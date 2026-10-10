@@ -1,0 +1,85 @@
+# AI coding assistants
+
+# Claude
+.claude/
+CLAUDE.md
+.claude.json
+
+# OpenAI Codex
+.codex/
+AGENTS.md
+
+# Gemini CLI
+.gemini/
+GEMINI.md
+
+# Cursor
+.cursor/
+.cursorignore
+.cursorindexingignore
+.cursorrules
+
+# Windsurf
+.windsurf/
+.windsurfrules
+
+# GitHub Copilot
+.github/copilot-instructions.md
+**/copilot-instructions.md
+
+# Aider
+.aider*
+CONVENTIONS.md
+
+# Continue
+.continue/
+
+# Cline / Roo Code
+.cline/
+.roo/
+.rooignore
+
+# Amazon Q Developer
+.amazonq/
+
+# Zed AI
+.zed/
+
+# Replit AI
+.replit
+
+# Sourcegraph Cody
+.sourcegraph/
+
+# Tabnine
+.tabnine/
+
+# Generic AI / LLM artifacts
+.ai/
+.ai-*/
+.ai-*
+.llm/
+.llm-*/
+.llm-*
+.prompts/
+.prompts-*/
+.prompts-*
+.agent/
+.agent-*/
+.agent-*
+.agents/
+.agents-*/
+.agents-*
+.instructions/
+.instructions-*/
+.instructions-*
+.mcp.json
+.mcp-*.json
+
+# AI-generated task / session artifacts
+*.ai.md
+*.ai.txt
+*.generated-by-ai
+ai-context.md
+ai-instructions.md
+ai-prompts.md
