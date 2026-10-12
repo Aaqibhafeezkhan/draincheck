@@ -1,0 +1,23 @@
+version: 2
+
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore(deps)"
+    labels: []
+    groups:
+      # client-go, api and apimachinery must move together.
+      kubernetes:
+        patterns:
+          - "k8s.io/*"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "ci(deps)"
+    labels: []
