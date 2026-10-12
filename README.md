@@ -59,6 +59,10 @@ Requires Go 1.26+.
 
 [Specification](docs/SPEC.md)
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## License
 
 [Apache-2.0](LICENSE)
