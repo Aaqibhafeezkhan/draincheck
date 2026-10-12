@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-01
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-0
+  namespace: shop
+spec:
+  nodeName: worker-01
+  containers:
+    - name: web
+      image: example/web:1
