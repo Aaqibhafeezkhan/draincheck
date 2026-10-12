@@ -35,6 +35,7 @@ Dependency direction: `cmd` -> `inventory`, `analyzer`, `report` -> `findings`. 
 - Keep `cmd/` thin; logic lives in `internal/`.
 - Test first (red, then green). Unit tests use the client-go fake clientset and `testdata/`.
 - `gofmt` and `go vet ./...` must be clean.
+- **Docs ship with code.** A change to a flag, rule, severity, output format, exit code or required permission updates `docs/` in the same change. Document only what is implemented; mark the rest *planned*.
 
 ## Workflow
 
