@@ -65,3 +65,9 @@ func TestResolveTargetNodesEmptyCluster(t *testing.T) {
 		t.Error("expected error when selecting all nodes of an empty cluster")
 	}
 }
+
+func TestResolveTargetNodesNothingRequested(t *testing.T) {
+	if _, err := ResolveTargetNodes(snapshotWithNodes("worker-01"), nil, false); err == nil {
+		t.Error("expected error when no nodes are requested")
+	}
+}

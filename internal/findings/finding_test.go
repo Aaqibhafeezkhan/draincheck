@@ -21,3 +21,19 @@ func TestFindingJSON(t *testing.T) {
 		t.Errorf("json mismatch\n got: %s\nwant: %s", b, want)
 	}
 }
+
+func TestFindingJSONClusterScopedNilEvidence(t *testing.T) {
+	f := Finding{
+		RuleID:   "R",
+		Severity: Unknown,
+		Resource: ResourceRef{Kind: "Node", Name: "worker-02"},
+	}
+	b, err := json.Marshal(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"rule_id":"R","severity":"UNKNOWN","resource":"Node/worker-02","evidence":null,"description":"","remediation":""}`
+	if string(b) != want {
+		t.Errorf("json mismatch\n got: %s\nwant: %s", b, want)
+	}
+}
