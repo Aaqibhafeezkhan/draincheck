@@ -35,6 +35,21 @@ func TestRootFlags(t *testing.T) {
 			wantErr: "'*'",
 		},
 		{
+			name: "whitespace around names is trimmed",
+			args: []string{"--nodes", "worker-01, worker-02"},
+			want: options{Nodes: []string{"worker-01", "worker-02"}, Output: "text"},
+		},
+		{
+			name:    "empty node name",
+			args:    []string{"--nodes", "worker-01,,worker-02"},
+			wantErr: "empty",
+		},
+		{
+			name:    "blank node name",
+			args:    []string{"--nodes", "worker-01, "},
+			wantErr: "empty",
+		},
+		{
 			name:    "missing nodes",
 			args:    []string{},
 			wantErr: "--nodes",

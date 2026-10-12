@@ -19,7 +19,7 @@ draincheck --version
 | `--output`     | `text`                 | `text` or `json`.                                            |
 | `--version`    |                        | Print the version and exit.                                  |
 
-`'*'` cannot be combined with node names. Quote it so the shell does not expand it.
+`'*'` cannot be combined with node names. Quote it so the shell does not expand it. Surrounding whitespace in names is trimmed; empty names are error.
 
 ## Examples
 

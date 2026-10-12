@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"slices"
+	"strings"
 )
 
 // Supported values for --output.
@@ -30,6 +31,13 @@ type options struct {
 func (o *options) validate() error {
 	if len(o.Nodes) == 0 {
 		return fmt.Errorf("--nodes is required (comma-separated node names, or '*' for all nodes)")
+	}
+	for i, n := range o.Nodes {
+		n = strings.TrimSpace(n)
+		if n == "" {
+			return fmt.Errorf("--nodes: empty node name in list")
+		}
+		o.Nodes[i] = n
 	}
 	if slices.Contains(o.Nodes, wildcard) {
 		if len(o.Nodes) > 1 {
