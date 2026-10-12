@@ -47,6 +47,7 @@ Read-only. Needs `list` on:
 
 - `nodes`
 - `pods` (all namespaces)
+- `replicasets` (`apps`, all namespaces)
 - `poddisruptionbudgets` (`policy`, all namespaces)
 
 draincheck never cordons, evicts or modifies anything.

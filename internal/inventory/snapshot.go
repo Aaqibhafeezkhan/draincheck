@@ -3,6 +3,7 @@ package inventory
 import (
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
 )
@@ -13,15 +14,17 @@ import (
 type Snapshot struct {
 	nodes     []corev1.Node
 	pods      []corev1.Pod
+	rss       []appsv1.ReplicaSet
 	pdbs      []policyv1.PodDisruptionBudget
 	timestamp time.Time
 }
 
 // NewSnapshot builds a Snapshot from the given objects, taken at timestamp.
-func NewSnapshot(nodes []corev1.Node, pods []corev1.Pod, pdbs []policyv1.PodDisruptionBudget, timestamp time.Time) *Snapshot {
+func NewSnapshot(nodes []corev1.Node, pods []corev1.Pod, replicaSets []appsv1.ReplicaSet, pdbs []policyv1.PodDisruptionBudget, timestamp time.Time) *Snapshot {
 	return &Snapshot{
 		nodes:     copyNodes(nodes),
 		pods:      copyPods(pods),
+		rss:       copyReplicaSets(replicaSets),
 		pdbs:      copyPDBs(pdbs),
 		timestamp: timestamp,
 	}
@@ -32,6 +35,9 @@ func (s *Snapshot) Nodes() []corev1.Node { return copyNodes(s.nodes) }
 
 // Pods returns a copy of the pods in the snapshot.
 func (s *Snapshot) Pods() []corev1.Pod { return copyPods(s.pods) }
+
+// ReplicaSets returns a copy of the ReplicaSets in the snapshot.
+func (s *Snapshot) ReplicaSets() []appsv1.ReplicaSet { return copyReplicaSets(s.rss) }
 
 // PodDisruptionBudgets returns a copy of the PodDisruptionBudgets in the snapshot.
 func (s *Snapshot) PodDisruptionBudgets() []policyv1.PodDisruptionBudget { return copyPDBs(s.pdbs) }
@@ -49,6 +55,14 @@ func copyNodes(in []corev1.Node) []corev1.Node {
 
 func copyPods(in []corev1.Pod) []corev1.Pod {
 	out := make([]corev1.Pod, len(in))
+	for i := range in {
+		in[i].DeepCopyInto(&out[i])
+	}
+	return out
+}
+
+func copyReplicaSets(in []appsv1.ReplicaSet) []appsv1.ReplicaSet {
+	out := make([]appsv1.ReplicaSet, len(in))
 	for i := range in {
 		in[i].DeepCopyInto(&out[i])
 	}

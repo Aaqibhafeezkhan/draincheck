@@ -15,7 +15,7 @@ func snapshotWithNodes(names ...string) *Snapshot {
 	for i, n := range names {
 		nodes[i] = corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: n}}
 	}
-	return NewSnapshot(nodes, nil, nil, time.Time{})
+	return NewSnapshot(nodes, nil, nil, nil, time.Time{})
 }
 
 func TestResolveTargetNodes(t *testing.T) {
