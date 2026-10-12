@@ -11,8 +11,11 @@ import (
 var version = "dev"
 
 func main() {
-	if err := newRootCmd(version).Execute(); err != nil {
+	if err := newRootCmd(version, run).Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(2)
 	}
 }
+
+// run is the command body. Collection and analysis are wired in later.
+func run(options) error { return nil }

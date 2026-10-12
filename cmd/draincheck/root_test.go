@@ -7,7 +7,7 @@ import (
 )
 
 func TestRootVersionFlag(t *testing.T) {
-	cmd := newRootCmd("v1.2.3")
+	cmd := newRootCmd("v1.2.3", nil)
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
