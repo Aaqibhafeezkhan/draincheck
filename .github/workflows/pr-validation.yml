@@ -1,0 +1,64 @@
+name: PR validation
+
+on:
+  pull_request:
+    branches: [develop]
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: pr-validation-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  title:
+    name: PR title follows Conventional Commits
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          pattern='^(feat|fix|docs|test|refactor|perf|build|ci|chore)(\([a-z0-9._-]+\))?!?: .+'
+          if ! [[ "$PR_TITLE" =~ $pattern ]]; then
+            echo "::error::PR title must look like 'type(scope): subject' (types: feat, fix, docs, test, refactor, perf, build, ci, chore). Got: $PR_TITLE"
+            exit 1
+          fi
+
+  commits:
+    name: Commits are signed off and verified
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Check sign-off and signature
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: bash .github/scripts/check-commits.sh
+
+  coverage:
+    name: Coverage diff (informational)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Compare coverage with the base branch
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: bash .github/scripts/coverage-diff.sh
