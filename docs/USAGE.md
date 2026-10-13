@@ -90,6 +90,19 @@ Raised for a pod on a target node whose ownership gives it special `kubectl drai
 - Pods managed by any other controller (Deployment, StatefulSet, Job, ...) are not reported. A pod whose ReplicaSet is missing from the snapshot is treated as managed.
 - A pod with a mirror annotation is always `StaticPod`, even though it also has a `Node` owner reference.
 
+### `MISSING_RESOURCE_REQUESTS`
+
+Severity: `RISK`.
+
+Raised for a pod on a target node with at least one regular container that declares no CPU request or no memory request. The scheduler treats a missing request as zero, so the pod can be placed on a node with no real room for it, and capacity checks cannot account for it.
+
+- **Resource:** the pod (`Pod/<namespace>/<name>`), one finding per pod.
+- **Evidence:** `node` and `containers`: each container with a missing request, in spec order, with `missing_cpu` and `missing_memory`.
+- Only pods scheduled on a target node count. Pods in phase `Succeeded` or `Failed`, DaemonSet-managed pods and static (mirror) pods are skipped, since `kubectl drain` does not evict them.
+- Init containers are not inspected.
+- A CPU or memory request set at pod level (`spec.resources.requests`) covers every container for that resource.
+- Requests are read from the stored pod spec, so values filled in by a LimitRange or an admission webhook count as set.
+
 ## Cluster access
 
 Read-only. Needs `list` on:
