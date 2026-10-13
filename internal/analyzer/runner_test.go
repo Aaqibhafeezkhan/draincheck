@@ -1,0 +1,79 @@
+package analyzer
+
+import (
+	"reflect"
+	"testing"
+
+	"github.com/Veinar/draincheck/internal/findings"
+)
+
+// stubRule returns a fixed set of findings.
+type stubRule struct {
+	id  string
+	out []findings.Finding
+}
+
+func (r stubRule) ID() string                        { return r.id }
+func (r stubRule) Evaluate(Input) []findings.Finding { return r.out }
+
+func finding(ruleID string, ns, kind, name string) findings.Finding {
+	return findings.Finding{
+		RuleID:   ruleID,
+		Severity: findings.Risk,
+		Resource: findings.ResourceRef{Namespace: ns, Kind: kind, Name: name},
+	}
+}
+
+func TestRunSortsFindings(t *testing.T) {
+	a := stubRule{"A", []findings.Finding{finding("A", "web", "Pod", "z"), finding("A", "billing", "Pod", "p")}}
+	b := stubRule{"B", []findings.Finding{finding("B", "", "Node", "worker-01")}}
+
+	got := Run(Input{}, a, b)
+
+	want := []findings.Finding{
+		finding("B", "", "Node", "worker-01"),
+		finding("A", "billing", "Pod", "p"),
+		finding("A", "web", "Pod", "z"),
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Run() = %+v, want %+v", got, want)
+	}
+}
+
+func TestRunIndependentOfRuleOrder(t *testing.T) {
+	a := stubRule{"A", []findings.Finding{finding("A", "web", "Pod", "p")}}
+	b := stubRule{"B", []findings.Finding{finding("B", "web", "Pod", "p")}}
+
+	if got, want := Run(Input{}, a, b), Run(Input{}, b, a); !reflect.DeepEqual(got, want) {
+		t.Errorf("rule order changed output\n got: %+v\nwant: %+v", got, want)
+	}
+}
+
+func TestRunPassesInputToRules(t *testing.T) {
+	var seen Input
+	r := captureRule{seen: &seen}
+	in := Input{Targets: []string{"worker-01", "worker-02"}}
+
+	Run(in, r)
+
+	if !reflect.DeepEqual(seen.Targets, in.Targets) {
+		t.Errorf("rule saw targets %v, want %v", seen.Targets, in.Targets)
+	}
+}
+
+type captureRule struct{ seen *Input }
+
+func (captureRule) ID() string { return "capture" }
+func (r captureRule) Evaluate(in Input) []findings.Finding {
+	*r.seen = in
+	return nil
+}
+
+func TestRunNoRulesOrFindings(t *testing.T) {
+	if got := Run(Input{}); len(got) != 0 {
+		t.Errorf("Run() with no rules = %+v, want empty", got)
+	}
+	if got := Run(Input{}, stubRule{id: "A"}); len(got) != 0 {
+		t.Errorf("Run() with silent rule = %+v, want empty", got)
+	}
+}
