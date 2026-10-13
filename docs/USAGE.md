@@ -71,6 +71,25 @@ Raised for a pod on a target node when more than one PodDisruptionBudget in the 
 - A PDB whose selector is invalid is skipped.
 - A pod that is both overlapped and covered by a zero-disruption budget also gets a `PDB_DISRUPTION_BLOCKED` finding.
 
+### `POD_OWNERSHIP`
+
+Severity: `RISK`.
+
+Raised for a pod on a target node whose ownership gives it special `kubectl drain` behaviour. One finding per pod; the `category` in the evidence says which:
+
+| Category | Pod | What drain does |
+| --- | --- | --- |
+| `DaemonSet` | Controlled by a DaemonSet | Refused unless `--ignore-daemonsets`; never evicted. |
+| `StaticPod` | API mirror of a kubelet static pod (annotation `kubernetes.io/config.mirror`) | Skipped; cannot be rescheduled, stops with the node. |
+| `Unmanaged` | No controller | Refused unless `--force`; not recreated once deleted. |
+
+- **Resource:** the pod (`Pod/<namespace>/<name>`).
+- **Evidence:** `category`, `node`, and `owner_kind`/`owner_name` for DaemonSet pods.
+- It is `RISK`, not `BLOCKED`, because whether the drain stops depends on flags draincheck cannot observe.
+- Only pods scheduled on a target node count. Pods in phase `Succeeded` or `Failed` are skipped, since `kubectl drain` removes them without further checks.
+- Pods managed by any other controller (Deployment, StatefulSet, Job, ...) are not reported. A pod whose ReplicaSet is missing from the snapshot is treated as managed.
+- A pod with a mirror annotation is always `StaticPod`, even though it also has a `Node` owner reference.
+
 ## Cluster access
 
 Read-only. Needs `list` on:
