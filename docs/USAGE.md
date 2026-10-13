@@ -41,6 +41,23 @@ Each finding has exactly one severity. There is no `SAFE`.
 
 Findings are sorted by namespace, kind and name.
 
+## Rules
+
+Rules are implemented in `internal/analyzer`; they are not yet wired into the CLI (*planned*).
+
+### `PDB_DISRUPTION_BLOCKED`
+
+Severity: `BLOCKED`.
+
+Raised for a pod on a target node when a PodDisruptionBudget in the same namespace selects it and `status.disruptionsAllowed == 0`, so the eviction API will refuse the eviction.
+
+- **Resource:** the pod (`Pod/<namespace>/<name>`), one finding per pod and PDB. The finding points at the pod because it is the thing the drain will be stuck on; the PDB is carried as evidence.
+- **Evidence:** the PDB namespace and name, `current_healthy`, `desired_healthy` and `disruptions_allowed`.
+- Only pods scheduled on a target node count. Pods in phase `Succeeded` or `Failed` are skipped, since eviction does not consult budgets for them.
+- A PDB with an empty selector (`{}`) selects every pod in its namespace; one with no selector selects none.
+- A PDB whose selector is invalid is skipped.
+- Cluster-wide budgets summed across the batch (several nodes sharing one PDB) are *planned*, as is the overlapping-selector rule.
+
 ## Cluster access
 
 Read-only. Needs `list` on:
