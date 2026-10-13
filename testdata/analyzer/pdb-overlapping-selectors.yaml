@@ -1,0 +1,206 @@
+# Cluster for PDB_OVERLAPPING_SELECTORS.
+#
+# shop/web-0 matches both web-app and web-tier (worker-01).
+# shop/web-1 matches only web-app (worker-02).
+# shop/db-0 matches db-a, db-b and db-c (worker-01), declared out of order.
+# shop/job-0 matches two budgets but has already Succeeded.
+# staging/web-0 has the same labels as shop/web-0 but PDBs are namespaced,
+# and staging has a single budget.
+# batch/etl-0 is covered by batch/everything (empty selector) and batch/etl.
+# All budgets allow 1 disruption: the rule does not depend on that number.
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-01
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-02
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-0
+  namespace: shop
+  labels:
+    app: web
+    tier: frontend
+spec:
+  nodeName: worker-01
+  containers:
+    - name: web
+      image: example/web:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-1
+  namespace: shop
+  labels:
+    app: web
+spec:
+  nodeName: worker-02
+  containers:
+    - name: web
+      image: example/web:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: db-0
+  namespace: shop
+  labels:
+    app: db
+    tier: data
+    team: core
+spec:
+  nodeName: worker-01
+  containers:
+    - name: db
+      image: example/db:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: job-0
+  namespace: shop
+  labels:
+    app: web
+    tier: frontend
+spec:
+  nodeName: worker-01
+  containers:
+    - name: job
+      image: example/web:1
+status:
+  phase: Succeeded
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-0
+  namespace: staging
+  labels:
+    app: web
+    tier: frontend
+spec:
+  nodeName: worker-01
+  containers:
+    - name: web
+      image: example/web:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: etl-0
+  namespace: batch
+  labels:
+    app: etl
+spec:
+  nodeName: worker-02
+  containers:
+    - name: etl
+      image: example/etl:1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web-app
+  namespace: shop
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: web
+status:
+  disruptionsAllowed: 1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web-tier
+  namespace: shop
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      tier: frontend
+status:
+  disruptionsAllowed: 1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: db-c
+  namespace: shop
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      team: core
+status:
+  disruptionsAllowed: 1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: db-a
+  namespace: shop
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: db
+status:
+  disruptionsAllowed: 1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: db-b
+  namespace: shop
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      tier: data
+status:
+  disruptionsAllowed: 1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web-only
+  namespace: staging
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: web
+status:
+  disruptionsAllowed: 1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: everything
+  namespace: batch
+spec:
+  minAvailable: 1
+  selector: {}
+status:
+  disruptionsAllowed: 1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: etl
+  namespace: batch
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: etl
+status:
+  disruptionsAllowed: 1
