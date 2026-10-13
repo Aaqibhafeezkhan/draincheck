@@ -1,0 +1,153 @@
+# Cluster for PDB_DISRUPTION_BLOCKED.
+#
+# billing/api-pdb allows 0 disruptions and covers api-0 (worker-01) and
+# api-1 (worker-02). api-job-0 matches it but has already Succeeded.
+# shop/web-pdb allows 1 disruption. shop/cache-0 has no PDB.
+# staging/api-0 carries the same labels as billing/api-0 but PDBs are
+# namespaced. batch/job-0 is covered by an empty selector that allows 0.
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-01
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-02
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-0
+  namespace: billing
+  labels:
+    app: api
+spec:
+  nodeName: worker-01
+  containers:
+    - name: api
+      image: example/api:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-1
+  namespace: billing
+  labels:
+    app: api
+spec:
+  nodeName: worker-02
+  containers:
+    - name: api
+      image: example/api:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-job-0
+  namespace: billing
+  labels:
+    app: api
+spec:
+  nodeName: worker-01
+  containers:
+    - name: job
+      image: example/api:1
+status:
+  phase: Succeeded
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-0
+  namespace: shop
+  labels:
+    app: web
+spec:
+  nodeName: worker-01
+  containers:
+    - name: web
+      image: example/web:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cache-0
+  namespace: shop
+  labels:
+    app: cache
+spec:
+  nodeName: worker-01
+  containers:
+    - name: cache
+      image: example/cache:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-0
+  namespace: staging
+  labels:
+    app: api
+spec:
+  nodeName: worker-01
+  containers:
+    - name: api
+      image: example/api:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: job-0
+  namespace: batch
+spec:
+  nodeName: worker-01
+  containers:
+    - name: job
+      image: example/job:1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api-pdb
+  namespace: billing
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: api
+status:
+  currentHealthy: 2
+  desiredHealthy: 2
+  disruptionsAllowed: 0
+  expectedPods: 2
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web-pdb
+  namespace: shop
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: web
+status:
+  currentHealthy: 2
+  desiredHealthy: 1
+  disruptionsAllowed: 1
+  expectedPods: 2
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: all-pods
+  namespace: batch
+spec:
+  maxUnavailable: 0
+  selector: {}
+status:
+  currentHealthy: 1
+  desiredHealthy: 1
+  disruptionsAllowed: 0
+  expectedPods: 1
