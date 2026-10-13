@@ -56,7 +56,20 @@ Raised for a pod on a target node when a PodDisruptionBudget in the same namespa
 - Only pods scheduled on a target node count. Pods in phase `Succeeded` or `Failed` are skipped, since eviction does not consult budgets for them.
 - A PDB with an empty selector (`{}`) selects every pod in its namespace; one with no selector selects none.
 - A PDB whose selector is invalid is skipped.
-- Cluster-wide budgets summed across the batch (several nodes sharing one PDB) are *planned*, as is the overlapping-selector rule.
+- Cluster-wide budgets summed across the batch (several nodes sharing one PDB) are *planned*.
+
+### `PDB_OVERLAPPING_SELECTORS`
+
+Severity: `BLOCKED`.
+
+Raised for a pod on a target node when more than one PodDisruptionBudget in the same namespace selects it. The eviction API does not support a pod covered by several budgets and refuses the eviction, regardless of how many disruptions each budget allows.
+
+- **Resource:** the pod (`Pod/<namespace>/<name>`), one finding per pod.
+- **Evidence:** the `namespace` and the `pdbs` that select the pod, sorted by name.
+- Only pods scheduled on a target node count. Pods in phase `Succeeded` or `Failed` are skipped, since eviction does not consult budgets for them.
+- An empty selector (`{}`) selects every pod in its namespace, so it overlaps with any other budget there; one with no selector selects none.
+- A PDB whose selector is invalid is skipped.
+- A pod that is both overlapped and covered by a zero-disruption budget also gets a `PDB_DISRUPTION_BLOCKED` finding.
 
 ## Cluster access
 
