@@ -1,0 +1,186 @@
+# Cluster for MISSING_RESOURCE_REQUESTS.
+#
+# worker-01:
+#   shop/full-0          cpu and memory requested              -> not reported
+#   shop/bare-0          no requests at all                    -> web: cpu+memory
+#   shop/cpu-only-0      only cpu requested                    -> app: memory
+#   shop/mixed-0         app ok, sidecar has no cpu            -> sidecar: cpu
+#   shop/init-only-0     init container bare, app ok           -> not reported
+#   shop/podlevel-0      pod-level requests, bare container    -> not reported
+#   shop/old-0           bare but already Succeeded            -> skipped
+#   monitoring/agent-x1  bare, DaemonSet-managed               -> skipped
+#   kube-system/etcd-worker-01  bare mirror pod                -> skipped
+#   tools/debug          bare, no controller                   -> debug: cpu+memory
+# worker-02:
+#   shop/bare-1          no requests at all                    -> web: cpu+memory
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-01
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-02
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: full-0
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: StatefulSet, name: full, uid: 11111111-1111-1111-1111-111111111111, controller: true}
+spec:
+  nodeName: worker-01
+  containers:
+    - name: app
+      image: example/app:1
+      resources:
+        requests: {cpu: 100m, memory: 64Mi}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bare-0
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: StatefulSet, name: bare, uid: 22222222-2222-2222-2222-222222222222, controller: true}
+spec:
+  nodeName: worker-01
+  containers:
+    - name: web
+      image: example/web:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bare-1
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: StatefulSet, name: bare, uid: 22222222-2222-2222-2222-222222222222, controller: true}
+spec:
+  nodeName: worker-02
+  containers:
+    - name: web
+      image: example/web:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cpu-only-0
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: StatefulSet, name: cpu-only, uid: 33333333-3333-3333-3333-333333333333, controller: true}
+spec:
+  nodeName: worker-01
+  containers:
+    - name: app
+      image: example/app:1
+      resources:
+        requests: {cpu: 100m}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mixed-0
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: StatefulSet, name: mixed, uid: 44444444-4444-4444-4444-444444444444, controller: true}
+spec:
+  nodeName: worker-01
+  containers:
+    - name: sidecar
+      image: example/sidecar:1
+      resources:
+        requests: {memory: 16Mi}
+    - name: app
+      image: example/app:1
+      resources:
+        requests: {cpu: 100m, memory: 64Mi}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: init-only-0
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: StatefulSet, name: init-only, uid: 55555555-5555-5555-5555-555555555555, controller: true}
+spec:
+  nodeName: worker-01
+  initContainers:
+    - name: migrate
+      image: example/migrate:1
+  containers:
+    - name: app
+      image: example/app:1
+      resources:
+        requests: {cpu: 100m, memory: 64Mi}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: podlevel-0
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: StatefulSet, name: podlevel, uid: 66666666-6666-6666-6666-666666666666, controller: true}
+spec:
+  nodeName: worker-01
+  resources:
+    requests: {cpu: 200m, memory: 128Mi}
+  containers:
+    - name: app
+      image: example/app:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: old-0
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: batch/v1, kind: Job, name: old, uid: 77777777-7777-7777-7777-777777777777, controller: true}
+spec:
+  nodeName: worker-01
+  containers:
+    - name: job
+      image: example/job:1
+status:
+  phase: Succeeded
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: agent-x1
+  namespace: monitoring
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: DaemonSet, name: agent, uid: 88888888-8888-8888-8888-888888888888, controller: true}
+spec:
+  nodeName: worker-01
+  containers:
+    - name: agent
+      image: example/agent:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: etcd-worker-01
+  namespace: kube-system
+  annotations:
+    kubernetes.io/config.mirror: 0123456789abcdef
+  ownerReferences:
+    - {apiVersion: v1, kind: Node, name: worker-01, uid: 99999999-9999-9999-9999-999999999999, controller: true}
+spec:
+  nodeName: worker-01
+  containers:
+    - name: etcd
+      image: example/etcd:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: debug
+  namespace: tools
+spec:
+  nodeName: worker-01
+  containers:
+    - name: debug
+      image: example/debug:1
