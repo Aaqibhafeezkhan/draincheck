@@ -25,6 +25,8 @@ type options struct {
 	Kubeconfig string
 	Context    string
 	Output     string
+	// FailOn is the lowest finding level that makes the run exit 1.
+	FailOn string
 }
 
 // validate checks the options and normalizes the "*" wildcard into AllNodes.
@@ -49,5 +51,5 @@ func (o *options) validate() error {
 	if !slices.Contains([]string{outputText, outputJSON}, o.Output) {
 		return fmt.Errorf("invalid --output %q: must be %q or %q", o.Output, outputText, outputJSON)
 	}
-	return nil
+	return validFailOn(o.FailOn)
 }

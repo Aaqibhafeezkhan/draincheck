@@ -1,11 +1,11 @@
 # draincheck usage
 
-> **Status: pre-alpha.** Flags are parsed and validated; analysis and reports are not implemented yet. Sections marked *planned* describe intended behaviour.
+> **Status: pre-alpha.** The collector, rules and JSON report are wired to the CLI. The text report is not implemented yet: use `--output json`. Sections marked *planned* describe intended behaviour.
 
 ## Synopsis
 
 ```sh
-draincheck --nodes NODE[,NODE...] [--kubeconfig PATH] [--context NAME] [--output text|json]
+draincheck --nodes NODE[,NODE...] [--kubeconfig PATH] [--context NAME] [--output text|json] [--fail-on blocked|risk|any]
 draincheck --version
 ```
 
@@ -16,7 +16,8 @@ draincheck --version
 | `--nodes`      | none (required)        | Nodes to drain, comma-separated. `'*'` selects every node.   |
 | `--kubeconfig` | standard loading rules | Path to the kubeconfig file.                                 |
 | `--context`    | current context        | Kubeconfig context to use.                                   |
-| `--output`     | `text`                 | `text` or `json`.                                            |
+| `--output`     | `text`                 | `text` or `json`. `text` is *planned*; for now it exits 2 with a hint to use `json`. |
+| `--fail-on`    | `blocked`              | Lowest finding level that makes the run exit `1`: `blocked`, `risk` or `any`. |
 | `--version`    |                        | Print the version and exit.                                  |
 
 `'*'` cannot be combined with node names. Quote it so the shell does not expand it. Surrounding whitespace in names is trimmed; empty names are error.
@@ -24,8 +25,9 @@ draincheck --version
 ## Examples
 
 ```sh
-draincheck --nodes worker-02,worker-04
-draincheck --nodes '*' --context staging
+draincheck --nodes worker-02,worker-04 --output json
+draincheck --nodes '*' --context staging --output json
+draincheck --nodes worker-02 --output json --fail-on risk   # also fail CI on RISK
 draincheck --nodes worker-02 --output json
 ```
 
@@ -43,7 +45,7 @@ Findings are sorted by namespace, kind and name.
 
 ## JSON output
 
-The JSON formatter is implemented in `internal/report` (`WriteJSON`) but not yet wired to `--output json` (*planned*). The document looks like this:
+`--output json` writes the document below to stdout. Errors go to stderr, so stdout is always either a complete document or empty.
 
 ```json
 {
@@ -69,7 +71,7 @@ The JSON formatter is implemented in `internal/report` (`WriteJSON`) but not yet
 
 ## Rules
 
-Rules are implemented in `internal/analyzer`; they are not yet wired into the CLI (*planned*).
+Rules are implemented in `internal/analyzer` and all of them run on every invocation.
 
 ### `PDB_DISRUPTION_BLOCKED`
 
@@ -140,15 +142,23 @@ Read-only. Needs `list` on:
 
 draincheck never cordons, evicts or modifies anything.
 
-## Exit codes (*planned*)
+## Exit codes
 
-| Code | Meaning                  |
-| ---- | ------------------------ |
-| `0`  | No blocking findings     |
-| `1`  | At least one `BLOCKED`   |
-| `2`  | Error                    |
+| Code | Meaning                                                                 |
+| ---- | ----------------------------------------------------------------------- |
+| `0`  | Analysis completed; no finding at or above the `--fail-on` level.       |
+| `1`  | Analysis completed; at least one finding at or above `--fail-on`.       |
+| `2`  | draincheck could not complete: bad flags, unreadable kubeconfig, cluster unreachable, unknown node, unimplemented output format. |
 
-Whether `RISK` also fails the run is undecided.
+`--fail-on` picks what counts:
+
+| Value     | Exits `1` on                       |
+| --------- | ---------------------------------- |
+| `blocked` | `BLOCKED` (default)                |
+| `risk`    | `BLOCKED` or `RISK`                |
+| `any`     | any finding, including `UNKNOWN`   |
+
+The report is written before the exit code is decided, so a run that exits `1` still prints every finding.
 
 ## See also
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"reflect"
 	"strings"
 	"testing"
@@ -17,17 +18,17 @@ func TestRootFlags(t *testing.T) {
 		{
 			name: "defaults with nodes",
 			args: []string{"--nodes", "worker-02"},
-			want: options{Nodes: []string{"worker-02"}, Output: "text"},
+			want: options{Nodes: []string{"worker-02"}, Output: "text", FailOn: "blocked"},
 		},
 		{
 			name: "all flags",
 			args: []string{"--nodes", "worker-02,worker-04", "--kubeconfig", "/tmp/kc", "--context", "prod", "--output", "json"},
-			want: options{Nodes: []string{"worker-02", "worker-04"}, Kubeconfig: "/tmp/kc", Context: "prod", Output: "json"},
+			want: options{Nodes: []string{"worker-02", "worker-04"}, Kubeconfig: "/tmp/kc", Context: "prod", Output: "json", FailOn: "blocked"},
 		},
 		{
 			name: "wildcard selects all nodes",
 			args: []string{"--nodes", "*"},
-			want: options{AllNodes: true, Output: "text"},
+			want: options{AllNodes: true, Output: "text", FailOn: "blocked"},
 		},
 		{
 			name:    "wildcard mixed with names",
@@ -37,7 +38,7 @@ func TestRootFlags(t *testing.T) {
 		{
 			name: "whitespace around names is trimmed",
 			args: []string{"--nodes", "worker-01, worker-02"},
-			want: options{Nodes: []string{"worker-01", "worker-02"}, Output: "text"},
+			want: options{Nodes: []string{"worker-01", "worker-02"}, Output: "text", FailOn: "blocked"},
 		},
 		{
 			name:    "empty node name",
@@ -55,6 +56,16 @@ func TestRootFlags(t *testing.T) {
 			wantErr: "--nodes",
 		},
 		{
+			name: "fail-on risk",
+			args: []string{"--nodes", "a", "--fail-on", "risk"},
+			want: options{Nodes: []string{"a"}, Output: "text", FailOn: "risk"},
+		},
+		{
+			name:    "invalid fail-on",
+			args:    []string{"--nodes", "a", "--fail-on", "unknown"},
+			wantErr: "--fail-on",
+		},
+		{
 			name:    "invalid output",
 			args:    []string{"--nodes", "a", "--output", "yaml"},
 			wantErr: "--output",
@@ -63,7 +74,7 @@ func TestRootFlags(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var got options
-			cmd := newRootCmd("test", func(o options) error { got = o; return nil })
+			cmd := newRootCmd("test", func(_ context.Context, o options) error { got = o; return nil })
 			cmd.SetOut(&bytes.Buffer{})
 			cmd.SetErr(&bytes.Buffer{})
 			cmd.SetArgs(tt.args)
