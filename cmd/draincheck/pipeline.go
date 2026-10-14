@@ -6,6 +6,7 @@ import (
 	"io"
 
 	"github.com/Veinar/draincheck/internal/analyzer"
+	"github.com/Veinar/draincheck/internal/findings"
 	"github.com/Veinar/draincheck/internal/inventory"
 	"github.com/Veinar/draincheck/internal/report"
 )
@@ -14,10 +15,6 @@ import (
 // nodes and writes the report to w. It returns an *exitError with
 // exitFindings when the findings reach opts.FailOn.
 func execute(ctx context.Context, opts options, c inventory.Collector, w io.Writer) error {
-	if err := checkOutputImplemented(opts); err != nil {
-		return err
-	}
-
 	snap, err := c.Collect(ctx)
 	if err != nil {
 		return fmt.Errorf("collect cluster state: %w", err)
@@ -28,7 +25,7 @@ func execute(ctx context.Context, opts options, c inventory.Collector, w io.Writ
 	}
 
 	fs := analyzer.Run(analyzer.Input{Snapshot: snap, Targets: targets}, analyzer.DefaultRules()...)
-	if err := report.WriteJSON(w, fs); err != nil {
+	if err := writeReport(w, opts.Output, fs); err != nil {
 		return fmt.Errorf("write report: %w", err)
 	}
 
@@ -38,11 +35,11 @@ func execute(ctx context.Context, opts options, c inventory.Collector, w io.Writ
 	return nil
 }
 
-// checkOutputImplemented rejects output formats that are accepted by the flag
-// but have no formatter yet. run calls it before connecting to the cluster.
-func checkOutputImplemented(opts options) error {
-	if opts.Output != outputJSON {
-		return &exitError{code: exitFailure, msg: fmt.Sprintf("--output %s is not implemented yet; use --output json", opts.Output)}
+// writeReport renders fs with the formatter chosen by --output. options
+// validation guarantees format is one of the known values.
+func writeReport(w io.Writer, format string, fs []findings.Finding) error {
+	if format == outputJSON {
+		return report.WriteJSON(w, fs)
 	}
-	return nil
+	return report.WriteText(w, fs)
 }

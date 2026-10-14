@@ -1,6 +1,6 @@
 # draincheck usage
 
-> **Status: pre-alpha.** The collector, rules and JSON report are wired to the CLI. The text report is not implemented yet: use `--output json`. Sections marked *planned* describe intended behaviour.
+> **Status: pre-alpha.** The collector, rules and the text and JSON reports are wired to the CLI. Sections marked *planned* describe intended behaviour.
 
 ## Synopsis
 
@@ -16,7 +16,7 @@ draincheck --version
 | `--nodes`      | none (required)        | Nodes to drain, comma-separated. `'*'` selects every node.   |
 | `--kubeconfig` | standard loading rules | Path to the kubeconfig file.                                 |
 | `--context`    | current context        | Kubeconfig context to use.                                   |
-| `--output`     | `text`                 | `text` or `json`. `text` is *planned*; for now it exits 2 with a hint to use `json`. |
+| `--output`     | `text`                 | `text` (human-readable) or `json`. |
 | `--fail-on`    | `blocked`              | Lowest finding level that makes the run exit `1`: `blocked`, `risk` or `any`. |
 | `--version`    |                        | Print the version and exit.                                  |
 
@@ -25,7 +25,7 @@ draincheck --version
 ## Examples
 
 ```sh
-draincheck --nodes worker-02,worker-04 --output json
+draincheck --nodes worker-02,worker-04
 draincheck --nodes '*' --context staging --output json
 draincheck --nodes worker-02 --output json --fail-on risk   # also fail CI on RISK
 draincheck --nodes worker-02 --output json
@@ -42,6 +42,29 @@ Each finding has exactly one severity. There is no `SAFE`.
 | `UNKNOWN` | The outcome cannot be established reliably.                          |
 
 Findings are sorted by namespace, kind and name.
+
+## Text output
+
+`--output text` (the default) writes a human-readable report to stdout. Findings are grouped by severity, `BLOCKED` first, then `RISK`, then `UNKNOWN`; sections without findings are omitted. Within a section, findings are sorted by namespace, kind and name, so the same cluster state gives byte-identical output.
+
+```text
+draincheck - preflight maintenance analysis
+
+=== FINDINGS SUMMARY ===
+  BLOCKED: 1
+  RISK:    0
+  UNKNOWN: 0
+
+=== BLOCKED (1) ===
+
+[PDB_DISRUPTION_BLOCKED] Pod/billing/payments-api-0
+  PodDisruptionBudget billing/payments-api-pdb allows 0 disruptions.
+  Remediation: Add healthy replicas or relax the budget.
+```
+
+- With no findings the report says `No findings reported.` That is not a guarantee that the drain will succeed; there is no `SAFE` status.
+- The cluster name, snapshot timestamp, target node list and the mandatory disclaimer are *planned*.
+- The layout is meant for people. Use `--output json` in scripts and CI.
 
 ## JSON output
 
@@ -148,7 +171,7 @@ draincheck never cordons, evicts or modifies anything.
 | ---- | ----------------------------------------------------------------------- |
 | `0`  | Analysis completed; no finding at or above the `--fail-on` level.       |
 | `1`  | Analysis completed; at least one finding at or above `--fail-on`.       |
-| `2`  | draincheck could not complete: bad flags, unreadable kubeconfig, cluster unreachable, unknown node, unimplemented output format. |
+| `2`  | draincheck could not complete: bad flags, unreadable kubeconfig, cluster unreachable, unknown node. |
 
 `--fail-on` picks what counts:
 
