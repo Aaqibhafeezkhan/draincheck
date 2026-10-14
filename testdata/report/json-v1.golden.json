@@ -1,0 +1,71 @@
+{
+  "schema_version": "v1",
+  "findings": [
+    {
+      "rule_id": "UNKNOWN_CONSTRAINT",
+      "severity": "UNKNOWN",
+      "resource": "Node/worker-02",
+      "evidence": null,
+      "description": "A constraint could not be evaluated.",
+      "remediation": "Check it manually."
+    },
+    {
+      "rule_id": "PDB_DISRUPTION_BLOCKED",
+      "severity": "BLOCKED",
+      "resource": "Pod/billing/payments-api-0",
+      "evidence": {
+        "namespace": "billing",
+        "name": "payments-api-pdb",
+        "current_healthy": 3,
+        "desired_healthy": 3,
+        "disruptions_allowed": 0
+      },
+      "description": "PodDisruptionBudget billing/payments-api-pdb allows 0 disruptions.",
+      "remediation": "Add healthy replicas or relax the budget."
+    },
+    {
+      "rule_id": "PDB_OVERLAPPING_SELECTORS",
+      "severity": "BLOCKED",
+      "resource": "Pod/billing/payments-api-1",
+      "evidence": {
+        "namespace": "billing",
+        "pdbs": [
+          "a-pdb",
+          "b-pdb"
+        ]
+      },
+      "description": "Pod is selected by 2 PodDisruptionBudgets.",
+      "remediation": "Narrow the selectors."
+    },
+    {
+      "rule_id": "POD_OWNERSHIP",
+      "severity": "RISK",
+      "resource": "Pod/monitoring/agent-x1",
+      "evidence": {
+        "category": "DaemonSet",
+        "node": "worker-02",
+        "owner_kind": "DaemonSet",
+        "owner_name": "agent"
+      },
+      "description": "Pod monitoring/agent-x1 is managed by a DaemonSet.",
+      "remediation": "Drain with --ignore-daemonsets."
+    },
+    {
+      "rule_id": "MISSING_RESOURCE_REQUESTS",
+      "severity": "RISK",
+      "resource": "Pod/shop/web-0",
+      "evidence": {
+        "node": "worker-02",
+        "containers": [
+          {
+            "name": "web",
+            "missing_cpu": true,
+            "missing_memory": true
+          }
+        ]
+      },
+      "description": "Pod shop/web-0 has containers without resource requests.",
+      "remediation": "Set CPU and memory requests."
+    }
+  ]
+}
