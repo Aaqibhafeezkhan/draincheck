@@ -93,14 +93,18 @@ func TestExecuteUnknownNode(t *testing.T) {
 	}
 }
 
-func TestExecuteTextNotImplemented(t *testing.T) {
+func TestExecuteTextWritesReadableReport(t *testing.T) {
 	opts := options{Nodes: []string{"worker-1"}, Output: outputText, FailOn: failOnBlocked}
-	err := execute(context.Background(), opts, inventory.NewClientsetCollector(unmanagedCluster()), &bytes.Buffer{})
-	if err == nil || !strings.Contains(err.Error(), "--output json") {
-		t.Fatalf("error = %v, want a hint to use --output json", err)
+	var out bytes.Buffer
+	err := execute(context.Background(), opts, inventory.NewClientsetCollector(unmanagedCluster()), &out)
+	if err != nil && exitCodeOf(err) != exitFindings {
+		t.Fatalf("error = %v, want nil or exit code %d", err, exitFindings)
 	}
-	if exitCodeOf(err) != exitFailure {
-		t.Errorf("exit code = %d, want %d", exitCodeOf(err), exitFailure)
+	if !strings.Contains(out.String(), "=== FINDINGS SUMMARY ===") {
+		t.Errorf("output is not the text report:\n%s", out.String())
+	}
+	if json.Valid(out.Bytes()) {
+		t.Errorf("--output text must not write JSON:\n%s", out.String())
 	}
 }
 

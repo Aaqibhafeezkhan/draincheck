@@ -29,9 +29,6 @@ func main() {
 
 // run connects to the cluster and executes the analysis.
 func run(ctx context.Context, opts options) error {
-	if err := checkOutputImplemented(opts); err != nil {
-		return err
-	}
 	client, err := newClientset(opts.Kubeconfig, opts.Context)
 	if err != nil {
 		return err

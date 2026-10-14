@@ -1,0 +1,32 @@
+draincheck - preflight maintenance analysis
+
+=== FINDINGS SUMMARY ===
+  BLOCKED: 2
+  RISK:    2
+  UNKNOWN: 1
+
+=== BLOCKED (2) ===
+
+[PDB_DISRUPTION_BLOCKED] Pod/billing/payments-api-0
+  PodDisruptionBudget billing/payments-api-pdb allows 0 disruptions.
+  Remediation: Add healthy replicas or relax the budget.
+
+[PDB_OVERLAPPING_SELECTORS] Pod/billing/payments-api-1
+  Pod is selected by 2 PodDisruptionBudgets.
+  Remediation: Narrow the selectors.
+
+=== RISK (2) ===
+
+[POD_OWNERSHIP] Pod/monitoring/agent-x1
+  Pod monitoring/agent-x1 is managed by a DaemonSet.
+  Remediation: Drain with --ignore-daemonsets.
+
+[MISSING_RESOURCE_REQUESTS] Pod/shop/web-0
+  Pod shop/web-0 has containers without resource requests.
+  Remediation: Set CPU and memory requests.
+
+=== UNKNOWN (1) ===
+
+[UNKNOWN_CONSTRAINT] Node/worker-02
+  A constraint could not be evaluated.
+  Remediation: Check it manually.
