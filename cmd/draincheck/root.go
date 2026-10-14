@@ -1,9 +1,13 @@
 package main
 
-import "github.com/spf13/cobra"
+import (
+	"context"
+
+	"github.com/spf13/cobra"
+)
 
 // newRootCmd builds the root command. run receives the validated options.
-func newRootCmd(version string, run func(options) error) *cobra.Command {
+func newRootCmd(version string, run func(context.Context, options) error) *cobra.Command {
 	var opts options
 	cmd := &cobra.Command{
 		Use:           "draincheck",
@@ -11,11 +15,11 @@ func newRootCmd(version string, run func(options) error) *cobra.Command {
 		Version:       version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		RunE: func(*cobra.Command, []string) error {
+		RunE: func(c *cobra.Command, _ []string) error {
 			if err := opts.validate(); err != nil {
 				return err
 			}
-			return run(opts)
+			return run(c.Context(), opts)
 		},
 	}
 	f := cmd.Flags()
@@ -23,5 +27,6 @@ func newRootCmd(version string, run func(options) error) *cobra.Command {
 	f.StringVar(&opts.Kubeconfig, "kubeconfig", "", "path to the kubeconfig file (default: standard loading rules)")
 	f.StringVar(&opts.Context, "context", "", "kubeconfig context to use (default: current context)")
 	f.StringVar(&opts.Output, "output", outputText, "output format: text or json")
+	f.StringVar(&opts.FailOn, "fail-on", failOnBlocked, "exit 1 when a finding is at or above this level: blocked, risk or any")
 	return cmd
 }
