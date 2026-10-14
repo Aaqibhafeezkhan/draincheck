@@ -41,6 +41,32 @@ Each finding has exactly one severity. There is no `SAFE`.
 
 Findings are sorted by namespace, kind and name.
 
+## JSON output
+
+The JSON formatter is implemented in `internal/report` (`WriteJSON`) but not yet wired to `--output json` (*planned*). The document looks like this:
+
+```json
+{
+  "schema_version": "v1",
+  "findings": [
+    {
+      "rule_id": "PDB_DISRUPTION_BLOCKED",
+      "severity": "BLOCKED",
+      "resource": "Pod/billing/payments-api-0",
+      "evidence": { "namespace": "billing", "name": "payments-api-pdb", "current_healthy": 3, "desired_healthy": 3, "disruptions_allowed": 0 },
+      "description": "...",
+      "remediation": "..."
+    }
+  ]
+}
+```
+
+- `schema_version` is `"v1"`. Any change to the document shape is a deliberate, reviewed change, pinned by the golden file `testdata/report/json-v1.golden.json`.
+- `findings` is always an array, empty when there are none. It is sorted by namespace, kind, name, rule ID and severity, so the same cluster state gives byte-identical output.
+- `resource` is `Kind/namespace/name`, or `Kind/name` for cluster-scoped objects.
+- `evidence` is a typed object whose shape depends on `rule_id` (see *Rules*); it is `null` when a rule has none.
+- The report timestamp and the mandatory disclaimer are *planned*.
+
 ## Rules
 
 Rules are implemented in `internal/analyzer`; they are not yet wired into the CLI (*planned*).
