@@ -28,7 +28,7 @@ CodeQL and Scorecard upload to the Security tab, which needs a public repository
 | ------------- | --------------------------- | ------------------------------------------------------------------------------------------------ |
 | `release.yml` | push of tag `vX.Y.Z[-*]`    | GoReleaser builds Linux, macOS and Windows (`amd64`/`arm64`), checksums, cosign keyless signature, SLSA provenance (`*.intoto.jsonl`) |
 
-Top-level `permissions: read-all`; write permissions only on the `release` and `provenance` jobs. Config: `.goreleaser.yaml`. Details and verification: `docs/RELEASE.md`.
+Top-level `permissions: read-all`; write permissions only on the `release`, `provenance` and `publish` jobs. The release is created as a draft and published by the last job after the provenance is attached (needed for release immutability). Config: `.goreleaser.yaml`. Details and verification: `docs/RELEASE.md`.
 
 ## Coverage diff
 

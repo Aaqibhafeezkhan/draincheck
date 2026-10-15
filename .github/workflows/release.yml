@@ -1,7 +1,11 @@
 name: Release
 
-# Tag-triggered. Builds Linux binaries, signs the checksum file with cosign (keyless),
-# and attaches SLSA provenance (*.intoto.jsonl) to the GitHub release.
+# Tag-triggered. Builds the binaries, signs the checksum file with cosign (keyless),
+# generates SLSA provenance (*.intoto.jsonl) and publishes the GitHub release.
+#
+# The release is created as a draft, the provenance is attached to the draft, and only
+# then is it published. Repositories with release immutability reject assets added to a
+# published release, and a failed run leaves a draft that can simply be deleted.
 on:
   push:
     tags:
@@ -15,7 +19,7 @@ jobs:
     name: Build, checksum and sign
     runs-on: ubuntu-latest
     permissions:
-      contents: write # create the release and upload assets
+      contents: write # create the draft release and upload assets
       id-token: write # cosign keyless signing (OIDC)
     outputs:
       hashes: ${{ steps.hashes.outputs.hashes }}
@@ -50,10 +54,41 @@ jobs:
     permissions:
       actions: read # read the workflow run
       id-token: write # sign provenance (OIDC)
-      contents: write # upload provenance to the release
+      contents: write # required by the generator workflow; provenance is attached by the publish job
     # The SLSA generator verifies its own ref and must be referenced by tag, not by SHA.
     uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
     with:
       base64-subjects: ${{ needs.release.outputs.hashes }}
       provenance-name: draincheck.intoto.jsonl
-      upload-assets: true
+      upload-assets: false # attached to the draft release by the publish job below
+
+  publish:
+    name: Attach provenance and publish
+    needs: [release, provenance]
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read # download the provenance artifact of this run
+      contents: write # upload to and publish the release
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - name: Download provenance
+        run: gh run download "$GITHUB_RUN_ID" --name draincheck.intoto.jsonl --dir provenance
+
+      - name: Check the release is still a draft
+        run: |
+          set -euo pipefail
+          test -s provenance/draincheck.intoto.jsonl
+          draft="$(gh release view "$TAG" --json isDraft --jq .isDraft)"
+          if [ "$draft" != "true" ]; then
+            echo "Release $TAG is not a draft; refusing to modify it." >&2
+            exit 1
+          fi
+
+      - name: Attach provenance
+        run: gh release upload "$TAG" provenance/draincheck.intoto.jsonl
+
+      - name: Publish release
+        run: gh release edit "$TAG" --draft=false

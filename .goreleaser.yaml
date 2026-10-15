@@ -71,3 +71,7 @@ changelog:
 
 release:
   prerelease: auto
+  # Created as a draft: the workflow attaches the SLSA provenance and then
+  # publishes it. With release immutability enabled, assets cannot be added
+  # once a release is published.
+  draft: true
