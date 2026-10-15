@@ -9,11 +9,15 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/Veinar/draincheck/internal/findings"
 )
 
 var update = flag.Bool("update", false, "rewrite golden files")
+
+// snapshotTime is the fixed snapshot timestamp used by every report test.
+var snapshotTime = time.Date(2026, 10, 10, 21, 0, 0, 0, time.UTC)
 
 // sampleFindings is deliberately out of sorted order.
 func sampleFindings() []findings.Finding {
@@ -63,7 +67,7 @@ func sampleFindings() []findings.Finding {
 func render(t *testing.T, fs []findings.Finding) []byte {
 	t.Helper()
 	var buf bytes.Buffer
-	if err := WriteJSON(&buf, fs); err != nil {
+	if err := WriteJSON(&buf, fs, snapshotTime); err != nil {
 		t.Fatal(err)
 	}
 	return buf.Bytes()
@@ -96,6 +100,33 @@ func TestWriteJSONSchemaVersion(t *testing.T) {
 	}
 	if doc.SchemaVersion != "v1" {
 		t.Errorf("schema_version = %q, want %q", doc.SchemaVersion, "v1")
+	}
+}
+
+func TestWriteJSONCarriesSnapshotTimeAndDisclaimer(t *testing.T) {
+	var doc struct {
+		GeneratedAt string `json:"generated_at"`
+		Disclaimer  string `json:"disclaimer"`
+	}
+	if err := json.Unmarshal(render(t, nil), &doc); err != nil {
+		t.Fatal(err)
+	}
+	if doc.GeneratedAt != "2026-10-10T21:00:00Z" {
+		t.Errorf("generated_at = %q, want the snapshot time in UTC RFC 3339", doc.GeneratedAt)
+	}
+	if doc.Disclaimer != Disclaimer(snapshotTime) {
+		t.Errorf("disclaimer = %q, want %q", doc.Disclaimer, Disclaimer(snapshotTime))
+	}
+}
+
+func TestWriteJSONTimeIsNormalizedToUTC(t *testing.T) {
+	local := snapshotTime.In(time.FixedZone("CEST", 2*60*60))
+	var buf bytes.Buffer
+	if err := WriteJSON(&buf, nil, local); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(buf.Bytes(), render(t, nil)) {
+		t.Errorf("same instant in another zone changed the output:\n%s", buf.Bytes())
 	}
 }
 
@@ -170,7 +201,7 @@ func (w failingWriter) Write([]byte) (int, error) { return 0, w.err }
 func TestWriteJSONReturnsWriterError(t *testing.T) {
 	want := errors.New("disk full")
 
-	err := WriteJSON(failingWriter{err: want}, sampleFindings())
+	err := WriteJSON(failingWriter{err: want}, sampleFindings(), snapshotTime)
 
 	if !errors.Is(err, want) {
 		t.Errorf("err = %v, want %v", err, want)

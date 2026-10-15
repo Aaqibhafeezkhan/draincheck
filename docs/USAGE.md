@@ -45,10 +45,11 @@ Findings are sorted by namespace, kind and name.
 
 ## Text output
 
-`--output text` (the default) writes a human-readable report to stdout. Findings are grouped by severity, `BLOCKED` first, then `RISK`, then `UNKNOWN`; sections without findings are omitted. Within a section, findings are sorted by namespace, kind and name, so the same cluster state gives byte-identical output.
+`--output text` (the default) writes a human-readable report to stdout. Findings are grouped by severity, `BLOCKED` first, then `RISK`, then `UNKNOWN`; sections without findings are omitted. Within a section, findings are sorted by namespace, kind and name, so the same findings and snapshot time give byte-identical output.
 
 ```text
 draincheck - preflight maintenance analysis
+Timestamp: 2026-10-14T09:30:00Z
 
 === FINDINGS SUMMARY ===
   BLOCKED: 1
@@ -60,10 +61,13 @@ draincheck - preflight maintenance analysis
 [PDB_DISRUPTION_BLOCKED] Pod/billing/payments-api-0
   PodDisruptionBudget billing/payments-api-pdb allows 0 disruptions.
   Remediation: Add healthy replicas or relax the budget.
+
+This report describes the observed cluster state at 2026-10-14T09:30:00Z and does not guarantee execution success. Cluster state may drift immediately after analysis.
 ```
 
+- `Timestamp` is when the cluster snapshot was taken (RFC 3339, UTC), not when the report was printed. The closing disclaimer is mandatory and is always the last line.
 - With no findings the report says `No findings reported.` That is not a guarantee that the drain will succeed; there is no `SAFE` status.
-- The cluster name, snapshot timestamp, target node list and the mandatory disclaimer are *planned*.
+- The cluster name and the target node list are *planned*.
 - The layout is meant for people. Use `--output json` in scripts and CI.
 
 ## JSON output
@@ -73,6 +77,8 @@ draincheck - preflight maintenance analysis
 ```json
 {
   "schema_version": "v1",
+  "generated_at": "2026-10-14T09:30:00Z",
+  "disclaimer": "This report describes the observed cluster state at 2026-10-14T09:30:00Z and does not guarantee execution success. Cluster state may drift immediately after analysis.",
   "findings": [
     {
       "rule_id": "PDB_DISRUPTION_BLOCKED",
@@ -87,10 +93,11 @@ draincheck - preflight maintenance analysis
 ```
 
 - `schema_version` is `"v1"`. Any change to the document shape is a deliberate, reviewed change, pinned by the golden file `testdata/report/json-v1.golden.json`.
-- `findings` is always an array, empty when there are none. It is sorted by namespace, kind, name, rule ID and severity, so the same cluster state gives byte-identical output.
+- `findings` is always an array, empty when there are none. It is sorted by namespace, kind, name, rule ID and severity, so the same findings and snapshot time give byte-identical output.
 - `resource` is `Kind/namespace/name`, or `Kind/name` for cluster-scoped objects.
 - `evidence` is a typed object whose shape depends on `rule_id` (see *Rules*); it is `null` when a rule has none.
-- The report timestamp and the mandatory disclaimer are *planned*.
+- `generated_at` is the time the cluster snapshot was taken (RFC 3339, UTC), not the time the document was written, so the same snapshot always gives the same bytes.
+- `disclaimer` is the mandatory statement that the report does not guarantee execution success. It names the same timestamp.
 
 ## Rules
 

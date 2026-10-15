@@ -29,6 +29,11 @@ First development cycle. No version has been tagged yet.
 - Pipeline wiring collector, analyzer and report, with exit codes: `1` when a
   finding reaches the `--fail-on` threshold, `2` when the run cannot complete
   (#20).
+- Snapshot timestamp and mandatory disclaimer in every report: the text report
+  gains a `Timestamp:` header and a closing disclaimer line, and the JSON
+  report gains `generated_at` and `disclaimer` fields. The timestamp is when
+  the cluster snapshot was taken, so the same snapshot gives identical output
+  (#19).
 - Tag-triggered release workflow: signed multi-platform artifacts with SLSA
   provenance (#23).
 - Project documentation: specification (`docs/SPEC.md`), `README.md`,

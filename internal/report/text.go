@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"time"
 
 	"github.com/Veinar/draincheck/internal/findings"
 )
@@ -13,15 +14,18 @@ import (
 var textSeverities = []findings.Severity{findings.Blocked, findings.Risk, findings.Unknown}
 
 // WriteText writes fs to w as human-readable text, grouped by severity with
-// BLOCKED first. Findings are sorted on a copy, so the same input always
-// renders the same bytes. An empty input is reported as "No findings
-// reported."; the output never states that a drain is safe.
-func WriteText(w io.Writer, fs []findings.Finding) error {
+// BLOCKED first. taken is the time of the snapshot the findings describe. It is
+// shown in the header and in the closing disclaimer. Findings are sorted on a
+// copy, so the same input always renders the same bytes. An empty input is
+// reported as "No findings reported."; the output never states that a drain is
+// safe.
+func WriteText(w io.Writer, fs []findings.Finding, taken time.Time) error {
 	sorted := slices.Clone(fs)
 	findings.Sort(sorted)
 
 	var buf bytes.Buffer
-	buf.WriteString("draincheck - preflight maintenance analysis\n\n")
+	buf.WriteString("draincheck - preflight maintenance analysis\n")
+	fmt.Fprintf(&buf, "Timestamp: %s\n\n", formatTimestamp(taken))
 	writeSummary(&buf, sorted)
 
 	if len(sorted) == 0 {
@@ -30,6 +34,8 @@ func WriteText(w io.Writer, fs []findings.Finding) error {
 	for _, sev := range textSeverities {
 		writeSection(&buf, sev, sorted)
 	}
+
+	fmt.Fprintf(&buf, "\n%s\n", Disclaimer(taken))
 
 	_, err := w.Write(buf.Bytes())
 	return err

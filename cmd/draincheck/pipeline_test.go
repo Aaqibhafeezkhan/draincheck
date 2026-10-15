@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
@@ -93,6 +94,37 @@ func TestExecuteUnknownNode(t *testing.T) {
 	}
 }
 
+// fixedTime is the snapshot time used by tests that compare whole reports.
+var fixedTime = time.Date(2026, 10, 14, 9, 30, 0, 0, time.UTC)
+
+// atFixedTime re-stamps the snapshots of inner, so reports are reproducible.
+type atFixedTime struct{ inner inventory.Collector }
+
+func (c atFixedTime) Collect(ctx context.Context) (*inventory.Snapshot, error) {
+	s, err := c.inner.Collect(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return inventory.NewSnapshot(s.Nodes(), s.Pods(), s.ReplicaSets(), s.PodDisruptionBudgets(), fixedTime), nil
+}
+
+func TestExecuteReportsSnapshotTimestampAndDisclaimer(t *testing.T) {
+	for _, format := range []string{outputText, outputJSON} {
+		t.Run(format, func(t *testing.T) {
+			opts := options{Nodes: []string{"worker-1"}, Output: format, FailOn: failOnBlocked}
+			var out bytes.Buffer
+
+			_ = execute(context.Background(), opts, atFixedTime{inventory.NewClientsetCollector(unmanagedCluster())}, &out)
+
+			for _, want := range []string{"2026-10-14T09:30:00Z", "does not guarantee execution success"} {
+				if !strings.Contains(out.String(), want) {
+					t.Errorf("report is missing %q:\n%s", want, out.String())
+				}
+			}
+		})
+	}
+}
+
 func TestExecuteTextWritesReadableReport(t *testing.T) {
 	opts := options{Nodes: []string{"worker-1"}, Output: outputText, FailOn: failOnBlocked}
 	var out bytes.Buffer
@@ -175,7 +207,7 @@ func TestExecuteBlockedFailsByDefault(t *testing.T) {
 
 func TestExecuteDuplicateNodesAreAnalyzedOnce(t *testing.T) {
 	var once, twice bytes.Buffer
-	c := inventory.NewClientsetCollector(unmanagedCluster())
+	c := atFixedTime{inventory.NewClientsetCollector(unmanagedCluster())}
 
 	_ = execute(context.Background(), options{Nodes: []string{"worker-1"}, Output: outputJSON, FailOn: failOnBlocked}, c, &once)
 	_ = execute(context.Background(), options{Nodes: []string{"worker-1", "worker-1"}, Output: outputJSON, FailOn: failOnBlocked}, c, &twice)
