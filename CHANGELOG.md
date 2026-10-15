@@ -11,7 +11,11 @@ entries under `[Unreleased]` in the same pull request as the change (see
 
 ## [Unreleased]
 
-First development cycle. No version has been tagged yet.
+## [0.0.1] - 2026-10-16
+
+First pre-alpha release. It checks PodDisruptionBudgets, pod ownership and
+missing resource requests before a multi-node drain, and reports in text or
+JSON. Output and rules may still change before 0.1.0.
 
 ### Added
 
@@ -53,7 +57,7 @@ First development cycle. No version has been tagged yet.
 
 - `PDB_DISRUPTION_BLOCKED`: PDB with `disruptionsAllowed == 0` (#3).
 - `PDB_OVERLAPPING_SELECTORS`: pod matched by more than one PDB (#4).
-- `POD_OWNERSHIP`: DaemonSet, static and naked pods (#5).
+- `POD_OWNERSHIP`: DaemonSet, static and naked pods (#6).
 - `MISSING_RESOURCE_REQUESTS`: pods without CPU or memory requests (#7).
 
 ### Changed
@@ -61,4 +65,5 @@ First development cycle. No version has been tagged yet.
 - Bump Go to 1.26 and refresh indirect dependencies.
 - Bump `k8s.io/apimachinery` and `k8s.io/client-go` from 0.35.9 to 0.37.1.
 
-[Unreleased]: https://github.com/Veinar/draincheck/commits/develop
+[Unreleased]: https://github.com/Veinar/draincheck/compare/v0.0.1...develop
+[0.0.1]: https://github.com/Veinar/draincheck/releases/tag/v0.0.1

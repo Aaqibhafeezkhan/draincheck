@@ -85,3 +85,6 @@ ai-prompts.md
 
 # Build output
 /bin/
+
+# Local release notes, used with: gh release edit <tag> --notes-file release-notes/<version>.md
+/release-notes/
