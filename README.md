@@ -58,6 +58,50 @@ draincheck --nodes worker-02,worker-04 [--kubeconfig PATH] [--context NAME] [--o
 > [!TIP]
 > You usually do not need `--kubeconfig` or `--context`. draincheck loads your kubeconfig with the same rules as `kubectl`: the `KUBECONFIG` environment variable if set, otherwise `~/.kube/config`, using the current context. If `kubectl get nodes` works for the user running draincheck, `draincheck --nodes worker-02` works too. It does not call the `kubectl` binary; it reads the same kubeconfig and talks to the API server directly, so `kubectl` does not have to be installed.
 
+## Example
+
+> [!NOTE]
+> Output from a real cluster, with names anonymized and the list shortened (a real run prints at most 5 findings per rule and then `... and M more`).
+
+```text
+$ draincheck --nodes worker-02
+draincheck - preflight maintenance analysis
+Timestamp: 2026-10-15T20:06:57Z
+
+=== FINDINGS SUMMARY ===
+  BLOCKED: 1
+  RISK:    7
+  UNKNOWN: 0
+
+=== BLOCKED (1) ===
+
+[PDB_DISRUPTION_BLOCKED] 1 finding
+  Pod/longhorn-system/instance-manager-9c1e7a4b: PodDisruptionBudget longhorn-system/instance-manager-9c1e7a4b allows 0 disruptions (1 healthy, 1 desired), so eviction of pod instance-manager-9c1e7a4b from node worker-02 will be refused.
+  Remediation: Add healthy replicas, or relax minAvailable/maxUnavailable on the PodDisruptionBudget, before draining.
+
+=== RISK (7) ===
+
+[MISSING_RESOURCE_REQUESTS] 4 findings
+  Pod/cert-manager/cert-manager-cainjector-5d8f7c9b6-x2k4p: Pod cert-manager/cert-manager-cainjector-5d8f7c9b6-x2k4p on node worker-02 has containers without resource requests: cert-manager-cainjector (cpu); the scheduler treats them as needing nothing, so the pod may not fit where it is rescheduled.
+  Pod/cert-manager/cert-manager-webhook-7b6d9f5c4-q8m2z: Pod cert-manager/cert-manager-webhook-7b6d9f5c4-q8m2z on node worker-02 has containers without resource requests: cert-manager-webhook (cpu); the scheduler treats them as needing nothing, so the pod may not fit where it is rescheduled.
+  Pod/monitoring/grafana-6c9d8b7f5-4tn7w: Pod monitoring/grafana-6c9d8b7f5-4tn7w on node worker-02 has containers without resource requests: grafana (cpu, memory); the scheduler treats them as needing nothing, so the pod may not fit where it is rescheduled.
+  Pod/shop/web-7f565f8df8-glh5k: Pod shop/web-7f565f8df8-glh5k on node worker-02 has containers without resource requests: web (cpu, memory), worker (cpu, memory); the scheduler treats them as needing nothing, so the pod may not fit where it is rescheduled.
+  Remediation: Set CPU and memory requests on every container (or a pod-level request) so rescheduling and capacity checks can account for the pod.
+
+[POD_OWNERSHIP] 3 findings
+  Pod/kube-system/cilium-x7k2p: Pod kube-system/cilium-x7k2p on node worker-02 is managed by DaemonSet cilium; kubectl drain refuses it without --ignore-daemonsets and never evicts it.
+  Pod/kube-system/kube-proxy-worker-02: Pod kube-system/kube-proxy-worker-02 is a static pod mirrored from node worker-02; it cannot be evicted or rescheduled and stops with the node.
+  Pod/longhorn-system/engine-image-ei-1a2b3c4d-8xk2q: Pod longhorn-system/engine-image-ei-1a2b3c4d-8xk2q on node worker-02 is managed by DaemonSet engine-image-ei-1a2b3c4d; kubectl drain refuses it without --ignore-daemonsets and never evicts it.
+  Remediation (Pod/kube-system/cilium-x7k2p, Pod/longhorn-system/engine-image-ei-1a2b3c4d-8xk2q): Drain with --ignore-daemonsets; the DaemonSet pod stays until the node itself goes down.
+  Remediation (Pod/kube-system/kube-proxy-worker-02): Plan for the static pod to be unavailable while the node is down; kubectl drain skips it.
+
+This report describes the observed cluster state at 2026-10-15T20:06:57Z and does not guarantee execution success. Cluster state may drift immediately after analysis.
+$ echo $?
+1
+```
+
+The exit code is `1` here because a `BLOCKED` finding reaches the default `--fail-on blocked`. See [docs/USAGE.md](docs/USAGE.md) for every flag, rule and exit code.
+
 ## Install
 
 Linux, macOS and Windows binaries (`amd64` and `arm64`) are on the [releases page](https://github.com/Veinar/draincheck/releases). Releases are signed with cosign (keyless) and ship SLSA provenance. Install and verification steps: [docs/RELEASE.md](docs/RELEASE.md).
