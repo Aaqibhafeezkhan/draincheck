@@ -140,6 +140,23 @@ func TestExecuteTextWritesReadableReport(t *testing.T) {
 	}
 }
 
+func TestExecuteVerboseSelectsFullTextLayout(t *testing.T) {
+	for _, tc := range []struct {
+		verbose bool
+		want    string
+	}{
+		{false, "[POD_OWNERSHIP] 1 finding"},
+		{true, "[POD_OWNERSHIP] Pod/default/bare"},
+	} {
+		opts := options{Nodes: []string{"worker-1"}, Output: outputText, FailOn: failOnBlocked, Verbose: tc.verbose}
+		var out bytes.Buffer
+		_ = execute(context.Background(), opts, inventory.NewClientsetCollector(unmanagedCluster()), &out)
+		if !strings.Contains(out.String(), tc.want) {
+			t.Errorf("verbose=%v: missing %q:\n%s", tc.verbose, tc.want, out.String())
+		}
+	}
+}
+
 type failingCollector struct{}
 
 func (failingCollector) Collect(context.Context) (*inventory.Snapshot, error) {

@@ -34,6 +34,9 @@ First development cycle. No version has been tagged yet.
   report gains `generated_at` and `disclaimer` fields. The timestamp is when
   the cluster snapshot was taken, so the same snapshot gives identical output
   (#19).
+- Compact text report: findings are grouped by rule and each remediation is
+  printed once, long lists are collapsed. `--verbose` prints every finding in
+  full (#74).
 - Tag-triggered release workflow: signed multi-platform artifacts with SLSA
   provenance (#23).
 - Project documentation: specification (`docs/SPEC.md`), `README.md`,

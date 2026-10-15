@@ -19,7 +19,11 @@ var textSeverities = []findings.Severity{findings.Blocked, findings.Risk, findin
 // copy, so the same input always renders the same bytes. An empty input is
 // reported as "No findings reported."; the output never states that a drain is
 // safe.
-func WriteText(w io.Writer, fs []findings.Finding, taken time.Time) error {
+//
+// By default the layout is compact: findings are grouped by rule inside each
+// severity section and each remediation is printed once. With verbose set,
+// every finding is printed in full with its own remediation.
+func WriteText(w io.Writer, fs []findings.Finding, taken time.Time, verbose bool) error {
 	sorted := slices.Clone(fs)
 	findings.Sort(sorted)
 
@@ -31,8 +35,18 @@ func WriteText(w io.Writer, fs []findings.Finding, taken time.Time) error {
 	if len(sorted) == 0 {
 		buf.WriteString("\nNo findings reported.\n")
 	}
+	collapsed := false
 	for _, sev := range textSeverities {
-		writeSection(&buf, sev, sorted)
+		if verbose {
+			writeVerboseSection(&buf, sev, sorted)
+			continue
+		}
+		if writeCompactSection(&buf, sev, sorted) {
+			collapsed = true
+		}
+	}
+	if collapsed {
+		buf.WriteString("\nSome lists are collapsed. Use --verbose to print every finding.\n")
 	}
 
 	fmt.Fprintf(&buf, "\n%s\n", Disclaimer(taken))
@@ -46,22 +60,6 @@ func writeSummary(buf *bytes.Buffer, fs []findings.Finding) {
 	for _, sev := range textSeverities {
 		// "RISK:" is padded so the counts line up under "BLOCKED:" and "UNKNOWN:".
 		fmt.Fprintf(buf, "  %-8s %d\n", string(sev)+":", countSeverity(fs, sev))
-	}
-}
-
-func writeSection(buf *bytes.Buffer, sev findings.Severity, fs []findings.Finding) {
-	n := countSeverity(fs, sev)
-	if n == 0 {
-		return
-	}
-	fmt.Fprintf(buf, "\n=== %s (%d) ===\n", sev, n)
-	for _, f := range fs {
-		if f.Severity != sev {
-			continue
-		}
-		fmt.Fprintf(buf, "\n[%s] %s\n", f.RuleID, f.Resource)
-		fmt.Fprintf(buf, "  %s\n", f.Description)
-		fmt.Fprintf(buf, "  Remediation: %s\n", f.Remediation)
 	}
 }
 

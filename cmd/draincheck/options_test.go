@@ -26,6 +26,11 @@ func TestRootFlags(t *testing.T) {
 			want: options{Nodes: []string{"worker-02", "worker-04"}, Kubeconfig: "/tmp/kc", Context: "prod", Output: "json", FailOn: "blocked"},
 		},
 		{
+			name: "verbose",
+			args: []string{"--nodes", "worker-02", "--verbose"},
+			want: options{Nodes: []string{"worker-02"}, Output: "text", FailOn: "blocked", Verbose: true},
+		},
+		{
 			name: "wildcard selects all nodes",
 			args: []string{"--nodes", "*"},
 			want: options{AllNodes: true, Output: "text", FailOn: "blocked"},

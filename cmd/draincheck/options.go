@@ -25,6 +25,8 @@ type options struct {
 	Kubeconfig string
 	Context    string
 	Output     string
+	// Verbose prints every finding in full in the text report.
+	Verbose bool
 	// FailOn is the lowest finding level that makes the run exit 1.
 	FailOn string
 }

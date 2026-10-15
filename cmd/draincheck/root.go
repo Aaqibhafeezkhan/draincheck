@@ -27,6 +27,7 @@ func newRootCmd(version string, run func(context.Context, options) error) *cobra
 	f.StringVar(&opts.Kubeconfig, "kubeconfig", "", "path to the kubeconfig file (default: standard loading rules)")
 	f.StringVar(&opts.Context, "context", "", "kubeconfig context to use (default: current context)")
 	f.StringVar(&opts.Output, "output", outputText, "output format: text or json")
+	f.BoolVar(&opts.Verbose, "verbose", false, "text output: print every finding in full instead of the compact layout")
 	f.StringVar(&opts.FailOn, "fail-on", failOnBlocked, "exit 1 when a finding is at or above this level: blocked, risk or any")
 	return cmd
 }
