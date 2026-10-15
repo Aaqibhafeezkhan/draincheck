@@ -1,5 +1,7 @@
 {
   "schema_version": "v1",
+  "generated_at": "2026-10-10T21:00:00Z",
+  "disclaimer": "This report describes the observed cluster state at 2026-10-10T21:00:00Z and does not guarantee execution success. Cluster state may drift immediately after analysis.",
   "findings": [
     {
       "rule_id": "UNKNOWN_CONSTRAINT",

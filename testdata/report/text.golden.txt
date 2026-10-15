@@ -1,4 +1,5 @@
 draincheck - preflight maintenance analysis
+Timestamp: 2026-10-10T21:00:00Z
 
 === FINDINGS SUMMARY ===
   BLOCKED: 2
@@ -30,3 +31,5 @@ draincheck - preflight maintenance analysis
 [UNKNOWN_CONSTRAINT] Node/worker-02
   A constraint could not be evaluated.
   Remediation: Check it manually.
+
+This report describes the observed cluster state at 2026-10-10T21:00:00Z and does not guarantee execution success. Cluster state may drift immediately after analysis.
