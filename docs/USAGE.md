@@ -101,7 +101,7 @@ This report describes the observed cluster state at 2026-10-14T09:30:00Z and doe
 
 ## Rules
 
-Rules are implemented in `internal/analyzer` and all of them run on every invocation.
+Rules are implemented in `internal/analyzer` and all of them run on every invocation. How each rule keeps its noise down (false-positive cases, downgrades, grouping) is recorded in [RULES.md](RULES.md).
 
 ### `PDB_DISRUPTION_BLOCKED`
 
