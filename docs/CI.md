@@ -7,7 +7,7 @@ GitHub Actions in `.github/workflows/`. Actions are pinned by commit SHA; Depend
 | Workflow          | Runs on                | What                                                                 |
 | ----------------- | ---------------------- | -------------------------------------------------------------------- |
 | `ci.yml`          | push, PR to `develop`  | `go build`, `go vet`, `gofmt -l`, `go mod tidy` clean, `go test -race`, `golangci-lint` |
-| `pr-validation.yml` | PR to `develop`      | title is `type(scope): subject`; every commit is signed off (`-s`) and Verified (`-S`); coverage diff (informational) |
+| `pr-validation.yml` | PR to `develop`      | title is `type(scope): subject`; every commit is signed off (`-s`) and Verified (`-S`); `CHANGELOG.md` touched when non-test Go code in `cmd/` or `internal/` changes (bypass: `skip-changelog` label); coverage diff (informational) |
 | `workflow-lint.yml` | PR touching workflows | `actionlint`                                                         |
 
 ## Security
