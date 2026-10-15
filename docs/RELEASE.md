@@ -66,8 +66,10 @@ Download the archive, `checksums.txt`, `checksums.txt.sigstore.json` and `drainc
 ## Cut a release
 
 1. Merge to `develop`, then tag a signed tag: `git tag -s vX.Y.Z -m "vX.Y.Z" && git push origin vX.Y.Z`.
-2. Watch the `Release` workflow. Both jobs must pass.
+2. Watch the `Release` workflow. All three jobs must pass.
 3. Run the verification steps above against the published assets.
+
+The workflow creates the release as a draft, attaches the SLSA provenance to it and only then publishes it. This is required when release immutability is enabled for the repository: assets cannot be added to a published release, and the tag name of a published release cannot be reused. If the run fails before the last job, the release stays a draft. Delete it (`gh release delete vX.Y.Z --yes`), delete the tag, fix the cause and tag again. Nothing has been published.
 
 A tag with a suffix (`v0.2.0-rc.1`) is published as a pre-release.
 
