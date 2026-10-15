@@ -113,7 +113,7 @@ go test ./...
   ```
 
   `-s` adds a `Signed-off-by:` line that must match your commit author e-mail. It certifies that you wrote the change, or have the right to submit it, under the project license ([Developer Certificate of Origin](https://developercertificate.org/)). `-S` signs the commit; add your signing key to your GitHub account so the commit shows as *Verified*.
-- The `pr-validation.yml` workflow checks the title, the sign-off and the signature. See [`docs/CI.md`](docs/CI.md) for every check and how to run them locally.
+- The `pr-validation.yml` workflow checks the title, the sign-off, the signature. See [`docs/CI.md`](docs/CI.md) for every check and how to run them locally.
 
 ## Code conventions
 
@@ -129,6 +129,16 @@ The details are in `AGENTS.md`. The ones reviewers look at first:
 
 Docs ship with code. A change to a flag, rule, severity, output format, exit code or required permission must update `docs/` in the same pull request. Document only what is implemented; mark the rest *planned*.
 
+## Updating the changelog
+
+Add an entry under `## [Unreleased]` in `CHANGELOG.md` in the same pull request. The maintainer does not edit it at merge time.
+
+- Needed for user-visible changes: `feat`, `fix`, `perf`, behaviour-changing refactors, dependency bumps that affect users, security fixes.
+- Not needed for `docs`, `test`, `ci`, `chore` or internal refactors.
+- Use the Keep a Changelog groups: Added, Changed, Deprecated, Removed, Fixed, Security. Analyzer rules go under `#### Analyzer rules`.
+- Write for users, not as a copy of the commit subject, and link the issue or PR, e.g. `(#12)`.
+- Credit is optional. If you want to be listed, add your GitHub handle to the entry, e.g. `(#12, @username)`. Leave it out if you prefer not to be named.
+
 ## Pull request checklist
 
 - [ ] Branch is based on `develop` and named `<type>/<scope>-<slug>`
@@ -137,6 +147,7 @@ Docs ship with code. A change to a flag, rule, severity, output format, exit cod
 - [ ] Tests were added or updated, and written first
 - [ ] `gofmt -l .`, `go vet ./...` and `go test ./...` are clean
 - [ ] `docs/` is updated if behaviour changed
+- [ ] `CHANGELOG.md` has an entry under `[Unreleased]` for user-visible changes
 
 ## AI-assisted contributions
 

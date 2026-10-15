@@ -36,6 +36,7 @@ Dependency direction: `cmd` -> `inventory`, `analyzer`, `report` -> `findings`. 
 - Test first (red, then green). Unit tests use the client-go fake clientset and `testdata/`.
 - `gofmt` and `go vet ./...` must be clean.
 - **Docs ship with code.** A change to a flag, rule, severity, output format, exit code or required permission updates `docs/` in the same change. Document only what is implemented; mark the rest *planned*.
+- **Changelog ships with code.** A user-visible change (feat, fix, perf, a behavior-changing refactor, a dependency bump that affects users, a security fix) adds an entry under `## [Unreleased]` in `CHANGELOG.md` in the same change. Follow Keep a Changelog groups (Added, Changed, Deprecated, Removed, Fixed, Security); put analyzer rules under `#### Analyzer rules`. Write for users, not as a copy of the commit subject; link the issue or PR, e.g. `(#12)`. **Ask the contributor** whether they want to be credited in the changelog; add their GitHub handle, e.g. `(#12, @username)`, only if they say yes. Never assume consent or guess a handle. Skip `docs`, `test`, `ci`, `chore` and internal refactors. The maintainer does not edit the changelog at merge time.
 
 ## Workflow
 
