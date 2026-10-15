@@ -5,14 +5,20 @@
 [![Go](https://img.shields.io/badge/Go-%2300ADD8.svg?&logo=go&logoColor=white)](#)
 ![GitHub top language](https://img.shields.io/github/languages/top/Veinar/draincheck)
 ![GitHub License](https://img.shields.io/github/license/Veinar/draincheck?color=%23dc9c1d)
-![GitHub Tag](https://img.shields.io/github/v/tag/Veinar/draincheck)
+[![GitHub Release](https://img.shields.io/github/v/release/Veinar/draincheck?include_prereleases&sort=semver)](https://github.com/Veinar/draincheck/releases/latest)
+![GitHub Downloads](https://img.shields.io/github/downloads/Veinar/draincheck/total)
 ![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/Veinar/draincheck?color=%233c5c68)
+![Platforms](https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows-lightgrey)
 ![Contrib welcome](https://img.shields.io/badge/contributions-welcome-blue)
 
 [![CI](https://github.com/Veinar/draincheck/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/Veinar/draincheck/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/Veinar/draincheck/actions/workflows/codeql.yml/badge.svg?branch=develop)](https://github.com/Veinar/draincheck/actions/workflows/codeql.yml)
 [![govulncheck](https://github.com/Veinar/draincheck/actions/workflows/govulncheck.yml/badge.svg?branch=develop)](https://github.com/Veinar/draincheck/actions/workflows/govulncheck.yml)
+[![Release](https://github.com/Veinar/draincheck/actions/workflows/release.yml/badge.svg)](https://github.com/Veinar/draincheck/actions/workflows/release.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Veinar/draincheck/badge)](https://scorecard.dev/viewer/?uri=github.com/Veinar/draincheck)
+
+[![Signed with cosign](https://img.shields.io/badge/signed-cosign%20keyless-blue)](docs/RELEASE.md#verify)
+[![Read-only](https://img.shields.io/badge/cluster%20access-read--only-green)](docs/SPEC.md)
 
 [![Claude](https://img.shields.io/badge/Claude-D97757?logo=claude&logoColor=fff)](#)
 
@@ -46,6 +52,10 @@ draincheck --nodes worker-02,worker-04 [--kubeconfig PATH] [--context NAME] [--o
 | `--context`    | Kubeconfig context                             | current context        |
 | `--output`     | Output format: `text` or `json`                | `text`                 |
 
+## Install
+
+Linux, macOS and Windows binaries (`amd64` and `arm64`) are on the [releases page](https://github.com/Veinar/draincheck/releases). Releases are signed with cosign (keyless) and ship SLSA provenance. Install and verification steps: [docs/RELEASE.md](docs/RELEASE.md).
+
 ## Build
 
 ```sh
@@ -57,7 +67,7 @@ Requires Go 1.26+.
 
 ## Docs
 
-[Specification](docs/SPEC.md)
+[Specification](docs/SPEC.md) · [CI](docs/CI.md) · [Release and verification](docs/RELEASE.md)
 
 ## Contributing
 

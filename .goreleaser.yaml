@@ -1,0 +1,73 @@
+# GoReleaser configuration. Run by .github/workflows/release.yml on a version tag.
+# Go cross-compiles, so all targets build on one Linux runner (CGO disabled).
+version: 2
+
+project_name: draincheck
+
+before:
+  hooks:
+    - go mod verify
+
+builds:
+  - id: draincheck
+    main: ./cmd/draincheck
+    binary: draincheck
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: draincheck
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+# Keyless cosign signature over the checksum file. The checksum file lists every archive,
+# so one signature covers all artifacts. Output: checksums.txt.sigstore.json (bundle with
+# signature, certificate and transparency log entry).
+signs:
+  - id: checksums
+    cmd: cosign
+    artifacts: checksum
+    signature: "${artifact}.sigstore.json"
+    args:
+      - sign-blob
+      - --yes
+      - --bundle=${signature}
+      - ${artifact}
+    output: true
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+
+release:
+  prerelease: auto
