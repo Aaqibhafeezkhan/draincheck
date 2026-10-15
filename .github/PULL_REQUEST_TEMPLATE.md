@@ -9,5 +9,5 @@
 - [ ] Tests added or updated
 - [ ] One file = one concern; test file mirrors source file
 - [ ] `docs/` updated if behaviour changed
-- [ ] `CHANGELOG.md` updated under `[Unreleased]` for user-visible changes
+- [ ] `CHANGELOG.md` updated under `[Unreleased]` for user-visible changes (or label `skip-changelog`)
 - [ ] `go vet ./...` and `go test ./...` pass

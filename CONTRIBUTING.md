@@ -113,7 +113,7 @@ go test ./...
   ```
 
   `-s` adds a `Signed-off-by:` line that must match your commit author e-mail. It certifies that you wrote the change, or have the right to submit it, under the project license ([Developer Certificate of Origin](https://developercertificate.org/)). `-S` signs the commit; add your signing key to your GitHub account so the commit shows as *Verified*.
-- The `pr-validation.yml` workflow checks the title, the sign-off, the signature. See [`docs/CI.md`](docs/CI.md) for every check and how to run them locally.
+- The `pr-validation.yml` workflow checks the title, the sign-off, the signature and the changelog entry. See [`docs/CI.md`](docs/CI.md) for every check and how to run them locally.
 
 ## Code conventions
 
@@ -138,6 +138,7 @@ Add an entry under `## [Unreleased]` in `CHANGELOG.md` in the same pull request.
 - Use the Keep a Changelog groups: Added, Changed, Deprecated, Removed, Fixed, Security. Analyzer rules go under `#### Analyzer rules`.
 - Write for users, not as a copy of the commit subject, and link the issue or PR, e.g. `(#12)`.
 - Credit is optional. If you want to be listed, add your GitHub handle to the entry, e.g. `(#12, @username)`. Leave it out if you prefer not to be named.
+- CI fails a PR that changes non-test Go code in `cmd/` or `internal/` without touching `CHANGELOG.md`. A maintainer can apply the `skip-changelog` label when no entry is warranted.
 
 ## Pull request checklist
 
