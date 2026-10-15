@@ -27,7 +27,8 @@
 
 Read-only preflight analyzer for multi-node `kubectl drain`. Tells you what would block or put at risk a planned maintenance **before** you cordon anything.
 
-> **Status: pre-alpha.** Only the CLI flags are implemented; no analysis yet.
+> [!CAUTION]
+> At its current state this tool is **very verbose**. It reports one finding per pod, each with a full description and remediation, so a real cluster can produce hundreds of lines (one 5-node run produced 95 findings). Grouping and a compact output are *planned*.
 
 ## What it is
 
@@ -52,6 +53,9 @@ draincheck --nodes worker-02,worker-04 [--kubeconfig PATH] [--context NAME] [--o
 | `--context`    | Kubeconfig context                             | current context        |
 | `--output`     | Output format: `text` or `json`                | `text`                 |
 
+> [!TIP]
+> You usually do not need `--kubeconfig` or `--context`. draincheck loads your kubeconfig with the same rules as `kubectl`: the `KUBECONFIG` environment variable if set, otherwise `~/.kube/config`, using the current context. If `kubectl get nodes` works for the user running draincheck, `draincheck --nodes worker-02` works too. It does not call the `kubectl` binary; it reads the same kubeconfig and talks to the API server directly, so `kubectl` does not have to be installed.
+
 ## Install
 
 Linux, macOS and Windows binaries (`amd64` and `arm64`) are on the [releases page](https://github.com/Veinar/draincheck/releases). Releases are signed with cosign (keyless) and ship SLSA provenance. Install and verification steps: [docs/RELEASE.md](docs/RELEASE.md).
@@ -59,8 +63,8 @@ Linux, macOS and Windows binaries (`amd64` and `arm64`) are on the [releases pag
 ## Build
 
 ```sh
-go build -o draincheck ./cmd/draincheck
 go test ./...
+go build -o draincheck ./cmd/draincheck
 ```
 
 Requires Go 1.26+.
