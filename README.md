@@ -27,8 +27,8 @@
 
 Read-only preflight analyzer for multi-node `kubectl drain`. Tells you what would block or put at risk a planned maintenance **before** you cordon anything.
 
-> [!CAUTION]
-> At its current state this tool is **very verbose**. It reports one finding per pod, each with a full description and remediation, so a real cluster can produce hundreds of lines (one 5-node run produced 95 findings). Grouping and a compact output are *planned*.
+> [!WARNING]
+> `--verbose` prints every finding in full, one block per pod with its own description and remediation. On a real cluster that can be hundreds of lines (one 5-node run produced 95 findings). The default text report is compact: findings are grouped by rule, each remediation is printed once and long lists are collapsed after 5 entries. Findings are still reported per pod; grouping per workload is *planned*.
 
 ## What it is
 
@@ -43,7 +43,7 @@ Read-only preflight analyzer for multi-node `kubectl drain`. Tells you what woul
 ## Usage
 
 ```sh
-draincheck --nodes worker-02,worker-04 [--kubeconfig PATH] [--context NAME] [--output text|json]
+draincheck --nodes worker-02,worker-04 [--kubeconfig PATH] [--context NAME] [--output text|json] [--verbose] [--fail-on blocked|risk|any]
 ```
 
 | Flag           | Description                                    | Default                |
@@ -52,6 +52,8 @@ draincheck --nodes worker-02,worker-04 [--kubeconfig PATH] [--context NAME] [--o
 | `--kubeconfig` | Path to kubeconfig                             | standard loading rules |
 | `--context`    | Kubeconfig context                             | current context        |
 | `--output`     | Output format: `text` or `json`                | `text`                 |
+| `--verbose`    | Text output only: print every finding in full  | off                    |
+| `--fail-on`    | Lowest finding level that exits `1`: `blocked`, `risk` or `any` | `blocked` |
 
 > [!TIP]
 > You usually do not need `--kubeconfig` or `--context`. draincheck loads your kubeconfig with the same rules as `kubectl`: the `KUBECONFIG` environment variable if set, otherwise `~/.kube/config`, using the current context. If `kubectl get nodes` works for the user running draincheck, `draincheck --nodes worker-02` works too. It does not call the `kubectl` binary; it reads the same kubeconfig and talks to the API server directly, so `kubectl` does not have to be installed.

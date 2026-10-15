@@ -26,7 +26,7 @@ func execute(ctx context.Context, opts options, c inventory.Collector, w io.Writ
 	}
 
 	fs := analyzer.Run(analyzer.Input{Snapshot: snap, Targets: targets}, analyzer.DefaultRules()...)
-	if err := writeReport(w, opts.Output, fs, snap.Timestamp()); err != nil {
+	if err := writeReport(w, opts.Output, opts.Verbose, fs, snap.Timestamp()); err != nil {
 		return fmt.Errorf("write report: %w", err)
 	}
 
@@ -36,11 +36,12 @@ func execute(ctx context.Context, opts options, c inventory.Collector, w io.Writ
 	return nil
 }
 
-// writeReport renders fs with the formatter chosen by --output. options
+// writeReport renders fs with the formatter chosen by --output; verbose only
+// affects the text formatter, JSON always carries every finding. options
 // validation guarantees format is one of the known values.
-func writeReport(w io.Writer, format string, fs []findings.Finding, taken time.Time) error {
+func writeReport(w io.Writer, format string, verbose bool, fs []findings.Finding, taken time.Time) error {
 	if format == outputJSON {
 		return report.WriteJSON(w, fs, taken)
 	}
-	return report.WriteText(w, fs, taken)
+	return report.WriteText(w, fs, taken, verbose)
 }

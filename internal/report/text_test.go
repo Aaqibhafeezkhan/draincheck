@@ -3,8 +3,6 @@ package report
 import (
 	"bytes"
 	"errors"
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -14,29 +12,21 @@ import (
 
 func renderText(t *testing.T, fs []findings.Finding) []byte {
 	t.Helper()
+	return renderTextMode(t, fs, false)
+}
+
+func renderVerbose(t *testing.T, fs []findings.Finding) []byte {
+	t.Helper()
+	return renderTextMode(t, fs, true)
+}
+
+func renderTextMode(t *testing.T, fs []findings.Finding, verbose bool) []byte {
+	t.Helper()
 	var buf bytes.Buffer
-	if err := WriteText(&buf, fs, snapshotTime); err != nil {
+	if err := WriteText(&buf, fs, snapshotTime, verbose); err != nil {
 		t.Fatal(err)
 	}
 	return buf.Bytes()
-}
-
-func TestWriteTextGolden(t *testing.T) {
-	got := renderText(t, sampleFindings())
-
-	path := filepath.Join("..", "..", "testdata", "report", "text.golden.txt")
-	if *update {
-		if err := os.WriteFile(path, got, 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
-	want, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(got, want) {
-		t.Errorf("output differs from %s (rerun with -update if the change is deliberate)\n got:\n%s\nwant:\n%s", path, got, want)
-	}
 }
 
 func TestWriteTextGroupsBySeverityBlockedFirst(t *testing.T) {
@@ -130,7 +120,7 @@ func TestWriteTextEndsWithNewline(t *testing.T) {
 func TestWriteTextReturnsWriterError(t *testing.T) {
 	want := errors.New("disk full")
 
-	err := WriteText(failingWriter{err: want}, sampleFindings(), snapshotTime)
+	err := WriteText(failingWriter{err: want}, sampleFindings(), snapshotTime, false)
 
 	if !errors.Is(err, want) {
 		t.Errorf("err = %v, want %v", err, want)

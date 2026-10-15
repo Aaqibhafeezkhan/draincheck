@@ -5,7 +5,7 @@
 ## Synopsis
 
 ```sh
-draincheck --nodes NODE[,NODE...] [--kubeconfig PATH] [--context NAME] [--output text|json] [--fail-on blocked|risk|any]
+draincheck --nodes NODE[,NODE...] [--kubeconfig PATH] [--context NAME] [--output text|json] [--verbose] [--fail-on blocked|risk|any]
 draincheck --version
 ```
 
@@ -17,6 +17,7 @@ draincheck --version
 | `--kubeconfig` | standard loading rules | Path to the kubeconfig file.                                 |
 | `--context`    | current context        | Kubeconfig context to use.                                   |
 | `--output`     | `text`                 | `text` (human-readable) or `json`. |
+| `--verbose`    | off                    | Text output only: print every finding in full instead of the compact layout. JSON always carries every finding. |
 | `--fail-on`    | `blocked`              | Lowest finding level that makes the run exit `1`: `blocked`, `risk` or `any`. |
 | `--version`    |                        | Print the version and exit.                                  |
 
@@ -45,7 +46,7 @@ Findings are sorted by namespace, kind and name.
 
 ## Text output
 
-`--output text` (the default) writes a human-readable report to stdout. Findings are grouped by severity, `BLOCKED` first, then `RISK`, then `UNKNOWN`; sections without findings are omitted. Within a section, findings are sorted by namespace, kind and name, so the same findings and snapshot time give byte-identical output.
+`--output text` (the default) writes a human-readable report to stdout. Findings are grouped by severity, `BLOCKED` first, then `RISK`, then `UNKNOWN`; sections without findings are omitted. Inside a section, findings are grouped by rule, rules in alphabetical order. A rule block has a header with the finding count, one line per finding and the remediation once. The output is deterministic: the same findings and snapshot time give byte-identical output.
 
 ```text
 draincheck - preflight maintenance analysis
@@ -58,11 +59,21 @@ Timestamp: 2026-10-14T09:30:00Z
 
 === BLOCKED (1) ===
 
-[PDB_DISRUPTION_BLOCKED] Pod/billing/payments-api-0
-  PodDisruptionBudget billing/payments-api-pdb allows 0 disruptions.
+[PDB_DISRUPTION_BLOCKED] 1 finding
+  Pod/billing/payments-api-0: PodDisruptionBudget billing/payments-api-pdb allows 0 disruptions.
   Remediation: Add healthy replicas or relax the budget.
 
 This report describes the observed cluster state at 2026-10-14T09:30:00Z and does not guarantee execution success. Cluster state may drift immediately after analysis.
+```
+
+- Findings of a rule that share a remediation print it once. A rule with several distinct remediations (for example `POD_OWNERSHIP` for DaemonSet versus static pods) prints each text once, with the resources it applies to: `Remediation (Pod/a/ds-1, Pod/a/ds-2): ...`.
+- Long lists are collapsed after 5 entries and end in `... and M more`. A line at the end of the report says when anything was collapsed. `--verbose` prints every finding.
+- `--verbose` prints one block per finding with its full description and remediation:
+
+```text
+[POD_OWNERSHIP] Pod/monitoring/agent-x1
+  Pod monitoring/agent-x1 is managed by a DaemonSet.
+  Remediation: Drain with --ignore-daemonsets.
 ```
 
 - `Timestamp` is when the cluster snapshot was taken (RFC 3339, UTC), not when the report was printed. The closing disclaimer is mandatory and is always the last line.
