@@ -1,9 +1,30 @@
 package findings
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 )
+
+func ExampleSort() {
+	fs := []Finding{
+		{Resource: ResourceRef{Namespace: "web", Kind: "Pod", Name: "zeta"}},
+		{Resource: ResourceRef{Namespace: "web", Kind: "Pod", Name: "api"}},
+		{Resource: ResourceRef{Namespace: "web", Kind: "Deployment", Name: "frontend"}},
+		{Resource: ResourceRef{Namespace: "billing", Kind: "Pod", Name: "worker"}},
+	}
+
+	Sort(fs)
+	for _, f := range fs {
+		fmt.Println(f.Resource)
+	}
+
+	// Output:
+	// Pod/billing/worker
+	// Deployment/web/frontend
+	// Pod/web/api
+	// Pod/web/zeta
+}
 
 func TestSort(t *testing.T) {
 	ref := func(ns, kind, name string) ResourceRef {
