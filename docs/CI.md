@@ -22,6 +22,14 @@ GitHub Actions in `.github/workflows/`. Actions are pinned by commit SHA; Depend
 
 CodeQL and Scorecard upload to the Security tab, which needs a public repository.
 
+## Release
+
+| Workflow      | Runs on                     | What                                                                                             |
+| ------------- | --------------------------- | ------------------------------------------------------------------------------------------------ |
+| `release.yml` | push of tag `vX.Y.Z[-*]`    | GoReleaser builds Linux, macOS and Windows (`amd64`/`arm64`), checksums, cosign keyless signature, SLSA provenance (`*.intoto.jsonl`) |
+
+Top-level `permissions: read-all`; write permissions only on the `release` and `provenance` jobs. Config: `.goreleaser.yaml`. Details and verification: `docs/RELEASE.md`.
+
 ## Coverage diff
 
 `pr-validation.yml` job `coverage` runs `go test -coverprofile` on the PR base and on the PR, and writes a per-package table to the job summary. It is **informational only**: it never fails a PR and uses no third-party service. Logic: `.github/scripts/coverage-diff.sh`.
