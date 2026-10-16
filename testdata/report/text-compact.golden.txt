@@ -19,7 +19,7 @@ Timestamp: 2026-10-10T21:00:00Z
 === RISK (2) ===
 
 [MISSING_RESOURCE_REQUESTS] 1 finding
-  Pod/shop/web-0: Pod shop/web-0 has containers without resource requests.
+  Deployment/shop/web: 2 of 3 pods of Deployment shop/web have containers without resource requests.
   Remediation: Set CPU and memory requests.
 
 [POD_OWNERSHIP] 1 finding

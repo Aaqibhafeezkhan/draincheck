@@ -163,11 +163,12 @@ Raised for a pod on a target node whose ownership gives it special `kubectl drai
 
 Severity: `RISK`.
 
-Raised for a pod on a target node with at least one regular container that declares no CPU request or no memory request. The scheduler treats a missing request as zero, so the pod can be placed on a node with no real room for it, and capacity checks cannot account for it.
+Raised for a workload with a pod on a target node that has at least one regular container that declares no CPU request or no memory request. The scheduler treats a missing request as zero, so the pod can be placed on a node with no real room for it, and capacity checks cannot account for it.
 
-- **Resource:** the pod (`Pod/<namespace>/<name>`), one finding per pod.
-- **Evidence:** `node` and `containers`: each container with a missing request, in spec order, with `missing_cpu` and `missing_memory`.
-- Only pods scheduled on a target node count. Pods in phase `Succeeded` or `Failed`, DaemonSet-managed pods and static (mirror) pods are skipped, since `kubectl drain` does not evict them.
+- **Resource:** the owning workload (for example `Deployment/<namespace>/<name>`, `StatefulSet/...`, `Job/...`), one finding per workload however many replicas are affected. A pod with no controller is its own workload (`Pod/<namespace>/<name>`). A pod owned by a ReplicaSet resolves to the Deployment that owns the ReplicaSet.
+- **Description:** states how many of the workload's pods on the target nodes are affected, for example `2 of 3 pods of Deployment shop/web`.
+- **Evidence:** `owner_kind` and `owner_name` (omitted for a pod with no controller), `pods_on_targets` (the workload's pods on the target nodes that `kubectl drain` would evict, with or without requests) and `pods`. Each entry of `pods` has the pod `name`, its `node` and its `containers`: each container with a missing request, in spec order, with `missing_cpu` and `missing_memory`. Pods are sorted by name. The pod namespace is the namespace of the resource.
+- Only pods scheduled on a target node count, in `pods` and in `pods_on_targets`. Pods in phase `Succeeded` or `Failed`, DaemonSet-managed pods and static (mirror) pods are skipped, since `kubectl drain` does not evict them and they are never rescheduled. They stay visible through `POD_OWNERSHIP`.
 - Init containers are not inspected.
 - A CPU or memory request set at pod level (`spec.resources.requests`) covers every container for that resource.
 - Requests are read from the stored pod spec, so values filled in by a LimitRange or an admission webhook count as set.

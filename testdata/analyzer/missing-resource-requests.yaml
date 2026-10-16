@@ -1,5 +1,7 @@
 # Cluster for MISSING_RESOURCE_REQUESTS.
 #
+# One finding is expected per owning workload (a naked pod is its own workload).
+#
 # worker-01:
 #   shop/full-0          cpu and memory requested              -> not reported
 #   shop/bare-0          no requests at all                    -> web: cpu+memory
@@ -11,8 +13,18 @@
 #   monitoring/agent-x1  bare, DaemonSet-managed               -> skipped
 #   kube-system/etcd-worker-01  bare mirror pod                -> skipped
 #   tools/debug          bare, no controller                   -> debug: cpu+memory
+#   shop/web-7f9c-a, -b  bare replicas of Deployment web       -> web: cpu+memory
+#   shop/api-5d4-a       bare replica of Deployment api        -> app: cpu+memory
+#   shop/api-5d4-b       replica of api with requests          -> counted, not reported
+#   shop/migrate-x7k2p   bare, running pod of Job migrate      -> job: cpu+memory
+#   shop/migrate-done    bare, Succeeded pod of Job migrate    -> skipped, not counted
 # worker-02:
 #   shop/bare-1          no requests at all                    -> web: cpu+memory
+#   shop/web-7f9c-c      bare replica of Deployment web        -> web: cpu+memory
+#   shop/api-5d4-c       bare replica of Deployment api        -> app: cpu+memory
+#
+# Deployments web and api own ReplicaSets web-7f9c and api-5d4, so their pods
+# resolve through the ReplicaSet to the Deployment.
 apiVersion: v1
 kind: Node
 metadata:
@@ -184,3 +196,127 @@ spec:
   containers:
     - name: debug
       image: example/debug:1
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: web-7f9c
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: Deployment, name: web, uid: aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa, controller: true}
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: api-5d4
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: Deployment, name: api, uid: bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb, controller: true}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-7f9c-a
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: web-7f9c, uid: cccccccc-cccc-cccc-cccc-cccccccccccc, controller: true}
+spec:
+  nodeName: worker-01
+  containers:
+    - name: web
+      image: example/web:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-7f9c-b
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: web-7f9c, uid: cccccccc-cccc-cccc-cccc-cccccccccccc, controller: true}
+spec:
+  nodeName: worker-01
+  containers:
+    - name: web
+      image: example/web:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-7f9c-c
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: web-7f9c, uid: cccccccc-cccc-cccc-cccc-cccccccccccc, controller: true}
+spec:
+  nodeName: worker-02
+  containers:
+    - name: web
+      image: example/web:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-5d4-a
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: api-5d4, uid: dddddddd-dddd-dddd-dddd-dddddddddddd, controller: true}
+spec:
+  nodeName: worker-01
+  containers:
+    - name: app
+      image: example/api:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-5d4-b
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: api-5d4, uid: dddddddd-dddd-dddd-dddd-dddddddddddd, controller: true}
+spec:
+  nodeName: worker-01
+  containers:
+    - name: app
+      image: example/api:1
+      resources:
+        requests: {cpu: 100m, memory: 64Mi}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-5d4-c
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: api-5d4, uid: dddddddd-dddd-dddd-dddd-dddddddddddd, controller: true}
+spec:
+  nodeName: worker-02
+  containers:
+    - name: app
+      image: example/api:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: migrate-x7k2p
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: batch/v1, kind: Job, name: migrate, uid: eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee, controller: true}
+spec:
+  nodeName: worker-01
+  containers:
+    - name: job
+      image: example/job:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: migrate-done
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: batch/v1, kind: Job, name: migrate, uid: eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee, controller: true}
+spec:
+  nodeName: worker-01
+  containers:
+    - name: job
+      image: example/job:1
+status:
+  phase: Succeeded
