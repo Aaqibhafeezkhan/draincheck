@@ -22,8 +22,8 @@ Timestamp: 2026-10-10T21:00:00Z
   Pod monitoring/agent-x1 is managed by a DaemonSet.
   Remediation: Drain with --ignore-daemonsets.
 
-[MISSING_RESOURCE_REQUESTS] Pod/shop/web-0
-  Pod shop/web-0 has containers without resource requests.
+[MISSING_RESOURCE_REQUESTS] Deployment/shop/web
+  2 of 3 pods of Deployment shop/web have containers without resource requests.
   Remediation: Set CPU and memory requests.
 
 === UNKNOWN (1) ===

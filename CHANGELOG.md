@@ -11,6 +11,18 @@ entries under `[Unreleased]` in the same pull request as the change (see
 
 ## [Unreleased]
 
+### Changed
+
+#### Analyzer rules
+
+- `MISSING_RESOURCE_REQUESTS` now reports one finding per owning workload
+  (Deployment, StatefulSet, Job or a pod with no controller) instead of one
+  per pod, so 10 replicas without requests are one finding. The finding points
+  at the workload and states how many of its pods on the target nodes are
+  affected. The JSON `evidence` changes: `node` and `containers` move into a
+  `pods` list (each pod with its `node` and `containers`), next to
+  `owner_kind`, `owner_name` and `pods_on_targets`. No pod is dropped (#73).
+
 ## [0.0.1] - 2026-10-16
 
 First pre-alpha release. It checks PodDisruptionBudgets, pod ownership and

@@ -46,11 +46,19 @@ func sampleFindings() []findings.Finding {
 			Remediation: "Check it manually.",
 		},
 		{
-			RuleID:      "MISSING_RESOURCE_REQUESTS",
-			Severity:    findings.Risk,
-			Resource:    findings.ResourceRef{Kind: "Pod", Namespace: "shop", Name: "web-0"},
-			Evidence:    findings.MissingRequestsEvidence{Node: "worker-02", Containers: []findings.MissingRequestsContainer{{Name: "web", MissingCPU: true, MissingMemory: true}}},
-			Description: "Pod shop/web-0 has containers without resource requests.",
+			RuleID:   "MISSING_RESOURCE_REQUESTS",
+			Severity: findings.Risk,
+			Resource: findings.ResourceRef{Kind: "Deployment", Namespace: "shop", Name: "web"},
+			Evidence: findings.MissingRequestsEvidence{
+				OwnerKind:     "Deployment",
+				OwnerName:     "web",
+				PodsOnTargets: 3,
+				Pods: []findings.MissingRequestsPod{
+					{Name: "web-7f9c-a", Node: "worker-02", Containers: []findings.MissingRequestsContainer{{Name: "web", MissingCPU: true, MissingMemory: true}}},
+					{Name: "web-7f9c-b", Node: "worker-03", Containers: []findings.MissingRequestsContainer{{Name: "web", MissingCPU: true}}},
+				},
+			},
+			Description: "2 of 3 pods of Deployment shop/web have containers without resource requests.",
 			Remediation: "Set CPU and memory requests.",
 		},
 		{

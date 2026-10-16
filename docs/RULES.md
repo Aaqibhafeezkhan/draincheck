@@ -95,14 +95,14 @@ Severity: `RISK`.
 
 | Criterion | Answer |
 | --- | --- |
-| False-positive case | Requests are read from the stored pod spec, so values from a LimitRange or an admission webhook count as set. A pod that is not rescheduled is not affected; those are skipped (below). |
+| False-positive case | Requests are read from the stored pod spec, so values from a LimitRange or an admission webhook count as set. A pod that is not rescheduled is not affected; those are skipped (below). A pod with no controller is reported as its own workload, although nothing recreates it after a drain; the finding only matters if the operator recreates it elsewhere. |
 | Downgrade | Estimate-class rule: it is only ever `RISK`. |
 | Mirror kubectl | Implemented: terminal pods, DaemonSet pods and static (mirror) pods are skipped, because the rule's rationale (the pod may not fit where it is rescheduled) does not apply to pods that are never rescheduled. They stay visible through `POD_OWNERSHIP`. |
-| Grouping | None: one finding per pod, so replicas of one Deployment repeat the same message. One finding per owning workload is *planned*, see *group MISSING_RESOURCE_REQUESTS per owning workload*. |
+| Grouping | Findings are grouped per owning workload (Deployment, StatefulSet, Job and so on), found with `inventory.OwnerResolver`. A pod with no controller counts as its own workload. Ten replicas missing requests give one finding. The description states the count once (for example "2 of 3 pods of Deployment shop/web") and the per-pod detail goes into the evidence. |
 | Estimates | Yes. The finding lists the containers and which request each lacks. Init containers are not inspected. |
-| Evidence | `findings.MissingRequestsEvidence`: `node` and `containers` with `missing_cpu` and `missing_memory`. |
-| Fixture | `testdata/analyzer`. |
-| Visibility | One finding per affected pod; nothing is hidden. |
+| Evidence | `findings.MissingRequestsEvidence`: `owner_kind` and `owner_name` (omitted for a pod with no controller), `pods_on_targets` (the workload's pods on the target nodes that kubectl would evict, the denominator of the count) and `pods`. Each entry of `pods` has `name`, `node` and `containers` with `missing_cpu` and `missing_memory`. |
+| Fixture | `testdata/analyzer/missing-resource-requests.yaml`: replicas of a Deployment on several nodes, a partly affected Deployment, a Job with a finished pod, DaemonSet and mirror pods. |
+| Visibility | Every affected pod, its node and its containers are in `pods` in the JSON report. The text report shows the count; `--verbose` shows the full description. |
 
 ## See also
 

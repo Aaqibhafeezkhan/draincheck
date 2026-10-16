@@ -55,18 +55,37 @@
     {
       "rule_id": "MISSING_RESOURCE_REQUESTS",
       "severity": "RISK",
-      "resource": "Pod/shop/web-0",
+      "resource": "Deployment/shop/web",
       "evidence": {
-        "node": "worker-02",
-        "containers": [
+        "owner_kind": "Deployment",
+        "owner_name": "web",
+        "pods_on_targets": 3,
+        "pods": [
           {
-            "name": "web",
-            "missing_cpu": true,
-            "missing_memory": true
+            "name": "web-7f9c-a",
+            "node": "worker-02",
+            "containers": [
+              {
+                "name": "web",
+                "missing_cpu": true,
+                "missing_memory": true
+              }
+            ]
+          },
+          {
+            "name": "web-7f9c-b",
+            "node": "worker-03",
+            "containers": [
+              {
+                "name": "web",
+                "missing_cpu": true,
+                "missing_memory": false
+              }
+            ]
           }
         ]
       },
-      "description": "Pod shop/web-0 has containers without resource requests.",
+      "description": "2 of 3 pods of Deployment shop/web have containers without resource requests.",
       "remediation": "Set CPU and memory requests."
     }
   ]
