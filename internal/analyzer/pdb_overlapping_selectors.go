@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/Veinar/draincheck/internal/findings"
+	"github.com/Veinar/draincheck/internal/inventory"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 )
@@ -18,9 +19,10 @@ const PDBOverlappingSelectorsID = "PDB_OVERLAPPING_SELECTORS"
 // and rejects the eviction with an error, whatever the budgets allow.
 //
 // One BLOCKED finding is emitted per pod, with every matching PDB as
-// evidence. Pods in a terminal phase (Succeeded, Failed) are skipped because
-// eviction does not consult budgets for them. A PDB with an invalid selector
-// is skipped: it cannot be matched reliably.
+// evidence. Pods that kubectl drain never evicts are skipped (DaemonSet pods
+// and static pods, see skippedByDrain), as are pods in a terminal phase
+// (Succeeded, Failed), because eviction does not consult budgets for them. A
+// PDB with an invalid selector is skipped: it cannot be matched reliably.
 type PDBOverlappingSelectors struct{}
 
 // ID implements Rule.
@@ -32,10 +34,11 @@ func (PDBOverlappingSelectors) Evaluate(in Input) []findings.Finding {
 		return nil
 	}
 
+	owners := inventory.NewOwnerResolver(in.Snapshot)
 	var out []findings.Finding
 	pdbs := in.Snapshot.PodDisruptionBudgets()
 	for _, pod := range in.Snapshot.Pods() {
-		if !slices.Contains(in.Targets, pod.Spec.NodeName) || terminal(pod) {
+		if !slices.Contains(in.Targets, pod.Spec.NodeName) || terminal(pod) || skippedByDrain(pod, owners) {
 			continue
 		}
 		var matched []string

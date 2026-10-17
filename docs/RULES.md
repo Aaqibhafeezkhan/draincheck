@@ -50,14 +50,14 @@ Severity: `BLOCKED`.
 
 | Criterion | Answer |
 | --- | --- |
-| False-positive case | `status.disruptionsAllowed` is read as is. A PDB whose status is not yet reconciled (`observedGeneration` differs from `generation`) reports a stale number: *planned*, see *PDB_STALE_STATUS and downgrade BLOCKED to UNKNOWN on unreconciled PDB*. A PDB owned by an operator that removes it when the node is cordoned is not told apart from a plain one: *planned*, see *report PDBs of operator-managed pods as UNKNOWN, not BLOCKED*. A PDB that selects a DaemonSet or static pod is reported although kubectl never evicts those pods: no downgrade yet, planned for later together with the one-finding-per-PDB change. |
-| Downgrade | Implemented: pods in phase `Succeeded` or `Failed` are skipped, and a PDB with an invalid selector is skipped. Nothing else is downgraded yet; the stale and operator-managed cases above become `UNKNOWN` when implemented. |
-| Mirror kubectl | Terminal pods only, see above. DaemonSet and mirror pods are *not* skipped yet. |
-| Grouping | None: one finding per pod and PDB, so 10 replicas behind one PDB give 10 findings. One finding per PDB is *planned*, see *PDB_DISRUPTION_BLOCKED must emit one finding per PDB*. |
+| False-positive case | `status.disruptionsAllowed` is read as is. A PDB whose status is not yet reconciled (`observedGeneration` differs from `generation`) reports a stale number: *planned*, see *PDB_STALE_STATUS and downgrade BLOCKED to UNKNOWN on unreconciled PDB*. A PDB owned by an operator that removes it when the node is cordoned is not told apart from a plain one: *planned*, see *report PDBs of operator-managed pods as UNKNOWN, not BLOCKED*. A PDB that selects only DaemonSet or static pods gives no finding, because kubectl never evicts those pods (see *Mirror kubectl*). |
+| Downgrade | Implemented: pods in phase `Succeeded` or `Failed` and pods kubectl never evicts (below) are skipped, and a PDB with an invalid selector is skipped. A PDB left with no pod gives no finding. Nothing else is downgraded yet; the stale and operator-managed cases above become `UNKNOWN` when implemented. |
+| Mirror kubectl | Implemented: terminal pods, DaemonSet-managed pods and static (mirror) pods are skipped, because `kubectl drain` never evicts them, so the eviction API never consults a budget for them. They stay visible through `POD_OWNERSHIP`. One corner is not covered: a pod whose DaemonSet has been deleted is still skipped as a DaemonSet pod, because draincheck does not list DaemonSets (see `POD_OWNERSHIP`); kubectl handles such an orphan differently, so a budget on it can be missed. |
+| Grouping | One finding per PDB, pointing at the PDB: 10 replicas behind one PDB give one finding. The description states the numbers (healthy, desired) and the pod and node counts once. A pod selected by two blocked PDBs is listed under each. |
 | Estimates | Not an estimate: the number comes from the PDB status. |
-| Evidence | `findings.PDBEvidence`: PDB namespace and name, `current_healthy`, `desired_healthy`, `disruptions_allowed`. |
-| Fixture | `testdata/analyzer`; the stale and operator-managed fixtures come with their issues. |
-| Visibility | One finding per affected pod; nothing is hidden. |
+| Evidence | `findings.PDBEvidence`: PDB `namespace` and `name`, `current_healthy`, `desired_healthy`, `disruptions_allowed`, `nodes` (the target nodes the pods run on) and `pods` (each with `namespace`, `name` and `node`). |
+| Fixture | `testdata/analyzer/pdb-disruption-blocked.yaml`: a PDB over pods on three nodes, two PDBs on one pod, and pods that must not be reported (finished, DaemonSet, static), including a PDB that selects only a DaemonSet pod. Also PDBs that allow a disruption and PDBs with an invalid or missing selector. The stale and operator-managed fixtures come with their issues. |
+| Visibility | Every selected pod and its node is in `pods` and `nodes` in the JSON report, so grouping hides nothing. The text report shows one line per PDB; `--verbose` shows the full description. |
 
 ### `PDB_OVERLAPPING_SELECTORS`
 
@@ -65,9 +65,9 @@ Severity: `BLOCKED`.
 
 | Criterion | Answer |
 | --- | --- |
-| False-positive case | The eviction API rejects a pod selected by several PDBs whatever the budgets allow, so for a pod that is evicted the finding is exact. It is a false positive for a DaemonSet or static pod, which kubectl never evicts. |
-| Downgrade | Implemented: terminal pods and PDBs with an invalid selector are skipped. No other downgrade; none is needed for evicted pods. |
-| Mirror kubectl | Terminal pods only. DaemonSet and mirror pods are *not* skipped yet, which is planned for later together with the one-finding-per-PDB change. |
+| False-positive case | The eviction API rejects a pod selected by several PDBs whatever the budgets allow, so for a pod that is evicted the finding is exact. DaemonSet and static pods, which kubectl never evicts, are skipped (see *Mirror kubectl*). |
+| Downgrade | Implemented: terminal pods, pods kubectl never evicts (below) and PDBs with an invalid selector are skipped. No other downgrade; none is needed for evicted pods. |
+| Mirror kubectl | Implemented: terminal pods, DaemonSet-managed pods and static (mirror) pods are skipped, because `kubectl drain` never evicts them, so the eviction API never sees them. They stay visible through `POD_OWNERSHIP`. A pod whose DaemonSet has been deleted is still skipped, for the reason given under `PDB_DISRUPTION_BLOCKED`. |
 | Grouping | One finding per pod, with every matching PDB in evidence. Replicas sharing the same overlap each get a finding. |
 | Estimates | Not an estimate. |
 | Evidence | `findings.OverlappingPDBsEvidence`: `namespace` and the `pdbs` that select the pod, sorted by name. |

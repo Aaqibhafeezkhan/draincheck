@@ -20,7 +20,7 @@ func TestPDBOverlappingSelectors(t *testing.T) {
 		want    []findings.Finding
 	}{
 		{
-			name:    "pod matched by two budgets, and by three listed in name order",
+			name:    "pod matched by two budgets, and by three listed in name order; DaemonSet and static pods are not reported",
 			targets: []string{"worker-01"},
 			want: []findings.Finding{
 				{RuleID: "PDB_OVERLAPPING_SELECTORS", Severity: findings.Blocked, Resource: findings.ResourceRef{Kind: "Pod", Namespace: "shop", Name: "db-0"}, Evidence: db},

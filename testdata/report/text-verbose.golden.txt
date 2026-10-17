@@ -8,13 +8,13 @@ Timestamp: 2026-10-10T21:00:00Z
 
 === BLOCKED (2) ===
 
-[PDB_DISRUPTION_BLOCKED] Pod/billing/payments-api-0
-  PodDisruptionBudget billing/payments-api-pdb allows 0 disruptions.
-  Remediation: Add healthy replicas or relax the budget.
-
 [PDB_OVERLAPPING_SELECTORS] Pod/billing/payments-api-1
   Pod is selected by 2 PodDisruptionBudgets.
   Remediation: Narrow the selectors.
+
+[PDB_DISRUPTION_BLOCKED] PodDisruptionBudget/billing/payments-api-pdb
+  PodDisruptionBudget billing/payments-api-pdb allows 0 disruptions.
+  Remediation: Add healthy replicas or relax the budget.
 
 === RISK (2) ===
 

@@ -1,10 +1,19 @@
 # Cluster for PDB_DISRUPTION_BLOCKED.
 #
-# billing/api-pdb allows 0 disruptions and covers api-0 (worker-01) and
-# api-1 (worker-02). api-job-0 matches it but has already Succeeded.
-# shop/web-pdb allows 1 disruption. shop/cache-0 has no PDB.
+# billing/api-pdb allows 0 disruptions and covers api-0 (worker-01), api-1
+# (worker-02) and api-2 (worker-03): one finding, three pods, three nodes.
+# Pods that must NOT appear in it although the selector matches them:
+# api-job-0 (already Succeeded), api-logger-x1 (DaemonSet pod) and
+# api-static-worker-01 (static pod); kubectl drain never evicts those.
+# shop/web-pdb allows 1 disruption. shop/cache-0 is selected by two budgets
+# that both allow 0 (cache-pdb-a, cache-pdb-b): one finding each, and the pod
+# is listed under both.
+# shop/broken-pdb has an invalid selector and shop/no-selector-pdb has none:
+# neither selects anything.
 # staging/api-0 carries the same labels as billing/api-0 but PDBs are
 # namespaced. batch/job-0 is covered by an empty selector that allows 0.
+# monitoring/agent-pdb allows 0 but only selects a DaemonSet pod, so there is
+# no finding at all.
 apiVersion: v1
 kind: Node
 metadata:
@@ -14,6 +23,11 @@ apiVersion: v1
 kind: Node
 metadata:
   name: worker-02
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-03
 ---
 apiVersion: v1
 kind: Pod
@@ -44,6 +58,19 @@ spec:
 apiVersion: v1
 kind: Pod
 metadata:
+  name: api-2
+  namespace: billing
+  labels:
+    app: api
+spec:
+  nodeName: worker-03
+  containers:
+    - name: api
+      image: example/api:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
   name: api-job-0
   namespace: billing
   labels:
@@ -55,6 +82,46 @@ spec:
       image: example/api:1
 status:
   phase: Succeeded
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-logger-x1
+  namespace: billing
+  labels:
+    app: api
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: DaemonSet
+      name: api-logger
+      uid: 11111111-1111-1111-1111-111111111111
+      controller: true
+spec:
+  nodeName: worker-01
+  containers:
+    - name: logger
+      image: example/logger:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-static-worker-01
+  namespace: billing
+  labels:
+    app: api
+  annotations:
+    kubernetes.io/config.mirror: 0123456789abcdef
+  ownerReferences:
+    - apiVersion: v1
+      kind: Node
+      name: worker-01
+      uid: 22222222-2222-2222-2222-222222222222
+      controller: true
+spec:
+  nodeName: worker-01
+  containers:
+    - name: api
+      image: example/api:1
 ---
 apiVersion: v1
 kind: Pod
@@ -85,6 +152,19 @@ spec:
 apiVersion: v1
 kind: Pod
 metadata:
+  name: broken-0
+  namespace: shop
+  labels:
+    app: broken
+spec:
+  nodeName: worker-01
+  containers:
+    - name: broken
+      image: example/broken:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
   name: api-0
   namespace: staging
   labels:
@@ -106,21 +186,40 @@ spec:
     - name: job
       image: example/job:1
 ---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: agent-x1
+  namespace: monitoring
+  labels:
+    app: agent
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: DaemonSet
+      name: agent
+      uid: 33333333-3333-3333-3333-333333333333
+      controller: true
+spec:
+  nodeName: worker-01
+  containers:
+    - name: agent
+      image: example/agent:1
+---
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
   name: api-pdb
   namespace: billing
 spec:
-  minAvailable: 2
+  minAvailable: 3
   selector:
     matchLabels:
       app: api
 status:
-  currentHealthy: 2
-  desiredHealthy: 2
+  currentHealthy: 3
+  desiredHealthy: 3
   disruptionsAllowed: 0
-  expectedPods: 2
+  expectedPods: 3
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget
@@ -141,11 +240,90 @@ status:
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
+  name: cache-pdb-a
+  namespace: shop
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: cache
+status:
+  currentHealthy: 1
+  desiredHealthy: 1
+  disruptionsAllowed: 0
+  expectedPods: 1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: cache-pdb-b
+  namespace: shop
+spec:
+  maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: cache
+status:
+  currentHealthy: 1
+  desiredHealthy: 1
+  disruptionsAllowed: 0
+  expectedPods: 1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: broken-pdb
+  namespace: shop
+spec:
+  minAvailable: 1
+  selector:
+    matchExpressions:
+      - key: app
+        operator: NotAValidOperator
+        values: ["broken"]
+status:
+  currentHealthy: 1
+  desiredHealthy: 1
+  disruptionsAllowed: 0
+  expectedPods: 1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: no-selector-pdb
+  namespace: shop
+spec:
+  minAvailable: 1
+status:
+  currentHealthy: 0
+  desiredHealthy: 0
+  disruptionsAllowed: 0
+  expectedPods: 0
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
   name: all-pods
   namespace: batch
 spec:
   maxUnavailable: 0
   selector: {}
+status:
+  currentHealthy: 1
+  desiredHealthy: 1
+  disruptionsAllowed: 0
+  expectedPods: 1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: agent-pdb
+  namespace: monitoring
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: agent
 status:
   currentHealthy: 1
   desiredHealthy: 1
