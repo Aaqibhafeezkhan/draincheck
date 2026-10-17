@@ -12,20 +12,6 @@
       "remediation": "Check it manually."
     },
     {
-      "rule_id": "PDB_DISRUPTION_BLOCKED",
-      "severity": "BLOCKED",
-      "resource": "Pod/billing/payments-api-0",
-      "evidence": {
-        "namespace": "billing",
-        "name": "payments-api-pdb",
-        "current_healthy": 3,
-        "desired_healthy": 3,
-        "disruptions_allowed": 0
-      },
-      "description": "PodDisruptionBudget billing/payments-api-pdb allows 0 disruptions.",
-      "remediation": "Add healthy replicas or relax the budget."
-    },
-    {
       "rule_id": "PDB_OVERLAPPING_SELECTORS",
       "severity": "BLOCKED",
       "resource": "Pod/billing/payments-api-1",
@@ -38,6 +24,36 @@
       },
       "description": "Pod is selected by 2 PodDisruptionBudgets.",
       "remediation": "Narrow the selectors."
+    },
+    {
+      "rule_id": "PDB_DISRUPTION_BLOCKED",
+      "severity": "BLOCKED",
+      "resource": "PodDisruptionBudget/billing/payments-api-pdb",
+      "evidence": {
+        "namespace": "billing",
+        "name": "payments-api-pdb",
+        "current_healthy": 3,
+        "desired_healthy": 3,
+        "disruptions_allowed": 0,
+        "nodes": [
+          "worker-02",
+          "worker-03"
+        ],
+        "pods": [
+          {
+            "namespace": "billing",
+            "name": "payments-api-0",
+            "node": "worker-02"
+          },
+          {
+            "namespace": "billing",
+            "name": "payments-api-1",
+            "node": "worker-03"
+          }
+        ]
+      },
+      "description": "PodDisruptionBudget billing/payments-api-pdb allows 0 disruptions.",
+      "remediation": "Add healthy replicas or relax the budget."
     },
     {
       "rule_id": "POD_OWNERSHIP",

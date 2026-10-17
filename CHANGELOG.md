@@ -30,6 +30,23 @@ entries under `[Unreleased]` in the same pull request as the change (see
   changes: `node` is replaced by `nodes` and a `pods` list (each pod with its
   `namespace`, `name` and `node`), next to `category` and, for DaemonSets,
   `owner_kind` and `owner_name`. No pod is dropped (#70).
+- `PDB_DISRUPTION_BLOCKED` now reports one finding per PodDisruptionBudget
+  instead of one per pod, so 10 replicas behind one budget are one finding.
+  The finding points at the `PodDisruptionBudget` instead of a pod, and its
+  description gives the numbers (healthy, desired) once, with how many pods on
+  how many target nodes are affected. The JSON `evidence` gains `nodes` and a
+  `pods` list (each pod with its `namespace`, `name` and `node`), next to the
+  existing budget fields. No pod is dropped (#71).
+
+### Fixed
+
+#### Analyzer rules
+
+- `PDB_DISRUPTION_BLOCKED` and `PDB_OVERLAPPING_SELECTORS` no longer report
+  DaemonSet pods and static pods. `kubectl drain` never evicts them, so no
+  PodDisruptionBudget can refuse their eviction; a budget that selects only
+  such pods was a false `BLOCKED`. They are still reported by `POD_OWNERSHIP`
+  (#71).
 
 ## [0.0.1] - 2026-10-16
 

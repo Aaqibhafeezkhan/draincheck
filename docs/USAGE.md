@@ -60,8 +60,8 @@ Timestamp: 2026-10-14T09:30:00Z
 === BLOCKED (1) ===
 
 [PDB_DISRUPTION_BLOCKED] 1 finding
-  Pod/billing/payments-api-0: PodDisruptionBudget billing/payments-api-pdb allows 0 disruptions.
-  Remediation: Add healthy replicas or relax the budget.
+  PodDisruptionBudget/billing/payments-api-pdb: PodDisruptionBudget billing/payments-api-pdb allows 0 disruptions (3 healthy, 3 desired), so eviction of its 2 pods on 2 target nodes will be refused.
+  Remediation: Add healthy replicas, or relax minAvailable/maxUnavailable on the PodDisruptionBudget, before draining.
 
 This report describes the observed cluster state at 2026-10-14T09:30:00Z and does not guarantee execution success. Cluster state may drift immediately after analysis.
 ```
@@ -94,8 +94,19 @@ This report describes the observed cluster state at 2026-10-14T09:30:00Z and doe
     {
       "rule_id": "PDB_DISRUPTION_BLOCKED",
       "severity": "BLOCKED",
-      "resource": "Pod/billing/payments-api-0",
-      "evidence": { "namespace": "billing", "name": "payments-api-pdb", "current_healthy": 3, "desired_healthy": 3, "disruptions_allowed": 0 },
+      "resource": "PodDisruptionBudget/billing/payments-api-pdb",
+      "evidence": {
+        "namespace": "billing",
+        "name": "payments-api-pdb",
+        "current_healthy": 3,
+        "desired_healthy": 3,
+        "disruptions_allowed": 0,
+        "nodes": ["worker-02", "worker-03"],
+        "pods": [
+          { "namespace": "billing", "name": "payments-api-0", "node": "worker-02" },
+          { "namespace": "billing", "name": "payments-api-1", "node": "worker-03" }
+        ]
+      },
       "description": "...",
       "remediation": "..."
     }
@@ -118,11 +129,12 @@ Rules are implemented in `internal/analyzer` and all of them run on every invoca
 
 Severity: `BLOCKED`.
 
-Raised for a pod on a target node when a PodDisruptionBudget in the same namespace selects it and `status.disruptionsAllowed == 0`, so the eviction API will refuse the eviction.
+Raised for a PodDisruptionBudget with `status.disruptionsAllowed == 0` that selects pods on the target nodes, so the eviction API will refuse to evict them. Findings are grouped by budget: ten replicas behind one PDB are one finding, not ten.
 
-- **Resource:** the pod (`Pod/<namespace>/<name>`), one finding per pod and PDB. The finding points at the pod because it is the thing the drain will be stuck on; the PDB is carried as evidence.
-- **Evidence:** the PDB namespace and name, `current_healthy`, `desired_healthy` and `disruptions_allowed`.
-- Only pods scheduled on a target node count. Pods in phase `Succeeded` or `Failed` are skipped, since eviction does not consult budgets for them.
+- **Resource:** the PDB (`PodDisruptionBudget/<namespace>/<name>`), one finding per PDB.
+- **Description:** states the numbers once (healthy, desired, 0 allowed) and how many pods on how many target nodes are affected.
+- **Evidence:** the PDB `namespace` and `name`, `current_healthy`, `desired_healthy` and `disruptions_allowed`, then `nodes` (the target nodes the selected pods run on, sorted) and `pods`, each with its `namespace`, `name` and `node`, sorted by namespace and name. Every selected pod is listed, so grouping hides nothing. A pod selected by two blocked PDBs is listed under both.
+- Only pods scheduled on a target node count. Pods in phase `Succeeded` or `Failed`, DaemonSet-managed pods and static (mirror) pods are skipped, since `kubectl drain` does not evict them and the eviction API is never asked about them. They stay visible through `POD_OWNERSHIP`. A PDB that selects only such pods gives no finding.
 - A PDB with an empty selector (`{}`) selects every pod in its namespace; one with no selector selects none.
 - A PDB whose selector is invalid is skipped.
 - Cluster-wide budgets summed across the batch (several nodes sharing one PDB) are *planned*.
@@ -135,10 +147,10 @@ Raised for a pod on a target node when more than one PodDisruptionBudget in the 
 
 - **Resource:** the pod (`Pod/<namespace>/<name>`), one finding per pod.
 - **Evidence:** the `namespace` and the `pdbs` that select the pod, sorted by name.
-- Only pods scheduled on a target node count. Pods in phase `Succeeded` or `Failed` are skipped, since eviction does not consult budgets for them.
+- Only pods scheduled on a target node count. Pods in phase `Succeeded` or `Failed` are skipped, since eviction does not consult budgets for them. So are DaemonSet-managed pods and static (mirror) pods, which `kubectl drain` never evicts. They stay visible through `POD_OWNERSHIP`.
 - An empty selector (`{}`) selects every pod in its namespace, so it overlaps with any other budget there; one with no selector selects none.
 - A PDB whose selector is invalid is skipped.
-- A pod that is both overlapped and covered by a zero-disruption budget also gets a `PDB_DISRUPTION_BLOCKED` finding.
+- A pod that is both overlapped and covered by a zero-disruption budget is also listed in the `PDB_DISRUPTION_BLOCKED` finding of that budget.
 
 ### `POD_OWNERSHIP`
 
