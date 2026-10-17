@@ -23,7 +23,7 @@ Timestamp: 2026-10-10T21:00:00Z
   Remediation: Set CPU and memory requests.
 
 [POD_OWNERSHIP] 1 finding
-  Pod/monitoring/agent-x1: Pod monitoring/agent-x1 is managed by a DaemonSet.
+  DaemonSet/monitoring/agent: DaemonSet monitoring/agent has 2 pods on 2 target nodes.
   Remediation: Drain with --ignore-daemonsets.
 
 === UNKNOWN (1) ===

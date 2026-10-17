@@ -22,6 +22,14 @@ entries under `[Unreleased]` in the same pull request as the change (see
   affected. The JSON `evidence` changes: `node` and `containers` move into a
   `pods` list (each pod with its `node` and `containers`), next to
   `owner_kind`, `owner_name` and `pods_on_targets`. No pod is dropped (#73).
+- `POD_OWNERSHIP` now groups by cause instead of reporting every pod: one
+  finding per DaemonSet, one per node for its static pods, and still one per
+  pod with no controller. A DaemonSet on 28 nodes is one finding that says
+  `--ignore-daemonsets` is needed, not 28 copies of the same advice. Findings
+  point at the `DaemonSet` or the `Node` instead of a pod. The JSON `evidence`
+  changes: `node` is replaced by `nodes` and a `pods` list (each pod with its
+  `namespace`, `name` and `node`), next to `category` and, for DaemonSets,
+  `owner_kind` and `owner_name`. No pod is dropped (#70).
 
 ## [0.0.1] - 2026-10-16
 

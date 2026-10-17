@@ -23,11 +23,20 @@ var snapshotTime = time.Date(2026, 10, 10, 21, 0, 0, 0, time.UTC)
 func sampleFindings() []findings.Finding {
 	return []findings.Finding{
 		{
-			RuleID:      "POD_OWNERSHIP",
-			Severity:    findings.Risk,
-			Resource:    findings.ResourceRef{Kind: "Pod", Namespace: "monitoring", Name: "agent-x1"},
-			Evidence:    findings.OwnershipEvidence{Category: findings.OwnershipDaemonSet, Node: "worker-02", OwnerKind: "DaemonSet", OwnerName: "agent"},
-			Description: "Pod monitoring/agent-x1 is managed by a DaemonSet.",
+			RuleID:   "POD_OWNERSHIP",
+			Severity: findings.Risk,
+			Resource: findings.ResourceRef{Kind: "DaemonSet", Namespace: "monitoring", Name: "agent"},
+			Evidence: findings.OwnershipEvidence{
+				Category:  findings.OwnershipDaemonSet,
+				OwnerKind: "DaemonSet",
+				OwnerName: "agent",
+				Nodes:     []string{"worker-02", "worker-03"},
+				Pods: []findings.OwnershipPod{
+					{Namespace: "monitoring", Name: "agent-x1", Node: "worker-02"},
+					{Namespace: "monitoring", Name: "agent-x2", Node: "worker-03"},
+				},
+			},
+			Description: "DaemonSet monitoring/agent has 2 pods on 2 target nodes.",
 			Remediation: "Drain with --ignore-daemonsets.",
 		},
 		{
