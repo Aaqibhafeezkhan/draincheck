@@ -66,14 +66,14 @@ Timestamp: 2026-10-14T09:30:00Z
 This report describes the observed cluster state at 2026-10-14T09:30:00Z and does not guarantee execution success. Cluster state may drift immediately after analysis.
 ```
 
-- Findings of a rule that share a remediation print it once. A rule with several distinct remediations (for example `POD_OWNERSHIP` for DaemonSet versus static pods) prints each text once, with the resources it applies to: `Remediation (Pod/a/ds-1, Pod/a/ds-2): ...`.
+- Findings of a rule that share a remediation print it once. A rule with several distinct remediations (for example `POD_OWNERSHIP` for DaemonSet versus static pods) prints each text once, with the resources it applies to: `Remediation (DaemonSet/a/ds-1, DaemonSet/a/ds-2): ...`.
 - Long lists are collapsed after 5 entries and end in `... and M more`. A line at the end of the report says when anything was collapsed. `--verbose` prints every finding.
 - `--verbose` prints one block per finding with its full description and remediation:
 
 ```text
-[POD_OWNERSHIP] Pod/monitoring/agent-x1
-  Pod monitoring/agent-x1 is managed by a DaemonSet.
-  Remediation: Drain with --ignore-daemonsets.
+[POD_OWNERSHIP] DaemonSet/monitoring/agent
+  DaemonSet monitoring/agent has 2 pods on 2 target nodes. kubectl drain refuses DaemonSet pods without --ignore-daemonsets and never evicts them.
+  Remediation: Drain with --ignore-daemonsets; DaemonSet pods stay until the node itself goes down.
 ```
 
 - `Timestamp` is when the cluster snapshot was taken (RFC 3339, UTC), not when the report was printed. The closing disclaimer is mandatory and is always the last line.
@@ -144,20 +144,22 @@ Raised for a pod on a target node when more than one PodDisruptionBudget in the 
 
 Severity: `RISK`.
 
-Raised for a pod on a target node whose ownership gives it special `kubectl drain` behaviour. One finding per pod; the `category` in the evidence says which:
+Raised for pods on a target node whose ownership gives them special `kubectl drain` behaviour. Findings are grouped by cause, so a DaemonSet that runs on many nodes is one finding, not one per pod. The `category` in the evidence says which kind it is:
 
-| Category | Pod | What drain does |
+| Category | One finding per | What drain does |
 | --- | --- | --- |
-| `DaemonSet` | Controlled by a DaemonSet | Refused unless `--ignore-daemonsets`; never evicted. |
-| `StaticPod` | API mirror of a kubelet static pod (annotation `kubernetes.io/config.mirror`) | Skipped; cannot be rescheduled, stops with the node. |
-| `Unmanaged` | No controller | Refused unless `--force`; not recreated once deleted. |
+| `DaemonSet` | DaemonSet, covering all its pods on the target nodes | Refused unless `--ignore-daemonsets`; never evicted. |
+| `StaticPod` | Node, covering the API mirrors of kubelet static pods on it (annotation `kubernetes.io/config.mirror`) | Skipped; cannot be rescheduled, stops with the node. |
+| `Unmanaged` | Pod with no controller | Refused unless `--force`; not recreated once deleted. |
 
-- **Resource:** the pod (`Pod/<namespace>/<name>`).
-- **Evidence:** `category`, `node`, and `owner_kind`/`owner_name` for DaemonSet pods.
+- **Resource:** `DaemonSet/<namespace>/<name>` for DaemonSet pods, `Node/<name>` for static pods and `Pod/<namespace>/<name>` for a pod with no controller.
+- **Evidence:** `category`, `nodes` (the nodes the covered pods run on, sorted) and `pods`, each with its `namespace`, `name` and `node`, sorted by namespace and name. A DaemonSet finding also has `owner_kind` and `owner_name`. Every covered pod is listed, so grouping hides nothing.
+- Static pods get one finding per node rather than one for the whole drain, because the node is what you choose with `--nodes`. The description names the static pods; the point is to plan around the node outage, since kubectl skips them.
 - It is `RISK`, not `BLOCKED`, because whether the drain stops depends on flags draincheck cannot observe.
 - Only pods scheduled on a target node count. Pods in phase `Succeeded` or `Failed` are skipped, since `kubectl drain` removes them without further checks.
 - Pods managed by any other controller (Deployment, StatefulSet, Job, ...) are not reported. A pod whose ReplicaSet is missing from the snapshot is treated as managed.
 - A pod with a mirror annotation is always `StaticPod`, even though it also has a `Node` owner reference.
+- A pod controlled by a DaemonSet that no longer exists is still reported as a DaemonSet pod, since draincheck does not list DaemonSets. `kubectl drain` handles such an orphan differently: it fails with a not-found error, and only `--force` deletes the pod. Handling this case is *planned*.
 
 ### `MISSING_RESOURCE_REQUESTS`
 

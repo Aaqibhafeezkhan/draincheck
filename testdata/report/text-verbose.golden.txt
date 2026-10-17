@@ -18,8 +18,8 @@ Timestamp: 2026-10-10T21:00:00Z
 
 === RISK (2) ===
 
-[POD_OWNERSHIP] Pod/monitoring/agent-x1
-  Pod monitoring/agent-x1 is managed by a DaemonSet.
+[POD_OWNERSHIP] DaemonSet/monitoring/agent
+  DaemonSet monitoring/agent has 2 pods on 2 target nodes.
   Remediation: Drain with --ignore-daemonsets.
 
 [MISSING_RESOURCE_REQUESTS] Deployment/shop/web

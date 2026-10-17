@@ -50,7 +50,7 @@ Severity: `BLOCKED`.
 
 | Criterion | Answer |
 | --- | --- |
-| False-positive case | `status.disruptionsAllowed` is read as is. A PDB whose status is not yet reconciled (`observedGeneration` differs from `generation`) reports a stale number: *planned*, see *PDB_STALE_STATUS and downgrade BLOCKED to UNKNOWN on unreconciled PDB*. A PDB owned by an operator that removes it when the node is cordoned is not told apart from a plain one: *planned*, see *report PDBs of operator-managed pods as UNKNOWN, not BLOCKED*. A PDB that selects a DaemonSet or static pod is reported although kubectl never evicts those pods: no downgrade yet, not tracked in an issue. |
+| False-positive case | `status.disruptionsAllowed` is read as is. A PDB whose status is not yet reconciled (`observedGeneration` differs from `generation`) reports a stale number: *planned*, see *PDB_STALE_STATUS and downgrade BLOCKED to UNKNOWN on unreconciled PDB*. A PDB owned by an operator that removes it when the node is cordoned is not told apart from a plain one: *planned*, see *report PDBs of operator-managed pods as UNKNOWN, not BLOCKED*. A PDB that selects a DaemonSet or static pod is reported although kubectl never evicts those pods: no downgrade yet, planned for later together with the one-finding-per-PDB change. |
 | Downgrade | Implemented: pods in phase `Succeeded` or `Failed` are skipped, and a PDB with an invalid selector is skipped. Nothing else is downgraded yet; the stale and operator-managed cases above become `UNKNOWN` when implemented. |
 | Mirror kubectl | Terminal pods only, see above. DaemonSet and mirror pods are *not* skipped yet. |
 | Grouping | None: one finding per pod and PDB, so 10 replicas behind one PDB give 10 findings. One finding per PDB is *planned*, see *PDB_DISRUPTION_BLOCKED must emit one finding per PDB*. |
@@ -67,7 +67,7 @@ Severity: `BLOCKED`.
 | --- | --- |
 | False-positive case | The eviction API rejects a pod selected by several PDBs whatever the budgets allow, so for a pod that is evicted the finding is exact. It is a false positive for a DaemonSet or static pod, which kubectl never evicts. |
 | Downgrade | Implemented: terminal pods and PDBs with an invalid selector are skipped. No other downgrade; none is needed for evicted pods. |
-| Mirror kubectl | Terminal pods only. DaemonSet and mirror pods are *not* skipped yet (not tracked in an issue). |
+| Mirror kubectl | Terminal pods only. DaemonSet and mirror pods are *not* skipped yet, which is planned for later together with the one-finding-per-PDB change. |
 | Grouping | One finding per pod, with every matching PDB in evidence. Replicas sharing the same overlap each get a finding. |
 | Estimates | Not an estimate. |
 | Evidence | `findings.OverlappingPDBsEvidence`: `namespace` and the `pdbs` that select the pod, sorted by name. |
@@ -80,14 +80,14 @@ Severity: `RISK`.
 
 | Criterion | Answer |
 | --- | --- |
-| False-positive case | The facts are true, but kubectl handles DaemonSet and static pods on its own, so the finding is information, not a fault. |
+| False-positive case | The facts are true, but kubectl handles DaemonSet and static pods on its own, so the finding is information, not a fault. One corner is not covered: a pod whose DaemonSet has been deleted is still reported as a DaemonSet pod, because draincheck does not list DaemonSets. kubectl treats that orphan differently (it stops with a not-found error and only deletes the pod with `--force`). Handling it is *planned*, see *POD_OWNERSHIP must handle orphaned DaemonSet pods (DaemonSet no longer exists)*. |
 | Downgrade | Never `BLOCKED`: whether the drain stops depends on kubectl flags draincheck cannot observe, so every category is `RISK`. |
-| Mirror kubectl | Terminal pods are skipped. DaemonSet and static pods are reported on purpose, because the operator needs the `--ignore-daemonsets` flag and must plan for the node outage; the remediation says kubectl skips them. |
-| Grouping | None: one finding per pod, so a DaemonSet on 28 nodes gives 28 findings. One finding per DaemonSet and one per node for static pods is *planned*, see *POD_OWNERSHIP must group per DaemonSet and per node*. |
+| Mirror kubectl | Terminal pods are skipped. DaemonSet and static pods are reported on purpose, because the operator needs the `--ignore-daemonsets` flag and must plan for the node outage; the remediation says kubectl skips them. Because that advice is the same for every pod of a kind, it is given once per finding, not once per pod. |
+| Grouping | A DaemonSet is one finding, however many nodes it runs on (28 pods on 28 nodes is one finding). Static pods are one finding per node, listing the static pods that stop with it. A pod with no controller is one finding of its own, since each one is lost on drain. Collapsing static pods across nodes is left to the compact text report: the node is the unit of action, because `--nodes` picks nodes. |
 | Estimates | Not an estimate. |
-| Evidence | `findings.OwnershipEvidence`: `category`, `node`, and `owner_kind`/`owner_name` for DaemonSet pods. |
-| Fixture | `testdata/analyzer`. |
-| Visibility | One finding per pod; nothing is hidden. |
+| Evidence | `findings.OwnershipEvidence`: `category`, `nodes` and `pods` (each with `namespace`, `name` and `node`), plus `owner_kind` and `owner_name` for a DaemonSet. |
+| Fixture | `testdata/analyzer/pod-ownership.yaml`: a DaemonSet on three nodes, two DaemonSets with the same name in different namespaces, static pods on two nodes (one node with pods from two namespaces), naked pods, and managed and finished pods that must not be reported. |
+| Visibility | Every pod stays in `pods` in the JSON report, with its namespace and node. The text report shows one line per finding; `--verbose` prints the full description, which names the static pods. |
 
 ### `MISSING_RESOURCE_REQUESTS`
 

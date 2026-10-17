@@ -42,14 +42,29 @@
     {
       "rule_id": "POD_OWNERSHIP",
       "severity": "RISK",
-      "resource": "Pod/monitoring/agent-x1",
+      "resource": "DaemonSet/monitoring/agent",
       "evidence": {
         "category": "DaemonSet",
-        "node": "worker-02",
         "owner_kind": "DaemonSet",
-        "owner_name": "agent"
+        "owner_name": "agent",
+        "nodes": [
+          "worker-02",
+          "worker-03"
+        ],
+        "pods": [
+          {
+            "namespace": "monitoring",
+            "name": "agent-x1",
+            "node": "worker-02"
+          },
+          {
+            "namespace": "monitoring",
+            "name": "agent-x2",
+            "node": "worker-03"
+          }
+        ]
       },
-      "description": "Pod monitoring/agent-x1 is managed by a DaemonSet.",
+      "description": "DaemonSet monitoring/agent has 2 pods on 2 target nodes.",
       "remediation": "Drain with --ignore-daemonsets."
     },
     {

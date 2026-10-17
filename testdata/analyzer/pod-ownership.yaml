@@ -1,15 +1,24 @@
 # Cluster for POD_OWNERSHIP.
 #
+# Expected findings: one per DaemonSet, one per node that runs static pods, and
+# one per naked pod.
+#
 # worker-01:
-#   monitoring/agent-x1  DaemonSet-managed                -> DaemonSet
-#   kube-system/etcd-worker-01  mirror pod of a static pod -> StaticPod
-#   tools/debug          no controller                    -> Unmanaged
-#   shop/web-0           Deployment web via ReplicaSet    -> not reported
-#   shop/db-0            StatefulSet                      -> not reported
-#   shop/old-0           naked but already Succeeded      -> skipped
-#   shop/orphan-0        ReplicaSet missing from snapshot -> not reported
+#   monitoring/agent-x1  DaemonSet monitoring/agent         -> DaemonSet
+#   logging/agent-l1     DaemonSet logging/agent (same name, other namespace) -> DaemonSet
+#   kube-system/etcd-worker-01  mirror pod of a static pod  -> StaticPod
+#   edge/proxy-worker-01        mirror pod, other namespace -> StaticPod
+#   tools/debug          no controller                      -> Unmanaged
+#   shop/web-0           Deployment web via ReplicaSet      -> not reported
+#   shop/db-0            StatefulSet                        -> not reported
+#   shop/old-0           naked but already Succeeded        -> skipped
+#   shop/orphan-0        ReplicaSet missing from snapshot   -> not reported
 # worker-02:
-#   monitoring/agent-x2  DaemonSet-managed                -> DaemonSet
+#   monitoring/agent-x2  DaemonSet monitoring/agent         -> DaemonSet
+#   kube-system/etcd-worker-02  mirror pod of a static pod  -> StaticPod
+#   tools/scratch        no controller                      -> Unmanaged
+# worker-03:
+#   monitoring/agent-x3  DaemonSet monitoring/agent         -> DaemonSet
 apiVersion: v1
 kind: Node
 metadata:
@@ -19,6 +28,11 @@ apiVersion: v1
 kind: Node
 metadata:
   name: worker-02
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-03
 ---
 apiVersion: apps/v1
 kind: ReplicaSet
@@ -171,3 +185,86 @@ spec:
   containers:
     - name: app
       image: example/app:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: agent-x3
+  namespace: monitoring
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: DaemonSet
+      name: agent
+      uid: 22222222-2222-2222-2222-222222222222
+      controller: true
+spec:
+  nodeName: worker-03
+  containers:
+    - name: agent
+      image: example/agent:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: agent-l1
+  namespace: logging
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: DaemonSet
+      name: agent
+      uid: 77777777-7777-7777-7777-777777777777
+      controller: true
+spec:
+  nodeName: worker-01
+  containers:
+    - name: agent
+      image: example/logagent:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: etcd-worker-02
+  namespace: kube-system
+  annotations:
+    kubernetes.io/config.mirror: fedcba9876543210
+  ownerReferences:
+    - apiVersion: v1
+      kind: Node
+      name: worker-02
+      uid: 88888888-8888-8888-8888-888888888888
+      controller: true
+spec:
+  nodeName: worker-02
+  containers:
+    - name: etcd
+      image: example/etcd:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: proxy-worker-01
+  namespace: edge
+  annotations:
+    kubernetes.io/config.mirror: "0011223344556677"
+  ownerReferences:
+    - apiVersion: v1
+      kind: Node
+      name: worker-01
+      uid: 99999999-9999-9999-9999-999999999999
+      controller: true
+spec:
+  nodeName: worker-01
+  containers:
+    - name: proxy
+      image: example/proxy:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: scratch
+  namespace: tools
+spec:
+  nodeName: worker-02
+  containers:
+    - name: scratch
+      image: example/debug:1
