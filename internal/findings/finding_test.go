@@ -32,6 +32,35 @@ func TestFindingJSON(t *testing.T) {
 	}
 }
 
+func TestFindingJSONPDBStaleStatusEvidence(t *testing.T) {
+	f := Finding{
+		RuleID:   "PDB_STALE_STATUS",
+		Severity: Unknown,
+		Resource: ResourceRef{Kind: "PodDisruptionBudget", Namespace: "billing", Name: "payments-api-pdb"},
+		Evidence: PDBStaleStatusEvidence{
+			PDBEvidence: PDBEvidence{
+				Namespace:      "billing",
+				Name:           "payments-api-pdb",
+				CurrentHealthy: 3,
+				DesiredHealthy: 3,
+				Nodes:          []string{"worker-01"},
+				Pods:           []PDBPod{{Namespace: "billing", Name: "payments-api-0", Node: "worker-01"}},
+			},
+			ObservedGeneration: 1,
+			Generation:         2,
+		},
+	}
+	b, err := json.Marshal(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The budget fields sit next to the generations, not under a nested key.
+	want := `{"rule_id":"PDB_STALE_STATUS","severity":"UNKNOWN","resource":"PodDisruptionBudget/billing/payments-api-pdb","evidence":{"namespace":"billing","name":"payments-api-pdb","current_healthy":3,"desired_healthy":3,"disruptions_allowed":0,"nodes":["worker-01"],"pods":[{"namespace":"billing","name":"payments-api-0","node":"worker-01"}],"observed_generation":1,"generation":2},"description":"","remediation":""}`
+	if string(b) != want {
+		t.Errorf("json mismatch\n got: %s\nwant: %s", b, want)
+	}
+}
+
 func TestFindingJSONClusterScopedNilEvidence(t *testing.T) {
 	f := Finding{
 		RuleID:   "R",

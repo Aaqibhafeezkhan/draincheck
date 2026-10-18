@@ -1,0 +1,231 @@
+# Cluster for PDB_STALE_STATUS, and for its interplay with PDB_DISRUPTION_BLOCKED.
+#
+# A PDB is stale when status.observedGeneration differs from metadata.generation.
+#
+# billing/api-pdb is stale and allows 0: without the stale check it would be a
+# BLOCKED finding. It covers api-0 (worker-01) and api-1 (worker-02).
+# shop/web-pdb is stale but allows 1: its numbers cannot be trusted either, so
+# it is reported too. shop/cache-pdb is settled and allows 1: no finding.
+# batch/job-pdb is settled and allows 0: BLOCKED, not stale.
+# monitoring/agent-pdb is stale but selects only a DaemonSet pod, which kubectl
+# never evicts, so there is no finding. edge/proxy-pdb is stale but its only
+# pod runs on worker-03; it matters only when worker-03 is a target.
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-01
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-02
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-03
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-0
+  namespace: billing
+  labels:
+    app: api
+spec:
+  nodeName: worker-01
+  containers:
+    - name: api
+      image: example/api:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-1
+  namespace: billing
+  labels:
+    app: api
+spec:
+  nodeName: worker-02
+  containers:
+    - name: api
+      image: example/api:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-0
+  namespace: shop
+  labels:
+    app: web
+spec:
+  nodeName: worker-01
+  containers:
+    - name: web
+      image: example/web:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cache-0
+  namespace: shop
+  labels:
+    app: cache
+spec:
+  nodeName: worker-01
+  containers:
+    - name: cache
+      image: example/cache:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: job-0
+  namespace: batch
+  labels:
+    app: job
+spec:
+  nodeName: worker-01
+  containers:
+    - name: job
+      image: example/job:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: agent-x1
+  namespace: monitoring
+  labels:
+    app: agent
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: DaemonSet
+      name: agent
+      uid: 11111111-1111-1111-1111-111111111111
+      controller: true
+spec:
+  nodeName: worker-01
+  containers:
+    - name: agent
+      image: example/agent:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: proxy-0
+  namespace: edge
+  labels:
+    app: proxy
+spec:
+  nodeName: worker-03
+  containers:
+    - name: proxy
+      image: example/proxy:1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api-pdb
+  namespace: billing
+  generation: 2
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: api
+status:
+  observedGeneration: 1
+  currentHealthy: 2
+  desiredHealthy: 2
+  disruptionsAllowed: 0
+  expectedPods: 2
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web-pdb
+  namespace: shop
+  generation: 3
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: web
+status:
+  observedGeneration: 2
+  currentHealthy: 2
+  desiredHealthy: 1
+  disruptionsAllowed: 1
+  expectedPods: 2
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: cache-pdb
+  namespace: shop
+  generation: 1
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: cache
+status:
+  observedGeneration: 1
+  currentHealthy: 2
+  desiredHealthy: 1
+  disruptionsAllowed: 1
+  expectedPods: 2
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: job-pdb
+  namespace: batch
+  generation: 2
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: job
+status:
+  observedGeneration: 2
+  currentHealthy: 1
+  desiredHealthy: 1
+  disruptionsAllowed: 0
+  expectedPods: 1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: agent-pdb
+  namespace: monitoring
+  generation: 2
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: agent
+status:
+  observedGeneration: 1
+  currentHealthy: 1
+  desiredHealthy: 1
+  disruptionsAllowed: 0
+  expectedPods: 1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: proxy-pdb
+  namespace: edge
+  generation: 2
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: proxy
+status:
+  observedGeneration: 1
+  currentHealthy: 1
+  desiredHealthy: 1
+  disruptionsAllowed: 0
+  expectedPods: 1

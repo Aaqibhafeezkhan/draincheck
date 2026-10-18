@@ -137,6 +137,7 @@ Raised for a PodDisruptionBudget with `status.disruptionsAllowed == 0` that sele
 - Only pods scheduled on a target node count. Pods in phase `Succeeded` or `Failed`, DaemonSet-managed pods and static (mirror) pods are skipped, since `kubectl drain` does not evict them and the eviction API is never asked about them. They stay visible through `POD_OWNERSHIP`. A PDB that selects only such pods gives no finding.
 - A PDB with an empty selector (`{}`) selects every pod in its namespace; one with no selector selects none.
 - A PDB whose selector is invalid is skipped.
+- A PDB whose status is stale is not reported here: `PDB_STALE_STATUS` reports it as `UNKNOWN`, because its numbers cannot be trusted.
 - Cluster-wide budgets summed across the batch (several nodes sharing one PDB) are *planned*.
 
 ### `PDB_OVERLAPPING_SELECTORS`
@@ -151,6 +152,20 @@ Raised for a pod on a target node when more than one PodDisruptionBudget in the 
 - An empty selector (`{}`) selects every pod in its namespace, so it overlaps with any other budget there; one with no selector selects none.
 - A PDB whose selector is invalid is skipped.
 - A pod that is both overlapped and covered by a zero-disruption budget is also listed in the `PDB_DISRUPTION_BLOCKED` finding of that budget.
+
+### `PDB_STALE_STATUS`
+
+Severity: `UNKNOWN`.
+
+Raised for a PodDisruptionBudget whose `status.observedGeneration` differs from `metadata.generation` while it selects pods on the target nodes. The status of such a budget describes an older spec, so its numbers, `disruptionsAllowed` included, cannot be trusted, and draincheck cannot say whether the drain will be refused. The finding replaces the `PDB_DISRUPTION_BLOCKED` one for the same budget. It is `UNKNOWN`, so it makes the run exit `1` only with `--fail-on any`.
+
+- **Resource:** the PDB (`PodDisruptionBudget/<namespace>/<name>`), one finding per PDB.
+- **Description:** states `status.observedGeneration` and `metadata.generation`, and how many pods on how many target nodes are affected.
+- **Evidence:** the same fields as `PDB_DISRUPTION_BLOCKED` (the numbers as last reported, `nodes` and `pods`) plus `observed_generation` and `generation`.
+- A stale PDB is reported whatever its status allows, since an out-of-date number that allows a disruption cannot be trusted either.
+- The pods counted are the same as for `PDB_DISRUPTION_BLOCKED`: only pods on a target node, without finished, DaemonSet-managed and static pods. A stale PDB that selects only such pods gives no finding.
+- A PDB whose status is only briefly behind (right after its spec was edited) clears up once the disruption controller catches up; run draincheck again. One that stays stale points to an unhealthy kube-controller-manager.
+- Reporting a PDB whose selector matches no pod at all (probably a typo) is *planned*.
 
 ### `POD_OWNERSHIP`
 

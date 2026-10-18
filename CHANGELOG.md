@@ -11,6 +11,18 @@ entries under `[Unreleased]` in the same pull request as the change (see
 
 ## [Unreleased]
 
+### Added
+
+#### Analyzer rules
+
+- `PDB_STALE_STATUS`: a PodDisruptionBudget whose `status.observedGeneration`
+  differs from `metadata.generation` while it selects pods on the target nodes
+  is reported as `UNKNOWN`, one finding per budget. Such a status describes an
+  older spec, so its `disruptionsAllowed` cannot be trusted. The JSON
+  `evidence` has the budget fields of `PDB_DISRUPTION_BLOCKED` (the numbers as
+  last reported, `nodes` and `pods`) plus `observed_generation` and
+  `generation` (#41).
+
 ### Changed
 
 #### Analyzer rules
@@ -37,6 +49,9 @@ entries under `[Unreleased]` in the same pull request as the change (see
   how many target nodes are affected. The JSON `evidence` gains `nodes` and a
   `pods` list (each pod with its `namespace`, `name` and `node`), next to the
   existing budget fields. No pod is dropped (#71).
+- `PDB_DISRUPTION_BLOCKED` no longer reports a PodDisruptionBudget whose status
+  is stale as `BLOCKED`; `PDB_STALE_STATUS` reports it as `UNKNOWN` instead, so
+  a drain is not failed on a number that may be out of date (#41).
 
 ### Fixed
 
