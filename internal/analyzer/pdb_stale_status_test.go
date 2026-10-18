@@ -77,7 +77,7 @@ func TestPDBStaleStatus(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := Run(Input{Snapshot: s, Targets: tt.targets}, PDBStaleStatus{})
+			got := Run(nil, Input{Snapshot: s, Targets: tt.targets}, PDBStaleStatus{})
 
 			// Ignore prose; it is covered by TestPDBStaleStatusDescribesFinding.
 			for i := range got {
@@ -96,7 +96,7 @@ func TestPDBStaleStatus(t *testing.T) {
 func TestPDBStaleStatusReplacesBlocked(t *testing.T) {
 	s := snapshotFromFixture(t, "pdb-stale-status.yaml")
 
-	got := Run(Input{Snapshot: s, Targets: []string{"worker-01", "worker-02"}}, PDBDisruptionBlocked{}, PDBStaleStatus{})
+	got := Run(nil, Input{Snapshot: s, Targets: []string{"worker-01", "worker-02"}}, PDBDisruptionBlocked{}, PDBStaleStatus{})
 
 	var summary []string
 	for _, f := range got {

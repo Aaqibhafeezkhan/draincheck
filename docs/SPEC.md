@@ -75,6 +75,7 @@ draincheck/
 - **Typed evidence.** Rules return concrete, versioned Go structs, not `map[string]interface{}`, so the JSON schema stays stable for CI pipelines.
 - **Immutable snapshots.** The inventory collector takes a read-only snapshot of cluster state; rules evaluate that snapshot deterministically.
 - **Sorted findings.** All findings are sorted consistently by namespace, resource kind and name before printing or serialization.
+- **Accountable actions.** Every action draincheck takes is accounted for by a `DEBUG` line when `--debug` is set: each cluster read, each rule run and each decision that shapes the result. The lines go to stderr through an injected `*slog.Logger`, never to stdout, and never carry tokens or kubeconfig contents. See [USAGE.md](USAGE.md#debug-output).
 
 ## 6. Example output
 

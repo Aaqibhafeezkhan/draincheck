@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"slices"
 	"strings"
 	"testing"
@@ -49,7 +50,7 @@ func TestExecute(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var out bytes.Buffer
-			err := execute(context.Background(), tt.opts, inventory.NewClientsetCollector(unmanagedCluster()), &out)
+			err := execute(context.Background(), tt.opts, nil, inventory.NewClientsetCollector(unmanagedCluster(), nil), &out)
 
 			if tt.wantCode == 0 && err != nil {
 				t.Fatalf("execute() error = %v, want nil", err)
@@ -80,7 +81,7 @@ func TestExecute(t *testing.T) {
 func TestExecuteUnknownNode(t *testing.T) {
 	var out bytes.Buffer
 	opts := options{Nodes: []string{"ghost"}, Output: outputJSON, FailOn: failOnBlocked}
-	err := execute(context.Background(), opts, inventory.NewClientsetCollector(unmanagedCluster()), &out)
+	err := execute(context.Background(), opts, nil, inventory.NewClientsetCollector(unmanagedCluster(), nil), &out)
 
 	var nf *inventory.NodesNotFoundError
 	if !errors.As(err, &nf) {
@@ -114,7 +115,7 @@ func TestExecuteReportsSnapshotTimestampAndDisclaimer(t *testing.T) {
 			opts := options{Nodes: []string{"worker-1"}, Output: format, FailOn: failOnBlocked}
 			var out bytes.Buffer
 
-			_ = execute(context.Background(), opts, atFixedTime{inventory.NewClientsetCollector(unmanagedCluster())}, &out)
+			_ = execute(context.Background(), opts, nil, atFixedTime{inventory.NewClientsetCollector(unmanagedCluster(), nil)}, &out)
 
 			for _, want := range []string{"2026-10-14T09:30:00Z", "does not guarantee execution success"} {
 				if !strings.Contains(out.String(), want) {
@@ -128,7 +129,7 @@ func TestExecuteReportsSnapshotTimestampAndDisclaimer(t *testing.T) {
 func TestExecuteTextWritesReadableReport(t *testing.T) {
 	opts := options{Nodes: []string{"worker-1"}, Output: outputText, FailOn: failOnBlocked}
 	var out bytes.Buffer
-	err := execute(context.Background(), opts, inventory.NewClientsetCollector(unmanagedCluster()), &out)
+	err := execute(context.Background(), opts, nil, inventory.NewClientsetCollector(unmanagedCluster(), nil), &out)
 	if err != nil && exitCodeOf(err) != exitFindings {
 		t.Fatalf("error = %v, want nil or exit code %d", err, exitFindings)
 	}
@@ -150,7 +151,7 @@ func TestExecuteVerboseSelectsFullTextLayout(t *testing.T) {
 	} {
 		opts := options{Nodes: []string{"worker-1"}, Output: outputText, FailOn: failOnBlocked, Verbose: tc.verbose}
 		var out bytes.Buffer
-		_ = execute(context.Background(), opts, inventory.NewClientsetCollector(unmanagedCluster()), &out)
+		_ = execute(context.Background(), opts, nil, inventory.NewClientsetCollector(unmanagedCluster(), nil), &out)
 		if !strings.Contains(out.String(), tc.want) {
 			t.Errorf("verbose=%v: missing %q:\n%s", tc.verbose, tc.want, out.String())
 		}
@@ -165,7 +166,7 @@ func (failingCollector) Collect(context.Context) (*inventory.Snapshot, error) {
 
 func TestExecuteCollectError(t *testing.T) {
 	opts := options{Nodes: []string{"worker-1"}, Output: outputJSON, FailOn: failOnBlocked}
-	err := execute(context.Background(), opts, failingCollector{}, &bytes.Buffer{})
+	err := execute(context.Background(), opts, nil, failingCollector{}, &bytes.Buffer{})
 	if err == nil || !strings.Contains(err.Error(), "boom") {
 		t.Fatalf("error = %v, want wrapped collector error", err)
 	}
@@ -209,7 +210,7 @@ func TestExecuteBlockedFailsByDefault(t *testing.T) {
 	var out bytes.Buffer
 	opts := options{Nodes: []string{"worker-1"}, Output: outputJSON, FailOn: failOnBlocked}
 
-	err := execute(context.Background(), opts, inventory.NewClientsetCollector(client), &out)
+	err := execute(context.Background(), opts, nil, inventory.NewClientsetCollector(client, nil), &out)
 
 	if exitCodeOf(err) != exitFindings {
 		t.Fatalf("exit code = %d (err %v), want %d", exitCodeOf(err), err, exitFindings)
@@ -224,10 +225,10 @@ func TestExecuteBlockedFailsByDefault(t *testing.T) {
 
 func TestExecuteDuplicateNodesAreAnalyzedOnce(t *testing.T) {
 	var once, twice bytes.Buffer
-	c := atFixedTime{inventory.NewClientsetCollector(unmanagedCluster())}
+	c := atFixedTime{inventory.NewClientsetCollector(unmanagedCluster(), nil)}
 
-	_ = execute(context.Background(), options{Nodes: []string{"worker-1"}, Output: outputJSON, FailOn: failOnBlocked}, c, &once)
-	_ = execute(context.Background(), options{Nodes: []string{"worker-1", "worker-1"}, Output: outputJSON, FailOn: failOnBlocked}, c, &twice)
+	_ = execute(context.Background(), options{Nodes: []string{"worker-1"}, Output: outputJSON, FailOn: failOnBlocked}, nil, c, &once)
+	_ = execute(context.Background(), options{Nodes: []string{"worker-1", "worker-1"}, Output: outputJSON, FailOn: failOnBlocked}, nil, c, &twice)
 
 	if once.String() != twice.String() {
 		t.Errorf("duplicate --nodes changed the report:\n%s\nvs\n%s", once.String(), twice.String())
@@ -238,7 +239,7 @@ func TestExecuteWildcardOnEmptyCluster(t *testing.T) {
 	var out bytes.Buffer
 	opts := options{AllNodes: true, Output: outputJSON, FailOn: failOnBlocked}
 
-	err := execute(context.Background(), opts, inventory.NewClientsetCollector(fake.NewClientset()), &out)
+	err := execute(context.Background(), opts, nil, inventory.NewClientsetCollector(fake.NewClientset(), nil), &out)
 
 	if err == nil || !strings.Contains(err.Error(), "no nodes") {
 		t.Fatalf("error = %v, want 'no nodes'", err)
@@ -259,7 +260,7 @@ func TestExecuteForbiddenIsAnError(t *testing.T) {
 	var out bytes.Buffer
 	opts := options{Nodes: []string{"worker-1"}, Output: outputJSON, FailOn: failOnBlocked}
 
-	err := execute(context.Background(), opts, inventory.NewClientsetCollector(client), &out)
+	err := execute(context.Background(), opts, nil, inventory.NewClientsetCollector(client, nil), &out)
 
 	if err == nil || !strings.Contains(err.Error(), "list pods") || !strings.Contains(err.Error(), "forbidden") {
 		t.Fatalf("error = %v, want a forbidden error naming the pods list", err)
@@ -287,7 +288,7 @@ func TestExecutePassesContextToCollector(t *testing.T) {
 	cancel()
 	opts := options{Nodes: []string{"worker-1"}, Output: outputJSON, FailOn: failOnBlocked}
 
-	err := execute(ctx, opts, ctxCollector{}, &bytes.Buffer{})
+	err := execute(ctx, opts, nil, ctxCollector{}, &bytes.Buffer{})
 
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("error = %v, want context.Canceled", err)
@@ -304,7 +305,7 @@ func (failingWriter) Write([]byte) (int, error) { return 0, errors.New("broken p
 func TestExecuteWriteFailure(t *testing.T) {
 	opts := options{Nodes: []string{"worker-1"}, Output: outputJSON, FailOn: failOnBlocked}
 
-	err := execute(context.Background(), opts, inventory.NewClientsetCollector(unmanagedCluster()), failingWriter{})
+	err := execute(context.Background(), opts, nil, inventory.NewClientsetCollector(unmanagedCluster(), nil), failingWriter{})
 
 	if err == nil || !strings.Contains(err.Error(), "write report") {
 		t.Fatalf("error = %v, want 'write report'", err)
@@ -329,7 +330,7 @@ func TestExecuteIsDeterministic(t *testing.T) {
 	opts := options{Nodes: []string{"worker-1"}, Output: outputJSON, FailOn: failOnBlocked}
 
 	var first bytes.Buffer
-	if err := execute(context.Background(), opts, inventory.NewClientsetCollector(fake.NewClientset(objs...)), &first); err != nil {
+	if err := execute(context.Background(), opts, nil, inventory.NewClientsetCollector(fake.NewClientset(objs...), nil), &first); err != nil {
 		t.Fatal(err)
 	}
 	if n := len(ruleIDs(t, first.Bytes())); n < 9 {
@@ -337,11 +338,73 @@ func TestExecuteIsDeterministic(t *testing.T) {
 	}
 	for i := 0; i < 5; i++ {
 		var again bytes.Buffer
-		if err := execute(context.Background(), opts, inventory.NewClientsetCollector(fake.NewClientset(objs...)), &again); err != nil {
+		if err := execute(context.Background(), opts, nil, inventory.NewClientsetCollector(fake.NewClientset(objs...), nil), &again); err != nil {
 			t.Fatal(err)
 		}
 		if again.String() != first.String() {
 			t.Fatalf("run %d differs from the first run", i+2)
+		}
+	}
+}
+
+// debugLog returns a logger that writes DEBUG lines in text form to buf.
+func debugLog(buf *bytes.Buffer) *slog.Logger {
+	return slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+}
+
+// wantInOrder fails unless every want appears in got, each after the previous.
+func wantInOrder(t *testing.T, got string, wants ...string) {
+	t.Helper()
+	rest := got
+	for _, w := range wants {
+		i := strings.Index(rest, w)
+		if i < 0 {
+			t.Errorf("log is missing %q (or has it out of order):\n%s", w, got)
+			return
+		}
+		rest = rest[i+len(w):]
+	}
+}
+
+func TestExecuteLogsPipelineSteps(t *testing.T) {
+	opts := options{Nodes: []string{"worker-1"}, Output: outputJSON, FailOn: failOnRisk}
+	var out, logs bytes.Buffer
+
+	_ = execute(context.Background(), opts, debugLog(&logs), inventory.NewClientsetCollector(unmanagedCluster(), nil), &out)
+
+	wantInOrder(t, logs.String(),
+		`msg="resolve target nodes" requested=[worker-1] all=false targets=[worker-1]`,
+		`msg="rule done" rule=POD_OWNERSHIP findings=1`,
+		`msg=summary blocked=0 risk=1 unknown=0 fail_on=risk`,
+		`msg="write report" format=json verbose=false findings=1`,
+	)
+}
+
+func TestExecuteLogsRejectedTargetNodes(t *testing.T) {
+	opts := options{Nodes: []string{"ghost"}, Output: outputJSON, FailOn: failOnBlocked}
+	var out, logs bytes.Buffer
+
+	_ = execute(context.Background(), opts, debugLog(&logs), inventory.NewClientsetCollector(unmanagedCluster(), nil), &out)
+
+	wantInOrder(t, logs.String(), `msg="resolve target nodes failed"`, `requested=[ghost]`, `error="node(s) not found in cluster: ghost"`)
+}
+
+func TestExecuteDebugDoesNotChangeStdout(t *testing.T) {
+	for _, format := range []string{outputText, outputJSON} {
+		for _, verbose := range []bool{false, true} {
+			opts := options{Nodes: []string{"worker-1"}, Output: format, Verbose: verbose, FailOn: failOnBlocked}
+			c := atFixedTime{inventory.NewClientsetCollector(unmanagedCluster(), nil)}
+			var plain, debug, logs bytes.Buffer
+
+			_ = execute(context.Background(), opts, nil, c, &plain)
+			_ = execute(context.Background(), opts, debugLog(&logs), c, &debug)
+
+			if !bytes.Equal(plain.Bytes(), debug.Bytes()) {
+				t.Errorf("%s verbose=%v: stdout differs with a debug logger\nwithout:\n%s\nwith:\n%s", format, verbose, plain.String(), debug.String())
+			}
+			if logs.Len() == 0 {
+				t.Errorf("%s verbose=%v: the debug logger received nothing", format, verbose)
+			}
 		}
 	}
 }

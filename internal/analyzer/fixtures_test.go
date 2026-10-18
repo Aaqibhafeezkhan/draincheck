@@ -46,7 +46,7 @@ func snapshotFromFixture(t *testing.T, name string) *inventory.Snapshot {
 		objs = append(objs, obj)
 	}
 
-	s, err := inventory.NewClientsetCollector(fake.NewClientset(objs...)).Collect(context.Background())
+	s, err := inventory.NewClientsetCollector(fake.NewClientset(objs...), nil).Collect(context.Background())
 	if err != nil {
 		t.Fatalf("%s: collect: %v", name, err)
 	}

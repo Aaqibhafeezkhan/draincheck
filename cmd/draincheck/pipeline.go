@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"time"
 
 	"github.com/Veinar/draincheck/internal/analyzer"
@@ -14,18 +15,28 @@ import (
 
 // execute collects a snapshot, runs the default rules against the target
 // nodes and writes the report to w. It returns an *exitError with
-// exitFindings when the findings reach opts.FailOn.
-func execute(ctx context.Context, opts options, c inventory.Collector, w io.Writer) error {
+// exitFindings when the findings reach opts.FailOn. Each step writes a DEBUG
+// line to logger, which never touches w; a nil logger discards them.
+func execute(ctx context.Context, opts options, logger *slog.Logger, c inventory.Collector, w io.Writer) error {
+	if logger == nil {
+		logger = slog.New(slog.DiscardHandler)
+	}
+
 	snap, err := c.Collect(ctx)
 	if err != nil {
 		return fmt.Errorf("collect cluster state: %w", err)
 	}
 	targets, err := inventory.ResolveTargetNodes(snap, opts.Nodes, opts.AllNodes)
 	if err != nil {
+		logger.Debug("resolve target nodes failed", "requested", opts.Nodes, "all", opts.AllNodes, "error", err)
 		return err
 	}
+	logger.Debug("resolve target nodes", "requested", opts.Nodes, "all", opts.AllNodes, "targets", targets)
 
-	fs := analyzer.Run(analyzer.Input{Snapshot: snap, Targets: targets}, analyzer.DefaultRules()...)
+	fs := analyzer.Run(logger, analyzer.Input{Snapshot: snap, Targets: targets}, analyzer.DefaultRules()...)
+	logSummary(logger, fs, opts.FailOn)
+
+	logger.Debug("write report", "format", opts.Output, "verbose", opts.Verbose, "findings", len(fs))
 	if err := writeReport(w, opts.Output, opts.Verbose, fs, snap.Timestamp()); err != nil {
 		return fmt.Errorf("write report: %w", err)
 	}
@@ -34,6 +45,18 @@ func execute(ctx context.Context, opts options, c inventory.Collector, w io.Writ
 		return &exitError{code: exitFindings}
 	}
 	return nil
+}
+
+// logSummary writes the number of findings per severity and the --fail-on
+// level they are held against.
+func logSummary(logger *slog.Logger, fs []findings.Finding, failOn string) {
+	counts := map[findings.Severity]int{}
+	for _, f := range fs {
+		counts[f.Severity]++
+	}
+	logger.Debug("summary",
+		"blocked", counts[findings.Blocked], "risk", counts[findings.Risk], "unknown", counts[findings.Unknown],
+		"fail_on", failOn)
 }
 
 // writeReport renders fs with the formatter chosen by --output; verbose only

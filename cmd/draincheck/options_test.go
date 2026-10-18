@@ -31,6 +31,11 @@ func TestRootFlags(t *testing.T) {
 			want: options{Nodes: []string{"worker-02"}, Output: "text", FailOn: "blocked", Verbose: true},
 		},
 		{
+			name: "debug",
+			args: []string{"--nodes", "worker-02", "--debug"},
+			want: options{Nodes: []string{"worker-02"}, Output: "text", FailOn: "blocked", Debug: true},
+		},
+		{
 			name: "wildcard selects all nodes",
 			args: []string{"--nodes", "*"},
 			want: options{AllNodes: true, Output: "text", FailOn: "blocked"},

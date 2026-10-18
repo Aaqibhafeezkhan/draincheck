@@ -5,7 +5,7 @@
 ## Synopsis
 
 ```sh
-draincheck --nodes NODE[,NODE...] [--kubeconfig PATH] [--context NAME] [--output text|json] [--verbose] [--fail-on blocked|risk|any]
+draincheck --nodes NODE[,NODE...] [--kubeconfig PATH] [--context NAME] [--output text|json] [--verbose] [--fail-on blocked|risk|any] [--debug]
 draincheck --version
 ```
 
@@ -19,6 +19,7 @@ draincheck --version
 | `--output`     | `text`                 | `text` (human-readable) or `json`. |
 | `--verbose`    | off                    | Text output only: print every finding in full instead of the compact layout. JSON always carries every finding. |
 | `--fail-on`    | `blocked`              | Lowest finding level that makes the run exit `1`: `blocked`, `risk` or `any`. |
+| `--debug`      | off                    | Write one line to stderr for each action draincheck takes. The report on stdout does not change. See [Debug output](#debug-output). |
 | `--version`    |                        | Print the version and exit.                                  |
 
 `'*'` cannot be combined with node names. Quote it so the shell does not expand it. Surrounding whitespace in names is trimmed; empty names are error.
@@ -235,6 +236,46 @@ Read-only. Needs `list` on:
 - `poddisruptionbudgets` (`policy`, all namespaces)
 
 draincheck never cordons, evicts or modifies anything.
+
+## Debug output
+
+`--debug` makes every action draincheck takes visible. Each one writes a line at level `DEBUG` to **stderr**, in `key=value` form, so a debug log shows what draincheck read from the cluster, what it decided and how the run ended. Use it to find out why a run behaved as it did, and attach it when you report a problem.
+
+stdout is not touched. The text or JSON report is byte-for-byte the same with and without `--debug`, so scripts that read stdout keep working. Without `--debug`, nothing is written to stderr except errors.
+
+| Message | Written | Fields |
+| --- | --- | --- |
+| `settings` | when the run starts | `kubeconfig` (the files that are read), `context`, `nodes`, `all_nodes`, `output`, `verbose`, `fail_on` |
+| `list` | after each list call to the API server | `resource`, `count`, `duration` |
+| `list failed` | when a list call fails | `resource`, `duration`, `error` |
+| `resolve target nodes` | when the target nodes are accepted | `requested`, `all`, `targets` |
+| `resolve target nodes failed` | when a node does not exist or the cluster has no nodes | `requested`, `all`, `error` |
+| `rule start` and `rule done` | around each rule | `rule`; `findings` on `rule done` |
+| `summary` | when all rules are done | `blocked`, `risk`, `unknown`, `fail_on` |
+| `write report` | just before the report is written | `format`, `verbose`, `findings` |
+| `finished` | when the run ends, also after an error | `exit_code` |
+
+Example, with the path anonymized and the rule lines shortened:
+
+```text
+$ draincheck --nodes worker-1 --debug >report.txt
+time=2026-10-18T17:29:41.507Z level=DEBUG msg=settings kubeconfig=[/home/user/.kube/config] context=dev nodes=[worker-1] all_nodes=false output=text verbose=false fail_on=blocked
+time=2026-10-18T17:29:41.514Z level=DEBUG msg=list resource=nodes count=1 duration=4.807574ms
+time=2026-10-18T17:29:41.515Z level=DEBUG msg=list resource=pods count=1 duration=1.629527ms
+time=2026-10-18T17:29:41.516Z level=DEBUG msg=list resource=replicasets count=0 duration=433.921µs
+time=2026-10-18T17:29:41.516Z level=DEBUG msg=list resource=poddisruptionbudgets count=0 duration=399.377µs
+time=2026-10-18T17:29:41.516Z level=DEBUG msg="resolve target nodes" requested=[worker-1] all=false targets=[worker-1]
+time=2026-10-18T17:29:41.516Z level=DEBUG msg="rule start" rule=PDB_DISRUPTION_BLOCKED
+time=2026-10-18T17:29:41.516Z level=DEBUG msg="rule done" rule=PDB_DISRUPTION_BLOCKED findings=0
+...
+time=2026-10-18T17:29:41.516Z level=DEBUG msg="rule done" rule=POD_OWNERSHIP findings=1
+...
+time=2026-10-18T17:29:41.516Z level=DEBUG msg=summary blocked=0 risk=1 unknown=0 fail_on=blocked
+time=2026-10-18T17:29:41.516Z level=DEBUG msg="write report" format=text verbose=false findings=1
+time=2026-10-18T17:29:41.516Z level=DEBUG msg=finished exit_code=0
+```
+
+Debug lines name files, resources, rules and nodes, and give counts. They never contain tokens, client certificates, `Authorization` headers or anything read from the kubeconfig besides its path. The `kubeconfig` field lists the files draincheck reads: the path from `--kubeconfig`, or else the files in `KUBECONFIG`, or else `~/.kube/config`. An empty `context` means the current context of the kubeconfig.
 
 ## Exit codes
 

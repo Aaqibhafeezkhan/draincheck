@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-
-	"github.com/Veinar/draincheck/internal/inventory"
 )
 
 // version is overridden at build time via -ldflags "-X main.version=...".
@@ -25,13 +23,4 @@ func main() {
 		stop()
 		os.Exit(exitCodeOf(err))
 	}
-}
-
-// run connects to the cluster and executes the analysis.
-func run(ctx context.Context, opts options) error {
-	client, err := newClientset(opts.Kubeconfig, opts.Context)
-	if err != nil {
-		return err
-	}
-	return execute(ctx, opts, inventory.NewClientsetCollector(client), os.Stdout)
 }

@@ -12,6 +12,7 @@ Read-only Go CLI that preflight-checks a multi-node `kubectl drain`. Spec: `docs
 - **No `SAFE` status.** Findings are `BLOCKED`, `RISK` or `UNKNOWN` only.
 - **Typed evidence.** Concrete structs, never `map[string]interface{}`.
 - **Deterministic output.** Sort findings with `findings.Sort` before printing or serializing.
+- **Account for every action.** Each cluster read, rule run and decision that shapes the result writes a `DEBUG` line (`--debug`, stderr only). Never log secrets. Details under Code conventions.
 - **Ask, don't guess.** Open questions go to the user.
 
 ## Layout
@@ -33,6 +34,7 @@ Dependency direction: `cmd` -> `inventory`, `analyzer`, `report` -> `findings`. 
 - **One file = one concern.** One type or one rule per file; no grab-bag files.
 - **Test file mirrors source file:** `foo.go` -> `foo_test.go`.
 - Keep `cmd/` thin; logic lives in `internal/`.
+- **Debug accounts for actions.** `--debug` is how an operator checks what draincheck did, so every action has a `DEBUG` line: each cluster read (resource, count, duration), each rule (start, finish, findings) and each decision that shapes the result (target nodes, severity counts, exit code). A new API call, rule or decision ships with its `DEBUG` line and a test for it, and its row in the Debug output table in `docs/USAGE.md`. Log what was done and the outcome, not object contents. Never log tokens, certificates, `Authorization` headers or kubeconfig contents; log paths and names only. Use the `*slog.Logger` passed in from `cmd/draincheck` (a nil logger discards); no package-level logger. Diagnostics go to stderr only, and stdout must be byte-identical with and without `--debug`.
 - Test first (red, then green). Unit tests use the client-go fake clientset and `testdata/`.
 - `gofmt` and `go vet ./...` must be clean.
 - **Docs ship with code.** A change to a flag, rule, severity, output format, exit code or required permission updates `docs/` in the same change. Document only what is implemented; mark the rest *planned*.

@@ -101,7 +101,7 @@ func TestPodOwnership(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := Run(Input{Snapshot: s, Targets: tt.targets}, PodOwnership{})
+			got := Run(nil, Input{Snapshot: s, Targets: tt.targets}, PodOwnership{})
 
 			// Ignore prose; it is covered by TestPodOwnershipDescribesFinding.
 			for i := range got {
@@ -120,7 +120,7 @@ func TestPodOwnership(t *testing.T) {
 func TestPodOwnershipKeepsEveryPod(t *testing.T) {
 	s := snapshotFromFixture(t, "pod-ownership.yaml")
 
-	got := Run(Input{Snapshot: s, Targets: []string{"worker-01", "worker-02", "worker-03"}}, PodOwnership{})
+	got := Run(nil, Input{Snapshot: s, Targets: []string{"worker-01", "worker-02", "worker-03"}}, PodOwnership{})
 
 	seen := make(map[findings.OwnershipPod]int)
 	for _, g := range got {
@@ -159,8 +159,8 @@ func TestPodOwnershipIgnoresPodOrder(t *testing.T) {
 	reversed := inventory.NewSnapshot(s.Nodes(), pods, s.ReplicaSets(), s.PodDisruptionBudgets(), s.Timestamp())
 	targets := []string{"worker-01", "worker-02", "worker-03"}
 
-	want := Run(Input{Snapshot: s, Targets: targets}, PodOwnership{})
-	got := Run(Input{Snapshot: reversed, Targets: targets}, PodOwnership{})
+	want := Run(nil, Input{Snapshot: s, Targets: targets}, PodOwnership{})
+	got := Run(nil, Input{Snapshot: reversed, Targets: targets}, PodOwnership{})
 
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("reversing the pod order changed the findings\n got: %+v\nwant: %+v", got, want)
@@ -170,7 +170,7 @@ func TestPodOwnershipIgnoresPodOrder(t *testing.T) {
 func TestPodOwnershipDescribesFinding(t *testing.T) {
 	s := snapshotFromFixture(t, "pod-ownership.yaml")
 
-	got := Run(Input{Snapshot: s, Targets: []string{"worker-01", "worker-02", "worker-03"}}, PodOwnership{})
+	got := Run(nil, Input{Snapshot: s, Targets: []string{"worker-01", "worker-02", "worker-03"}}, PodOwnership{})
 
 	byResource := make(map[string]findings.Finding, len(got))
 	for _, g := range got {

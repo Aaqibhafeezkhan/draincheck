@@ -29,6 +29,8 @@ type options struct {
 	Verbose bool
 	// FailOn is the lowest finding level that makes the run exit 1.
 	FailOn string
+	// Debug writes diagnostic lines to stderr.
+	Debug bool
 }
 
 // validate checks the options and normalizes the "*" wildcard into AllNodes.

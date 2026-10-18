@@ -98,7 +98,7 @@ func TestMissingResourceRequests(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := Run(Input{Snapshot: s, Targets: tt.targets}, MissingResourceRequests{})
+			got := Run(nil, Input{Snapshot: s, Targets: tt.targets}, MissingResourceRequests{})
 
 			// Ignore prose; it is covered by TestMissingResourceRequestsDescribesFinding.
 			for i := range got {
@@ -116,7 +116,7 @@ func TestMissingResourceRequests(t *testing.T) {
 func TestMissingResourceRequestsOneFindingPerWorkload(t *testing.T) {
 	s := snapshotFromFixture(t, "missing-resource-requests.yaml")
 
-	got := Run(Input{Snapshot: s, Targets: []string{"worker-01", "worker-02"}}, MissingResourceRequests{})
+	got := Run(nil, Input{Snapshot: s, Targets: []string{"worker-01", "worker-02"}}, MissingResourceRequests{})
 
 	var web []findings.Finding
 	for _, g := range got {
@@ -138,7 +138,7 @@ func TestMissingResourceRequestsOneFindingPerWorkload(t *testing.T) {
 func TestMissingResourceRequestsDescribesFinding(t *testing.T) {
 	s := snapshotFromFixture(t, "missing-resource-requests.yaml")
 
-	got := Run(Input{Snapshot: s, Targets: []string{"worker-01", "worker-02"}}, MissingResourceRequests{})
+	got := Run(nil, Input{Snapshot: s, Targets: []string{"worker-01", "worker-02"}}, MissingResourceRequests{})
 
 	byResource := make(map[string]findings.Finding, len(got))
 	for _, g := range got {
@@ -178,7 +178,7 @@ func TestMissingResourceRequestsDescribesFinding(t *testing.T) {
 func TestMissingResourceRequestsSharesRemediation(t *testing.T) {
 	s := snapshotFromFixture(t, "missing-resource-requests.yaml")
 
-	got := Run(Input{Snapshot: s, Targets: []string{"worker-01", "worker-02"}}, MissingResourceRequests{})
+	got := Run(nil, Input{Snapshot: s, Targets: []string{"worker-01", "worker-02"}}, MissingResourceRequests{})
 
 	for _, g := range got[1:] {
 		if g.Remediation != got[0].Remediation {

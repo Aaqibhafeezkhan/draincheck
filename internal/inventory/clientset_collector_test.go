@@ -1,8 +1,11 @@
 package inventory
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -26,7 +29,7 @@ func TestClientsetCollectorCollect(t *testing.T) {
 		&policyv1.PodDisruptionBudget{ObjectMeta: metav1.ObjectMeta{Name: "api", Namespace: "billing"}},
 	)
 	now := time.Date(2026, 10, 12, 9, 0, 0, 0, time.UTC)
-	c := NewClientsetCollector(client)
+	c := NewClientsetCollector(client, nil)
 	c.now = func() time.Time { return now }
 
 	s, err := c.Collect(context.Background())
@@ -52,7 +55,7 @@ func TestClientsetCollectorCollect(t *testing.T) {
 
 func TestClientsetCollectorIsReadOnly(t *testing.T) {
 	client := fake.NewClientset()
-	if _, err := NewClientsetCollector(client).Collect(context.Background()); err != nil {
+	if _, err := NewClientsetCollector(client, nil).Collect(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	actions := client.Actions()
@@ -73,10 +76,73 @@ func TestClientsetCollectorListError(t *testing.T) {
 			client.PrependReactor("list", resource, func(k8stesting.Action) (bool, runtime.Object, error) {
 				return true, nil, errors.New("boom")
 			})
-			_, err := NewClientsetCollector(client).Collect(context.Background())
+			_, err := NewClientsetCollector(client, nil).Collect(context.Background())
 			if err == nil {
 				t.Fatal("expected error")
 			}
 		})
+	}
+}
+
+// debugLogger returns a logger that writes DEBUG lines in text form to buf.
+func debugLogger(buf *bytes.Buffer) *slog.Logger {
+	return slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+}
+
+func TestClientsetCollectorLogsEveryList(t *testing.T) {
+	client := fake.NewClientset(
+		&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "worker-01"}},
+		&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "worker-02"}},
+		&corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "api-0", Namespace: "billing"}},
+		&policyv1.PodDisruptionBudget{ObjectMeta: metav1.ObjectMeta{Name: "api", Namespace: "billing"}},
+	)
+	var buf bytes.Buffer
+
+	if _, err := NewClientsetCollector(client, debugLogger(&buf)).Collect(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
+	want := []string{
+		"resource=nodes count=2",
+		"resource=pods count=1",
+		"resource=replicasets count=0",
+		"resource=poddisruptionbudgets count=1",
+	}
+	if len(lines) != len(want) {
+		t.Fatalf("got %d log lines, want %d:\n%s", len(lines), len(want), buf.String())
+	}
+	for i, w := range want {
+		if !strings.Contains(lines[i], "msg=list ") || !strings.Contains(lines[i], w) || !strings.Contains(lines[i], "duration=") {
+			t.Errorf("line %d = %q, want msg=list with %q and a duration", i+1, lines[i], w)
+		}
+	}
+}
+
+func TestClientsetCollectorLogsFailedList(t *testing.T) {
+	client := fake.NewClientset()
+	client.PrependReactor("list", "pods", func(k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New("boom")
+	})
+	var buf bytes.Buffer
+
+	if _, err := NewClientsetCollector(client, debugLogger(&buf)).Collect(context.Background()); err == nil {
+		t.Fatal("expected error")
+	}
+
+	got := buf.String()
+	for _, want := range []string{"msg=list resource=nodes count=0", "msg=\"list failed\" resource=pods", "error=boom", "duration="} {
+		if !strings.Contains(got, want) {
+			t.Errorf("log is missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "resource=replicasets") {
+		t.Errorf("collection continued after the failed list:\n%s", got)
+	}
+}
+
+func TestClientsetCollectorNilLoggerDiscards(t *testing.T) {
+	if _, err := NewClientsetCollector(fake.NewClientset(), nil).Collect(context.Background()); err != nil {
+		t.Fatalf("Collect() with a nil logger error = %v", err)
 	}
 }

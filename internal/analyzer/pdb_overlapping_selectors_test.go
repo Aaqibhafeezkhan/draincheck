@@ -42,7 +42,7 @@ func TestPDBOverlappingSelectors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := Run(Input{Snapshot: s, Targets: tt.targets}, PDBOverlappingSelectors{})
+			got := Run(nil, Input{Snapshot: s, Targets: tt.targets}, PDBOverlappingSelectors{})
 
 			// Ignore prose; it is covered by TestPDBOverlappingSelectorsDescribesFinding.
 			for i := range got {

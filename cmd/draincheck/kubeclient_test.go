@@ -72,3 +72,26 @@ func TestNewClientsetMalformedKubeconfig(t *testing.T) {
 		t.Fatal("newClientset() error = nil, want error for malformed kubeconfig")
 	}
 }
+
+func TestKubeconfigPaths(t *testing.T) {
+	t.Run("explicit path wins over KUBECONFIG", func(t *testing.T) {
+		t.Setenv("KUBECONFIG", "/env/one"+string(filepath.ListSeparator)+"/env/two")
+		got := kubeconfigPaths("/explicit/config")
+		if len(got) != 1 || got[0] != "/explicit/config" {
+			t.Errorf("kubeconfigPaths() = %v, want [/explicit/config]", got)
+		}
+	})
+	t.Run("KUBECONFIG lists the files in order", func(t *testing.T) {
+		t.Setenv("KUBECONFIG", "/env/one"+string(filepath.ListSeparator)+"/env/two")
+		got := kubeconfigPaths("")
+		if len(got) != 2 || got[0] != "/env/one" || got[1] != "/env/two" {
+			t.Errorf("kubeconfigPaths() = %v, want [/env/one /env/two]", got)
+		}
+	})
+	t.Run("default is never empty", func(t *testing.T) {
+		t.Setenv("KUBECONFIG", "")
+		if got := kubeconfigPaths(""); len(got) == 0 {
+			t.Error("kubeconfigPaths() = [], want the default kubeconfig file")
+		}
+	})
+}
