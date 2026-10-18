@@ -4,7 +4,7 @@ Timestamp: 2026-10-10T21:00:00Z
 === FINDINGS SUMMARY ===
   BLOCKED: 2
   RISK:    2
-  UNKNOWN: 1
+  UNKNOWN: 2
 
 === BLOCKED (2) ===
 
@@ -26,7 +26,11 @@ Timestamp: 2026-10-10T21:00:00Z
   2 of 3 pods of Deployment shop/web have containers without resource requests.
   Remediation: Set CPU and memory requests.
 
-=== UNKNOWN (1) ===
+=== UNKNOWN (2) ===
+
+[PDB_DISRUPTION_BLOCKED] Namespace/storage-system
+  Operator storage.example.com (NodeAgent) manages 2 PodDisruptionBudgets in namespace storage-system with 0 allowed disruptions.
+  Remediation: Check the operator's drain documentation.
 
 [UNKNOWN_CONSTRAINT] Node/worker-02
   A constraint could not be evaluated.

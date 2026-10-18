@@ -1,0 +1,719 @@
+# Cluster for the operator-managed case of PDB_DISRUPTION_BLOCKED.
+#
+# An operator creates one PDB per node for its own pods. Each PDB selects one
+# pod, has no ownerReferences, and shows 0 allowed disruptions. The pod is
+# controlled by the operator's custom resource (controller: true), so the
+# group of its owner is not core, apps or batch.
+#
+# storage-system: operator storage.example.com (NodeAgent), PDBs agent-1-pdb ..
+#   agent-4-pdb on worker-01 .. worker-04, one finding for all four.
+#   agent-5-pdb on worker-05 allows 1 disruption: nothing to report.
+# storage-system-b: the same operator in a second namespace: its own finding.
+# block-storage: operator longhorn.io (InstanceManager), which has a more
+#   specific remediation text. widgets: operator other.example.org (Widget),
+#   which has none and gets the generic text, and a second operator of the same
+#   group (Gadget) in the same namespace: a finding of its own.
+# twin: one PDB selects a Widget pod and two Gadget pods. It is reported once,
+#   under the first of the two kinds (Gadget), with all three pods in evidence.
+# shop: PDBs whose pods are controlled by a Deployment (through a ReplicaSet),
+#   a StatefulSet, a Job and a ReplicationController: groups apps, apps, batch
+#   and core. They stay BLOCKED.
+# mixed: one PDB selects a Deployment pod (worker-01) and an operator pod
+#   (worker-02): operator-managed when both nodes are targets; only the
+#   Deployment pod is evicted when worker-01 alone is.
+# outdated: an operator PDB whose status is stale: PDB_STALE_STATUS reports it,
+#   not this rule.
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-01
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-02
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-03
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-04
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-05
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: agent-1
+  namespace: storage-system
+  labels:
+    node-agent: agent-1
+  ownerReferences:
+    - apiVersion: storage.example.com/v1
+      kind: NodeAgent
+      name: agent-1
+      uid: 11111111-1111-1111-1111-111111111111
+      controller: true
+spec:
+  nodeName: worker-01
+  containers:
+    - name: agent
+      image: example/agent:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: agent-2
+  namespace: storage-system
+  labels:
+    node-agent: agent-2
+  ownerReferences:
+    - apiVersion: storage.example.com/v1
+      kind: NodeAgent
+      name: agent-2
+      uid: 22222222-2222-2222-2222-222222222222
+      controller: true
+spec:
+  nodeName: worker-02
+  containers:
+    - name: agent
+      image: example/agent:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: agent-3
+  namespace: storage-system
+  labels:
+    node-agent: agent-3
+  ownerReferences:
+    - apiVersion: storage.example.com/v1
+      kind: NodeAgent
+      name: agent-3
+      uid: 33333333-3333-3333-3333-333333333333
+      controller: true
+spec:
+  nodeName: worker-03
+  containers:
+    - name: agent
+      image: example/agent:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: agent-4
+  namespace: storage-system
+  labels:
+    node-agent: agent-4
+  ownerReferences:
+    - apiVersion: storage.example.com/v1
+      kind: NodeAgent
+      name: agent-4
+      uid: 44444444-4444-4444-4444-444444444444
+      controller: true
+spec:
+  nodeName: worker-04
+  containers:
+    - name: agent
+      image: example/agent:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: agent-5
+  namespace: storage-system
+  labels:
+    node-agent: agent-5
+  ownerReferences:
+    - apiVersion: storage.example.com/v1
+      kind: NodeAgent
+      name: agent-5
+      uid: 55555555-5555-5555-5555-555555555555
+      controller: true
+spec:
+  nodeName: worker-05
+  containers:
+    - name: agent
+      image: example/agent:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: agent-1
+  namespace: storage-system-b
+  labels:
+    node-agent: agent-1
+  ownerReferences:
+    - apiVersion: storage.example.com/v1
+      kind: NodeAgent
+      name: agent-1
+      uid: 66666666-6666-6666-6666-666666666666
+      controller: true
+spec:
+  nodeName: worker-02
+  containers:
+    - name: agent
+      image: example/agent:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: instance-manager-a
+  namespace: block-storage
+  labels:
+    manager: instance-manager-a
+  ownerReferences:
+    - apiVersion: longhorn.io/v1beta2
+      kind: InstanceManager
+      name: instance-manager-a
+      uid: 77777777-7777-7777-7777-777777777777
+      controller: true
+spec:
+  nodeName: worker-01
+  containers:
+    - name: manager
+      image: example/manager:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: widget-0
+  namespace: widgets
+  labels:
+    app: widget
+  ownerReferences:
+    - apiVersion: other.example.org/v1
+      kind: Widget
+      name: widget
+      uid: 88888888-8888-8888-8888-888888888888
+      controller: true
+spec:
+  nodeName: worker-02
+  containers:
+    - name: widget
+      image: example/widget:1
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: web-7f9c
+  namespace: shop
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: web
+      uid: 99999999-9999-9999-9999-999999999999
+      controller: true
+spec:
+  selector:
+    matchLabels:
+      app: web
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-7f9c-a
+  namespace: shop
+  labels:
+    app: web
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: web-7f9c
+      uid: aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
+      controller: true
+spec:
+  nodeName: worker-01
+  containers:
+    - name: web
+      image: example/web:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-7f9c-b
+  namespace: shop
+  labels:
+    app: web
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: web-7f9c
+      uid: aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
+      controller: true
+spec:
+  nodeName: worker-02
+  containers:
+    - name: web
+      image: example/web:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: db-0
+  namespace: shop
+  labels:
+    app: db
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: StatefulSet
+      name: db
+      uid: bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb
+      controller: true
+spec:
+  nodeName: worker-03
+  containers:
+    - name: db
+      image: example/db:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: migrate-x1
+  namespace: shop
+  labels:
+    app: migrate
+  ownerReferences:
+    - apiVersion: batch/v1
+      kind: Job
+      name: migrate
+      uid: cccccccc-cccc-cccc-cccc-cccccccccccc
+      controller: true
+spec:
+  nodeName: worker-01
+  containers:
+    - name: job
+      image: example/job:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: legacy-0
+  namespace: shop
+  labels:
+    app: legacy
+  ownerReferences:
+    - apiVersion: v1
+      kind: ReplicationController
+      name: legacy
+      uid: dddddddd-dddd-dddd-dddd-dddddddddddd
+      controller: true
+spec:
+  nodeName: worker-04
+  containers:
+    - name: legacy
+      image: example/legacy:1
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: mixed-web-5d
+  namespace: mixed
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: mixed-web
+      uid: eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee
+      controller: true
+spec:
+  selector:
+    matchLabels:
+      tier: mixed
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mixed-web-0
+  namespace: mixed
+  labels:
+    tier: mixed
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: mixed-web-5d
+      uid: ffffffff-ffff-ffff-ffff-ffffffffffff
+      controller: true
+spec:
+  nodeName: worker-01
+  containers:
+    - name: web
+      image: example/web:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mixed-agent-0
+  namespace: mixed
+  labels:
+    tier: mixed
+  ownerReferences:
+    - apiVersion: storage.example.com/v1
+      kind: NodeAgent
+      name: mixed-agent
+      uid: 12121212-1212-1212-1212-121212121212
+      controller: true
+spec:
+  nodeName: worker-02
+  containers:
+    - name: agent
+      image: example/agent:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: outdated-agent-0
+  namespace: outdated
+  labels:
+    app: outdated-agent
+  ownerReferences:
+    - apiVersion: storage.example.com/v1
+      kind: NodeAgent
+      name: outdated-agent
+      uid: 34343434-3434-3434-3434-343434343434
+      controller: true
+spec:
+  nodeName: worker-03
+  containers:
+    - name: agent
+      image: example/agent:1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: agent-1-pdb
+  namespace: storage-system
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      node-agent: agent-1
+status:
+  currentHealthy: 1
+  desiredHealthy: 1
+  disruptionsAllowed: 0
+  expectedPods: 1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: agent-2-pdb
+  namespace: storage-system
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      node-agent: agent-2
+status:
+  currentHealthy: 1
+  desiredHealthy: 1
+  disruptionsAllowed: 0
+  expectedPods: 1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: agent-3-pdb
+  namespace: storage-system
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      node-agent: agent-3
+status:
+  currentHealthy: 1
+  desiredHealthy: 1
+  disruptionsAllowed: 0
+  expectedPods: 1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: agent-4-pdb
+  namespace: storage-system
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      node-agent: agent-4
+status:
+  currentHealthy: 1
+  desiredHealthy: 1
+  disruptionsAllowed: 0
+  expectedPods: 1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: agent-5-pdb
+  namespace: storage-system
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      node-agent: agent-5
+status:
+  currentHealthy: 2
+  desiredHealthy: 1
+  disruptionsAllowed: 1
+  expectedPods: 2
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: agent-1-pdb
+  namespace: storage-system-b
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      node-agent: agent-1
+status:
+  currentHealthy: 1
+  desiredHealthy: 1
+  disruptionsAllowed: 0
+  expectedPods: 1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: instance-manager-a
+  namespace: block-storage
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      manager: instance-manager-a
+status:
+  currentHealthy: 1
+  desiredHealthy: 1
+  disruptionsAllowed: 0
+  expectedPods: 1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: widget-pdb
+  namespace: widgets
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: widget
+status:
+  currentHealthy: 1
+  desiredHealthy: 1
+  disruptionsAllowed: 0
+  expectedPods: 1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web-pdb
+  namespace: shop
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: web
+status:
+  currentHealthy: 2
+  desiredHealthy: 2
+  disruptionsAllowed: 0
+  expectedPods: 2
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: db-pdb
+  namespace: shop
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: db
+status:
+  currentHealthy: 1
+  desiredHealthy: 1
+  disruptionsAllowed: 0
+  expectedPods: 1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: migrate-pdb
+  namespace: shop
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: migrate
+status:
+  currentHealthy: 1
+  desiredHealthy: 1
+  disruptionsAllowed: 0
+  expectedPods: 1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: legacy-pdb
+  namespace: shop
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: legacy
+status:
+  currentHealthy: 1
+  desiredHealthy: 1
+  disruptionsAllowed: 0
+  expectedPods: 1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: mixed-pdb
+  namespace: mixed
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      tier: mixed
+status:
+  currentHealthy: 2
+  desiredHealthy: 2
+  disruptionsAllowed: 0
+  expectedPods: 2
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: outdated-agent-pdb
+  namespace: outdated
+  generation: 2
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: outdated-agent
+status:
+  observedGeneration: 1
+  currentHealthy: 1
+  desiredHealthy: 1
+  disruptionsAllowed: 0
+  expectedPods: 1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gadget-0
+  namespace: widgets
+  labels:
+    app: gadget
+  ownerReferences:
+    - apiVersion: other.example.org/v1
+      kind: Gadget
+      name: gadget
+      uid: 45454545-4545-4545-4545-454545454545
+      controller: true
+spec:
+  nodeName: worker-02
+  containers:
+    - name: gadget
+      image: example/gadget:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: twin-a
+  namespace: twin
+  labels:
+    tier: twin
+  ownerReferences:
+    - apiVersion: other.example.org/v1
+      kind: Widget
+      name: twin-widget
+      uid: 56565656-5656-5656-5656-565656565656
+      controller: true
+spec:
+  nodeName: worker-04
+  containers:
+    - name: widget
+      image: example/widget:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: twin-b
+  namespace: twin
+  labels:
+    tier: twin
+  ownerReferences:
+    - apiVersion: other.example.org/v1
+      kind: Gadget
+      name: twin-gadget
+      uid: 67676767-6767-6767-6767-676767676767
+      controller: true
+spec:
+  nodeName: worker-04
+  containers:
+    - name: gadget
+      image: example/gadget:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: twin-c
+  namespace: twin
+  labels:
+    tier: twin
+  ownerReferences:
+    - apiVersion: other.example.org/v1
+      kind: Gadget
+      name: twin-gadget
+      uid: 78787878-7878-7878-7878-787878787878
+      controller: true
+spec:
+  nodeName: worker-04
+  containers:
+    - name: gadget
+      image: example/gadget:1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: gadget-pdb
+  namespace: widgets
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: gadget
+status:
+  currentHealthy: 1
+  desiredHealthy: 1
+  disruptionsAllowed: 0
+  expectedPods: 1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: twin-pdb
+  namespace: twin
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      tier: twin
+status:
+  currentHealthy: 2
+  desiredHealthy: 2
+  disruptionsAllowed: 0
+  expectedPods: 2

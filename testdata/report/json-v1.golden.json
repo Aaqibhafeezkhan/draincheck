@@ -4,6 +4,56 @@
   "disclaimer": "This report describes the observed cluster state at 2026-10-10T21:00:00Z and does not guarantee execution success. Cluster state may drift immediately after analysis.",
   "findings": [
     {
+      "rule_id": "PDB_DISRUPTION_BLOCKED",
+      "severity": "UNKNOWN",
+      "resource": "Namespace/storage-system",
+      "evidence": {
+        "managed_by": {
+          "api_group": "storage.example.com",
+          "kind": "NodeAgent"
+        },
+        "namespace": "storage-system",
+        "pdbs": [
+          {
+            "namespace": "storage-system",
+            "name": "agent-1-pdb",
+            "current_healthy": 1,
+            "desired_healthy": 1,
+            "disruptions_allowed": 0,
+            "nodes": [
+              "worker-02"
+            ],
+            "pods": [
+              {
+                "namespace": "storage-system",
+                "name": "agent-1",
+                "node": "worker-02"
+              }
+            ]
+          },
+          {
+            "namespace": "storage-system",
+            "name": "agent-2-pdb",
+            "current_healthy": 1,
+            "desired_healthy": 1,
+            "disruptions_allowed": 0,
+            "nodes": [
+              "worker-03"
+            ],
+            "pods": [
+              {
+                "namespace": "storage-system",
+                "name": "agent-2",
+                "node": "worker-03"
+              }
+            ]
+          }
+        ]
+      },
+      "description": "Operator storage.example.com (NodeAgent) manages 2 PodDisruptionBudgets in namespace storage-system with 0 allowed disruptions.",
+      "remediation": "Check the operator's drain documentation."
+    },
+    {
       "rule_id": "UNKNOWN_CONSTRAINT",
       "severity": "UNKNOWN",
       "resource": "Node/worker-02",

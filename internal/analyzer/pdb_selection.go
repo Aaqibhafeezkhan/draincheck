@@ -20,6 +20,11 @@ type pdbSelection struct {
 	pods []findings.PDBPod
 	// nodes are the nodes of pods, sorted, without duplicates.
 	nodes []string
+	// operators are the custom-resource controllers (see operatorOwned) of the
+	// pods, sorted by API group then kind, without duplicates. Empty when the
+	// pods are controlled by Deployments, StatefulSets, Jobs and the like, or by
+	// nothing.
+	operators []findings.ManagedBy
 }
 
 // resource is the object a finding about the budget points at.
@@ -70,14 +75,22 @@ func selectedPDBs(in Input) []pdbSelection {
 		}
 
 		var pods []findings.PDBPod
+		var operators []findings.ManagedBy
 		for _, pod := range evicted {
 			if pod.Namespace == pdb.Namespace && sel.Matches(labels.Set(pod.Labels)) {
 				pods = append(pods, findings.PDBPod{Namespace: pod.Namespace, Name: pod.Name, Node: pod.Spec.NodeName})
+				if owner := owners.Resolve(pod); operatorOwned(owner) {
+					operators = append(operators, findings.ManagedBy{APIGroup: owner.APIGroup, Kind: owner.Kind})
+				}
 			}
 		}
 		if len(pods) == 0 {
 			continue
 		}
+		slices.SortFunc(operators, func(a, b findings.ManagedBy) int {
+			return cmp.Or(cmp.Compare(a.APIGroup, b.APIGroup), cmp.Compare(a.Kind, b.Kind))
+		})
+		operators = slices.Compact(operators)
 		slices.SortFunc(pods, func(a, b findings.PDBPod) int {
 			return cmp.Or(cmp.Compare(a.Namespace, b.Namespace), cmp.Compare(a.Name, b.Name), cmp.Compare(a.Node, b.Node))
 		})
@@ -88,7 +101,7 @@ func selectedPDBs(in Input) []pdbSelection {
 		slices.Sort(nodes)
 		nodes = slices.Compact(nodes)
 
-		out = append(out, pdbSelection{pdb: pdb, pods: pods, nodes: nodes})
+		out = append(out, pdbSelection{pdb: pdb, pods: pods, nodes: nodes, operators: operators})
 	}
 	return out
 }

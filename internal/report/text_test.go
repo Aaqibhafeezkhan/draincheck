@@ -34,7 +34,7 @@ func TestWriteTextGroupsBySeverityBlockedFirst(t *testing.T) {
 
 	blocked := strings.Index(got, "=== BLOCKED (2) ===")
 	risk := strings.Index(got, "=== RISK (2) ===")
-	unknown := strings.Index(got, "=== UNKNOWN (1) ===")
+	unknown := strings.Index(got, "=== UNKNOWN (2) ===")
 	if blocked < 0 || risk < 0 || unknown < 0 {
 		t.Fatalf("missing a severity section:\n%s", got)
 	}
@@ -46,7 +46,7 @@ func TestWriteTextGroupsBySeverityBlockedFirst(t *testing.T) {
 func TestWriteTextSummaryCountsEverySeverity(t *testing.T) {
 	got := string(renderText(t, sampleFindings()))
 
-	for _, line := range []string{"  BLOCKED: 2\n", "  RISK:    2\n", "  UNKNOWN: 1\n"} {
+	for _, line := range []string{"  BLOCKED: 2\n", "  RISK:    2\n", "  UNKNOWN: 2\n"} {
 		if !strings.Contains(got, line) {
 			t.Errorf("summary missing %q:\n%s", line, got)
 		}

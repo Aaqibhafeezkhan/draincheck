@@ -52,6 +52,16 @@ entries under `[Unreleased]` in the same pull request as the change (see
 - `PDB_DISRUPTION_BLOCKED` no longer reports a PodDisruptionBudget whose status
   is stale as `BLOCKED`; `PDB_STALE_STATUS` reports it as `UNKNOWN` instead, so
   a drain is not failed on a number that may be out of date (#41).
+- `PDB_DISRUPTION_BLOCKED` reports a PodDisruptionBudget that selects pods
+  controlled by a custom resource (an operator) as `UNKNOWN` instead of
+  `BLOCKED`, because whether such a budget stops the drain depends on operator
+  state draincheck cannot see. The budgets of one operator in one namespace
+  are one finding that points at the `Namespace`, so an operator with a budget
+  per node gives one finding, not one per node. The JSON `evidence` of that
+  finding is `managed_by` (`api_group`, `kind`), `namespace` and a `pdbs` list
+  with the usual fields of each budget. Budgets over Deployments, StatefulSets,
+  Jobs and the like stay `BLOCKED`. Findings of this kind make the run exit `1`
+  only with `--fail-on any` (#72).
 
 ### Fixed
 

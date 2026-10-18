@@ -26,6 +26,12 @@ const PDBDisruptionBlockedID = "PDB_DISRUPTION_BLOCKED"
 //
 // A budget whose status is stale (see PDBStaleStatus) is skipped too: its
 // numbers cannot be trusted, so PDBStaleStatus reports it as UNKNOWN instead.
+//
+// A budget that selects a pod controlled by a custom resource (an operator, see
+// operatorOwned) is not BLOCKED but UNKNOWN: whether the drain stops depends on
+// operator state draincheck cannot see. Those budgets are grouped per operator
+// and namespace, see operatorManagedFindings. Budgets whose pods are controlled
+// by Deployments, StatefulSets, Jobs and the like stay BLOCKED.
 type PDBDisruptionBlocked struct{}
 
 // ID implements Rule.
@@ -34,9 +40,14 @@ func (PDBDisruptionBlocked) ID() string { return PDBDisruptionBlockedID }
 // Evaluate implements Rule.
 func (PDBDisruptionBlocked) Evaluate(in Input) []findings.Finding {
 	var out []findings.Finding
+	var operatorManaged []pdbSelection
 	for _, sel := range selectedPDBs(in) {
 		pdb := sel.pdb
 		if pdb.Status.DisruptionsAllowed != 0 || pdbStale(pdb) {
+			continue
+		}
+		if len(sel.operators) > 0 {
+			operatorManaged = append(operatorManaged, sel)
 			continue
 		}
 		out = append(out, findings.Finding{
@@ -51,7 +62,7 @@ func (PDBDisruptionBlocked) Evaluate(in Input) []findings.Finding {
 			Remediation: "Add healthy replicas, or relax minAvailable/maxUnavailable on the PodDisruptionBudget, before draining.",
 		})
 	}
-	return out
+	return append(out, operatorManagedFindings(operatorManaged)...)
 }
 
 func terminal(pod corev1.Pod) bool {
