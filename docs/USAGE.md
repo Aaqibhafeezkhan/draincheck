@@ -44,6 +44,21 @@ Each finding has exactly one severity. There is no `SAFE`.
 
 Findings are sorted by namespace, kind and name.
 
+### Grouping
+
+A finding covers one cause, not one pod. A cause that reaches many pods, such as ten replicas behind one PodDisruptionBudget or a DaemonSet that runs on every node, is one finding. The pods and nodes it covers are listed in its `evidence`, so the JSON report holds every one of them. The text report shows one line per finding.
+
+| Rule | One finding per | `resource` points at |
+| --- | --- | --- |
+| `PDB_DISRUPTION_BLOCKED` (`BLOCKED`) | PodDisruptionBudget | the PodDisruptionBudget |
+| `PDB_DISRUPTION_BLOCKED` (`UNKNOWN`) | operator and namespace | the namespace |
+| `PDB_STALE_STATUS` | PodDisruptionBudget | the PodDisruptionBudget |
+| `PDB_OVERLAPPING_SELECTORS` | pod | the pod |
+| `POD_OWNERSHIP` | DaemonSet, node (for its static pods) or pod without a controller | the DaemonSet, node or pod |
+| `MISSING_RESOURCE_REQUESTS` | owning workload | the workload; a pod without a controller is its own workload |
+
+An operator that keeps a PodDisruptionBudget for every node is grouped by the operator and the namespace. The operator is the API group and kind of the custom resource that controls the pods. The budgets of one operator in one namespace are one finding, however many nodes they cover, and each budget stays visible in `evidence.pdbs` with its numbers, nodes and pods. The same operator in another namespace, or another operator in the same namespace, is a finding of its own.
+
 ## Text output
 
 `--output text` (the default) writes a human-readable report to stdout. Findings are grouped by severity, `BLOCKED` first, then `RISK`, then `UNKNOWN`; sections without findings are omitted. Inside a section, findings are grouped by rule, rules in alphabetical order. A rule block has a header with the finding count, one line per finding and the remediation once. The output is deterministic: the same findings and snapshot time give byte-identical output.
@@ -117,7 +132,7 @@ This report describes the observed cluster state at 2026-10-14T09:30:00Z and doe
 - `schema_version` is `"v1"`. Any change to the document shape is a deliberate, reviewed change, pinned by the golden file `testdata/report/json-v1.golden.json`.
 - `findings` is always an array, empty when there are none. It is sorted by namespace, kind, name, rule ID and severity, so the same findings and snapshot time give byte-identical output.
 - `resource` is `Kind/namespace/name`, or `Kind/name` for cluster-scoped objects.
-- `evidence` is a typed object whose shape depends on `rule_id` (see *Rules*); it is `null` when a rule has none.
+- `evidence` is a typed object whose shape depends on `rule_id` (see *Rules*); it is `null` when a rule has none. `PDB_DISRUPTION_BLOCKED` has two shapes: one budget for `BLOCKED`, and the budgets of one operator for `UNKNOWN`.
 - `generated_at` is the time the cluster snapshot was taken (RFC 3339, UTC), not the time the document was written, so the same snapshot always gives the same bytes.
 - `disclaimer` is the mandatory statement that the report does not guarantee execution success. It names the same timestamp.
 
@@ -127,7 +142,7 @@ Rules are implemented in `internal/analyzer` and all of them run on every invoca
 
 ### `PDB_DISRUPTION_BLOCKED`
 
-Severity: `BLOCKED`.
+Severity: `BLOCKED`; `UNKNOWN` for budgets managed by an operator (below).
 
 Raised for a PodDisruptionBudget with `status.disruptionsAllowed == 0` that selects pods on the target nodes, so the eviction API will refuse to evict them. Findings are grouped by budget: ten replicas behind one PDB are one finding, not ten.
 
@@ -139,6 +154,14 @@ Raised for a PodDisruptionBudget with `status.disruptionsAllowed == 0` that sele
 - A PDB whose selector is invalid is skipped.
 - A PDB whose status is stale is not reported here: `PDB_STALE_STATUS` reports it as `UNKNOWN`, because its numbers cannot be trusted.
 - Cluster-wide budgets summed across the batch (several nodes sharing one PDB) are *planned*.
+
+**Budgets managed by an operator.** A budget that selects a pod controlled by a custom resource is `UNKNOWN`, not `BLOCKED`. A pod is controlled by a custom resource when the API group of its controller is not the core group, `apps` or `batch`. An operator can create and remove such a budget itself, so whether the drain stalls depends on operator state draincheck cannot see. Pods controlled by a Deployment, StatefulSet, Job or ReplicationController keep their budget `BLOCKED`; a budget over pods of both kinds is `UNKNOWN`. Only selected pods on the target nodes count, so an operator pod on another node does not change the answer.
+
+- **Resource:** the namespace (`Namespace/<name>`), one finding per operator and namespace.
+- **Evidence:** `managed_by` (the operator's `api_group` and `kind`), `namespace` and `pdbs`. `pdbs` lists the budgets sorted by name, each with the fields described above: `namespace`, `name`, the three numbers, `nodes` and `pods`. A budget over pods of several custom resources is listed under the first by API group, then kind.
+- **Description:** names the operator, says how many budgets it manages in the namespace, and how many pods on how many target nodes they cover.
+- **Remediation:** names the operator, says to check its drain documentation and the health of what it protects, and not to relax `minAvailable`, because the operator may recreate the budget. A few operators add a sentence of their own; every other operator gets the general text.
+- It is `UNKNOWN`, so it makes the run exit `1` only with `--fail-on any`.
 
 ### `PDB_OVERLAPPING_SELECTORS`
 
@@ -228,6 +251,8 @@ draincheck never cordons, evicts or modifies anything.
 | `blocked` | `BLOCKED` (default)                |
 | `risk`    | `BLOCKED` or `RISK`                |
 | `any`     | any finding, including `UNKNOWN`   |
+
+`UNKNOWN` findings, which are `PDB_STALE_STATUS` and the operator-managed budgets of `PDB_DISRUPTION_BLOCKED`, make the run exit `1` only with `--fail-on any`.
 
 The report is written before the exit code is decided, so a run that exits `1` still prints every finding.
 

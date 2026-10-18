@@ -58,6 +58,35 @@ func sampleFindings() []findings.Finding {
 			Remediation: "Add healthy replicas or relax the budget.",
 		},
 		{
+			RuleID:   "PDB_DISRUPTION_BLOCKED",
+			Severity: findings.Unknown,
+			Resource: findings.ResourceRef{Kind: "Namespace", Name: "storage-system"},
+			Evidence: findings.OperatorManagedPDBsEvidence{
+				ManagedBy: findings.ManagedBy{APIGroup: "storage.example.com", Kind: "NodeAgent"},
+				Namespace: "storage-system",
+				PDBs: []findings.PDBEvidence{
+					{
+						Namespace:      "storage-system",
+						Name:           "agent-1-pdb",
+						CurrentHealthy: 1,
+						DesiredHealthy: 1,
+						Nodes:          []string{"worker-02"},
+						Pods:           []findings.PDBPod{{Namespace: "storage-system", Name: "agent-1", Node: "worker-02"}},
+					},
+					{
+						Namespace:      "storage-system",
+						Name:           "agent-2-pdb",
+						CurrentHealthy: 1,
+						DesiredHealthy: 1,
+						Nodes:          []string{"worker-03"},
+						Pods:           []findings.PDBPod{{Namespace: "storage-system", Name: "agent-2", Node: "worker-03"}},
+					},
+				},
+			},
+			Description: "Operator storage.example.com (NodeAgent) manages 2 PodDisruptionBudgets in namespace storage-system with 0 allowed disruptions.",
+			Remediation: "Check the operator's drain documentation.",
+		},
+		{
 			RuleID:      "UNKNOWN_CONSTRAINT",
 			Severity:    findings.Unknown,
 			Resource:    findings.ResourceRef{Kind: "Node", Name: "worker-02"},

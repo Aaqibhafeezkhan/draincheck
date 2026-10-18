@@ -61,6 +61,38 @@ func TestFindingJSONPDBStaleStatusEvidence(t *testing.T) {
 	}
 }
 
+func TestFindingJSONOperatorManagedPDBsEvidence(t *testing.T) {
+	f := Finding{
+		RuleID:   "PDB_DISRUPTION_BLOCKED",
+		Severity: Unknown,
+		Resource: ResourceRef{Kind: "Namespace", Name: "storage-system"},
+		Evidence: OperatorManagedPDBsEvidence{
+			ManagedBy: ManagedBy{APIGroup: "storage.example.com", Kind: "NodeAgent"},
+			Namespace: "storage-system",
+			PDBs: []PDBEvidence{
+				{
+					Namespace:      "storage-system",
+					Name:           "agent-1-pdb",
+					CurrentHealthy: 1,
+					DesiredHealthy: 1,
+					Nodes:          []string{"worker-01"},
+					Pods:           []PDBPod{{Namespace: "storage-system", Name: "agent-1", Node: "worker-01"}},
+				},
+			},
+		},
+	}
+	b, err := json.Marshal(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// One finding covers every budget of one operator in one namespace; each
+	// budget keeps its own numbers, nodes and pods.
+	want := `{"rule_id":"PDB_DISRUPTION_BLOCKED","severity":"UNKNOWN","resource":"Namespace/storage-system","evidence":{"managed_by":{"api_group":"storage.example.com","kind":"NodeAgent"},"namespace":"storage-system","pdbs":[{"namespace":"storage-system","name":"agent-1-pdb","current_healthy":1,"desired_healthy":1,"disruptions_allowed":0,"nodes":["worker-01"],"pods":[{"namespace":"storage-system","name":"agent-1","node":"worker-01"}]}]},"description":"","remediation":""}`
+	if string(b) != want {
+		t.Errorf("json mismatch\n got: %s\nwant: %s", b, want)
+	}
+}
+
 func TestFindingJSONClusterScopedNilEvidence(t *testing.T) {
 	f := Finding{
 		RuleID:   "R",
