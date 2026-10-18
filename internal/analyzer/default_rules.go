@@ -5,6 +5,7 @@ func DefaultRules() []Rule {
 	return []Rule{
 		PDBDisruptionBlocked{},
 		PDBOverlappingSelectors{},
+		PDBStaleStatus{},
 		PodOwnership{},
 		MissingResourceRequests{},
 	}

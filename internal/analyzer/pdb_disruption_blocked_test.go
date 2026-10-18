@@ -96,6 +96,19 @@ func TestPDBDisruptionBlocked(t *testing.T) {
 	}
 }
 
+// A budget whose status has not caught up with its spec reports numbers that
+// cannot be trusted, so it is not a BLOCKED finding; PDB_STALE_STATUS reports it
+// as UNKNOWN instead. A settled budget that allows nothing stays BLOCKED.
+func TestPDBDisruptionBlockedSkipsStalePDB(t *testing.T) {
+	s := snapshotFromFixture(t, "pdb-stale-status.yaml")
+
+	got := PDBDisruptionBlocked{}.Evaluate(Input{Snapshot: s, Targets: []string{"worker-01", "worker-02", "worker-03"}})
+
+	if len(got) != 1 || got[0].Resource.Name != "job-pdb" {
+		t.Fatalf("got %+v, want only the settled batch/job-pdb", got)
+	}
+}
+
 // ten replicas behind one budget are the case the grouping exists for: one
 // finding, with all ten pods in evidence, however the snapshot orders them.
 func TestPDBDisruptionBlockedGroupsReplicas(t *testing.T) {
