@@ -39,9 +39,11 @@ Each finding has exactly one severity. There is no `SAFE`.
 
 | Severity  | Meaning                                                              |
 | --------- | -------------------------------------------------------------------- |
-| `BLOCKED` | A known constraint prevents the drain under the observed state.      |
-| `RISK`    | A condition could cause disruption or scheduling friction.           |
+| `BLOCKED` | The drain will not complete from the observed state without outside action; waiting does not fix it. |
+| `RISK`    | The drain proceeds, possibly in steps or after waiting, but something is lost, degraded or delayed. |
 | `UNKNOWN` | The outcome cannot be established reliably.                          |
+
+`kubectl drain` retries a refused eviction until its timeout, which is why the definitions rest on whether waiting can fix the problem. [SPEC.md](SPEC.md#31-what-blocked-and-risk-mean-for-a-drain-that-retries) has the reasoning and worked examples.
 
 Findings are sorted by namespace, kind and name.
 
