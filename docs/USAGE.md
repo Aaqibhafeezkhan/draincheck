@@ -241,7 +241,7 @@ draincheck never cordons, evicts or modifies anything.
 
 `--debug` makes every action draincheck takes visible. Each one writes a line at level `DEBUG` to **stderr**, in `key=value` form, so a debug log shows what draincheck read from the cluster, what it decided and how the run ended. Use it to find out why a run behaved as it did, and attach it when you report a problem.
 
-stdout is not touched. The text or JSON report is byte-for-byte the same with and without `--debug`, so scripts that read stdout keep working. Without `--debug`, nothing is written to stderr except errors.
+stdout is not touched. The text or JSON report is byte-for-byte the same with and without `--debug`, so scripts that read stdout keep working. Without `--debug`, nothing is written to stderr except errors. `--debug` does not change the exit code either; the one exception is stderr piped into a command that quits early, which ends the run with `141`. See [Closed pipes](#closed-pipes).
 
 | Message | Written | Fields |
 | --- | --- | --- |
@@ -296,6 +296,23 @@ Debug lines name files, resources, rules and nodes, and give counts. They never 
 `UNKNOWN` findings, which are `PDB_STALE_STATUS` and the operator-managed budgets of `PDB_DISRUPTION_BLOCKED`, make the run exit `1` only with `--fail-on any`.
 
 The report is written before the exit code is decided, so a run that exits `1` still prints every finding.
+
+`--debug` does not change the exit code. The same run ends with the same code with and without it, and the `finished` debug line shows the code the process exits with.
+
+### Closed pipes
+
+draincheck is a Go program, and Go ends a program with `SIGPIPE` when it writes to stdout or stderr and the other end of the pipe has already been closed. The process then does not exit with `0`, `1` or `2`; a shell reports `141` (128 + 13). This happens in two cases:
+
+- stdout is piped into a command that quits before reading everything, such as `head`. This happens with or without `--debug`.
+- stderr is piped into such a command and `--debug` is set. Without `--debug`, stderr is written only when a run fails and exits `2`, so runs that exit `0` or `1` are not affected. With `--debug`, every run writes to stderr, so a run that would exit `0` or `1` can end with `141` instead.
+
+In a CI step that gates on the exit code, write the report and the debug lines to files or to a reader that reads until the end:
+
+```sh
+draincheck --nodes worker-1 --debug >report.txt 2>debug.log
+```
+
+When the exit code decides whether a pipeline passes, treat `141` as a failed run and not as `1`.
 
 ## See also
 
