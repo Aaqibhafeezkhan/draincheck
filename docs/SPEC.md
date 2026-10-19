@@ -42,6 +42,25 @@ draincheck deliberately has no `SAFE` status. In a distributed system you cannot
 | `RISK`    | A configuration or workload condition could cause disruption, downtime or scheduling friction.                      | A deployment lacks resource requests, or relies on host-port bindings.                   |
 | `UNKNOWN` | The tool cannot establish the outcome reliably due to unsupported constraints, custom webhooks or dynamic races.    | A custom scheduler plugin or complex cloud storage attachment topology is in use.        |
 
+### 3.1 What `BLOCKED` and `RISK` mean for a drain that retries
+
+`kubectl drain` does not give up on a refused eviction: it retries until `--timeout`, which is infinite by default. The two states are therefore defined by whether waiting can fix the problem:
+
+- `BLOCKED`: the drain will not complete from the observed state without outside action (a change to the cluster, the workload or the budget). Waiting does not fix it.
+- `RISK`: the drain proceeds, possibly in steps or after waiting, but something is lost, degraded or delayed.
+- `UNKNOWN`: draincheck cannot establish which of the two applies.
+
+A PodDisruptionBudget at 0 is the reference case for `BLOCKED`. The disruption controller sets `disruptionsAllowed` to `currentHealthy - desiredHealthy`. At 0 the eviction is refused and the pod stays, so no replacement is created and `currentHealthy` does not rise because of the drain; only something outside the drain can lift it. A budget that allows at least one disruption is different: the first eviction frees a replacement, the budget recovers when that replacement is Ready, and the drain proceeds in steps.
+
+| Situation | State | Why |
+| --------- | ----- | --- |
+| A budget selects pods on the target nodes and allows 0 disruptions | `BLOCKED` | The eviction is refused and retrying does not change the count. |
+| A budget allows 1 disruption, the batch evicts 3 pods of it | `RISK` (*planned*) | The drain waits for each replacement to be Ready; it proceeds. |
+| Every node a workload may run on is drained | `RISK` (*planned*) | The drain itself completes; the evicted pods stay Pending and the workload is down. |
+| The numbers needed to tell (a stale budget status, an operator-managed budget) are not reliable | `UNKNOWN` | Nothing can be said about the outcome. |
+
+The report is a snapshot, as the disclaimer below says. A state that clears by itself, such as a rollout finishing or a pod becoming Ready, is not seen.
+
 Every report carries this mandatory disclaimer:
 
 > This report describes the observed cluster state at timestamp T and does not guarantee execution success. Cluster state may drift immediately after analysis.

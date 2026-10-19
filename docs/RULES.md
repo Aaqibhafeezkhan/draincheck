@@ -6,6 +6,8 @@ What each rule reports is described in [USAGE.md](USAGE.md#rules). This file rec
 
 ## Noise budget
 
+Pick the severity from the definitions in [SPEC.md](SPEC.md#31-what-blocked-and-risk-mean-for-a-drain-that-retries): `BLOCKED` only when waiting cannot fix the problem, `RISK` when the drain proceeds but something is lost, degraded or delayed.
+
 Every rule answers the eight criteria below, in its entry in this file and in the pull request that adds or changes it.
 
 | # | Criterion | Requirement |
