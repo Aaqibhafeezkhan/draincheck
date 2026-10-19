@@ -1,0 +1,1481 @@
+# Cluster for the noise regression test (tests/noise_regression_test.go).
+#
+# It has the shape of the run that motivated the noise work: many replicas
+# without requests, DaemonSets on every node, static pods, one operator with a
+# budget per node, and a few real problems. Before grouping, every pod was a
+# finding of its own. The test holds the grouped result: one finding per cause.
+#
+# Six nodes, all of them targets. Replicas are spread round-robin from worker-01.
+#
+# shop/web        Deployment, 12 pods, no requests. web-pdb allows 1: no finding.
+# shop/api        Deployment, 10 pods, no requests. api-pdb allows 1: no finding.
+# shop/worker     Deployment, 8 pods, memory request missing on one container.
+# shop/db         StatefulSet, 3 pods with requests. db-pdb allows 0: BLOCKED.
+# shop/cache      one pod selected by two budgets (cache-by-app, cache-by-tier).
+# shop/queue      Deployment, 2 pods. queue-pdb allows 0 but its status is stale.
+# default/debug-shell  a pod with no controller and no requests.
+# monitoring      DaemonSet node-exporter, 6 pods. node-exporter-pdb allows 0,
+#                 but drain never evicts DaemonSet pods: no finding.
+# kube-system     DaemonSet kube-proxy, 6 pods; static pods (etcd and
+#                 kube-apiserver mirrors) on worker-01 .. worker-03.
+# storage-system  operator storage.example.com (NodeAgent): 4 pods, one budget
+#                 each, all allow 0. They are one UNKNOWN finding.
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-01
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-02
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-03
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-04
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-05
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-06
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: web-7d9f
+  namespace: shop
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: web
+      uid: web-7d9f-uid
+      controller: true
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-7d9f-x00
+  namespace: shop
+  labels:
+    app: web
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: web-7d9f
+      uid: web-7d9f-uid
+      controller: true
+spec:
+  nodeName: worker-01
+  containers:
+    - name: app
+      image: example/app:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-7d9f-x01
+  namespace: shop
+  labels:
+    app: web
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: web-7d9f
+      uid: web-7d9f-uid
+      controller: true
+spec:
+  nodeName: worker-02
+  containers:
+    - name: app
+      image: example/app:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-7d9f-x02
+  namespace: shop
+  labels:
+    app: web
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: web-7d9f
+      uid: web-7d9f-uid
+      controller: true
+spec:
+  nodeName: worker-03
+  containers:
+    - name: app
+      image: example/app:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-7d9f-x03
+  namespace: shop
+  labels:
+    app: web
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: web-7d9f
+      uid: web-7d9f-uid
+      controller: true
+spec:
+  nodeName: worker-04
+  containers:
+    - name: app
+      image: example/app:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-7d9f-x04
+  namespace: shop
+  labels:
+    app: web
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: web-7d9f
+      uid: web-7d9f-uid
+      controller: true
+spec:
+  nodeName: worker-05
+  containers:
+    - name: app
+      image: example/app:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-7d9f-x05
+  namespace: shop
+  labels:
+    app: web
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: web-7d9f
+      uid: web-7d9f-uid
+      controller: true
+spec:
+  nodeName: worker-06
+  containers:
+    - name: app
+      image: example/app:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-7d9f-x06
+  namespace: shop
+  labels:
+    app: web
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: web-7d9f
+      uid: web-7d9f-uid
+      controller: true
+spec:
+  nodeName: worker-01
+  containers:
+    - name: app
+      image: example/app:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-7d9f-x07
+  namespace: shop
+  labels:
+    app: web
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: web-7d9f
+      uid: web-7d9f-uid
+      controller: true
+spec:
+  nodeName: worker-02
+  containers:
+    - name: app
+      image: example/app:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-7d9f-x08
+  namespace: shop
+  labels:
+    app: web
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: web-7d9f
+      uid: web-7d9f-uid
+      controller: true
+spec:
+  nodeName: worker-03
+  containers:
+    - name: app
+      image: example/app:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-7d9f-x09
+  namespace: shop
+  labels:
+    app: web
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: web-7d9f
+      uid: web-7d9f-uid
+      controller: true
+spec:
+  nodeName: worker-04
+  containers:
+    - name: app
+      image: example/app:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-7d9f-x10
+  namespace: shop
+  labels:
+    app: web
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: web-7d9f
+      uid: web-7d9f-uid
+      controller: true
+spec:
+  nodeName: worker-05
+  containers:
+    - name: app
+      image: example/app:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-7d9f-x11
+  namespace: shop
+  labels:
+    app: web
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: web-7d9f
+      uid: web-7d9f-uid
+      controller: true
+spec:
+  nodeName: worker-06
+  containers:
+    - name: app
+      image: example/app:1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web-pdb
+  namespace: shop
+spec:
+  minAvailable: 11
+  selector:
+    matchLabels:
+      app: web
+status:
+  currentHealthy: 12
+  desiredHealthy: 11
+  disruptionsAllowed: 1
+  expectedPods: 12
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: api-5c8d
+  namespace: shop
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: api
+      uid: api-5c8d-uid
+      controller: true
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-5c8d-x00
+  namespace: shop
+  labels:
+    app: api
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: api-5c8d
+      uid: api-5c8d-uid
+      controller: true
+spec:
+  nodeName: worker-01
+  containers:
+    - name: app
+      image: example/app:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-5c8d-x01
+  namespace: shop
+  labels:
+    app: api
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: api-5c8d
+      uid: api-5c8d-uid
+      controller: true
+spec:
+  nodeName: worker-02
+  containers:
+    - name: app
+      image: example/app:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-5c8d-x02
+  namespace: shop
+  labels:
+    app: api
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: api-5c8d
+      uid: api-5c8d-uid
+      controller: true
+spec:
+  nodeName: worker-03
+  containers:
+    - name: app
+      image: example/app:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-5c8d-x03
+  namespace: shop
+  labels:
+    app: api
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: api-5c8d
+      uid: api-5c8d-uid
+      controller: true
+spec:
+  nodeName: worker-04
+  containers:
+    - name: app
+      image: example/app:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-5c8d-x04
+  namespace: shop
+  labels:
+    app: api
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: api-5c8d
+      uid: api-5c8d-uid
+      controller: true
+spec:
+  nodeName: worker-05
+  containers:
+    - name: app
+      image: example/app:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-5c8d-x05
+  namespace: shop
+  labels:
+    app: api
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: api-5c8d
+      uid: api-5c8d-uid
+      controller: true
+spec:
+  nodeName: worker-06
+  containers:
+    - name: app
+      image: example/app:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-5c8d-x06
+  namespace: shop
+  labels:
+    app: api
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: api-5c8d
+      uid: api-5c8d-uid
+      controller: true
+spec:
+  nodeName: worker-01
+  containers:
+    - name: app
+      image: example/app:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-5c8d-x07
+  namespace: shop
+  labels:
+    app: api
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: api-5c8d
+      uid: api-5c8d-uid
+      controller: true
+spec:
+  nodeName: worker-02
+  containers:
+    - name: app
+      image: example/app:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-5c8d-x08
+  namespace: shop
+  labels:
+    app: api
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: api-5c8d
+      uid: api-5c8d-uid
+      controller: true
+spec:
+  nodeName: worker-03
+  containers:
+    - name: app
+      image: example/app:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-5c8d-x09
+  namespace: shop
+  labels:
+    app: api
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: api-5c8d
+      uid: api-5c8d-uid
+      controller: true
+spec:
+  nodeName: worker-04
+  containers:
+    - name: app
+      image: example/app:1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api-pdb
+  namespace: shop
+spec:
+  minAvailable: 9
+  selector:
+    matchLabels:
+      app: api
+status:
+  currentHealthy: 10
+  desiredHealthy: 9
+  disruptionsAllowed: 1
+  expectedPods: 10
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: worker-6b7c
+  namespace: shop
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: worker
+      uid: worker-6b7c-uid
+      controller: true
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: worker-6b7c-x00
+  namespace: shop
+  labels:
+    app: worker
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: worker-6b7c
+      uid: worker-6b7c-uid
+      controller: true
+spec:
+  nodeName: worker-01
+  containers:
+    - name: app
+      image: example/app:1
+      resources:
+        requests:
+          cpu: 100m
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: worker-6b7c-x01
+  namespace: shop
+  labels:
+    app: worker
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: worker-6b7c
+      uid: worker-6b7c-uid
+      controller: true
+spec:
+  nodeName: worker-02
+  containers:
+    - name: app
+      image: example/app:1
+      resources:
+        requests:
+          cpu: 100m
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: worker-6b7c-x02
+  namespace: shop
+  labels:
+    app: worker
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: worker-6b7c
+      uid: worker-6b7c-uid
+      controller: true
+spec:
+  nodeName: worker-03
+  containers:
+    - name: app
+      image: example/app:1
+      resources:
+        requests:
+          cpu: 100m
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: worker-6b7c-x03
+  namespace: shop
+  labels:
+    app: worker
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: worker-6b7c
+      uid: worker-6b7c-uid
+      controller: true
+spec:
+  nodeName: worker-04
+  containers:
+    - name: app
+      image: example/app:1
+      resources:
+        requests:
+          cpu: 100m
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: worker-6b7c-x04
+  namespace: shop
+  labels:
+    app: worker
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: worker-6b7c
+      uid: worker-6b7c-uid
+      controller: true
+spec:
+  nodeName: worker-05
+  containers:
+    - name: app
+      image: example/app:1
+      resources:
+        requests:
+          cpu: 100m
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: worker-6b7c-x05
+  namespace: shop
+  labels:
+    app: worker
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: worker-6b7c
+      uid: worker-6b7c-uid
+      controller: true
+spec:
+  nodeName: worker-06
+  containers:
+    - name: app
+      image: example/app:1
+      resources:
+        requests:
+          cpu: 100m
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: worker-6b7c-x06
+  namespace: shop
+  labels:
+    app: worker
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: worker-6b7c
+      uid: worker-6b7c-uid
+      controller: true
+spec:
+  nodeName: worker-01
+  containers:
+    - name: app
+      image: example/app:1
+      resources:
+        requests:
+          cpu: 100m
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: worker-6b7c-x07
+  namespace: shop
+  labels:
+    app: worker
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: worker-6b7c
+      uid: worker-6b7c-uid
+      controller: true
+spec:
+  nodeName: worker-02
+  containers:
+    - name: app
+      image: example/app:1
+      resources:
+        requests:
+          cpu: 100m
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: db-0
+  namespace: shop
+  labels:
+    app: db
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: StatefulSet
+      name: db
+      uid: db-uid
+      controller: true
+spec:
+  nodeName: worker-01
+  containers:
+    - name: app
+      image: example/app:1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: db-1
+  namespace: shop
+  labels:
+    app: db
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: StatefulSet
+      name: db
+      uid: db-uid
+      controller: true
+spec:
+  nodeName: worker-02
+  containers:
+    - name: app
+      image: example/app:1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: db-2
+  namespace: shop
+  labels:
+    app: db
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: StatefulSet
+      name: db
+      uid: db-uid
+      controller: true
+spec:
+  nodeName: worker-03
+  containers:
+    - name: app
+      image: example/app:1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: db-pdb
+  namespace: shop
+spec:
+  minAvailable: 3
+  selector:
+    matchLabels:
+      app: db
+status:
+  currentHealthy: 3
+  desiredHealthy: 3
+  disruptionsAllowed: 0
+  expectedPods: 3
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cache-0
+  namespace: shop
+  labels:
+    app: cache
+    tier: data
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: StatefulSet
+      name: cache
+      uid: cache-uid
+      controller: true
+spec:
+  nodeName: worker-04
+  containers:
+    - name: app
+      image: example/app:1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: cache-by-app
+  namespace: shop
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: cache
+status:
+  currentHealthy: 2
+  desiredHealthy: 1
+  disruptionsAllowed: 1
+  expectedPods: 2
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: cache-by-tier
+  namespace: shop
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      tier: data
+status:
+  currentHealthy: 2
+  desiredHealthy: 1
+  disruptionsAllowed: 1
+  expectedPods: 2
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: queue-8f4e
+  namespace: shop
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: queue
+      uid: queue-8f4e-uid
+      controller: true
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: queue-8f4e-x00
+  namespace: shop
+  labels:
+    app: queue
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: queue-8f4e
+      uid: queue-8f4e-uid
+      controller: true
+spec:
+  nodeName: worker-05
+  containers:
+    - name: app
+      image: example/app:1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: queue-8f4e-x01
+  namespace: shop
+  labels:
+    app: queue
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: queue-8f4e
+      uid: queue-8f4e-uid
+      controller: true
+spec:
+  nodeName: worker-06
+  containers:
+    - name: app
+      image: example/app:1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: queue-pdb
+  namespace: shop
+  generation: 2
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: queue
+status:
+  observedGeneration: 1
+  currentHealthy: 2
+  desiredHealthy: 2
+  disruptionsAllowed: 0
+  expectedPods: 2
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: debug-shell
+  namespace: default
+  labels:
+    run: debug-shell
+spec:
+  nodeName: worker-05
+  containers:
+    - name: app
+      image: example/app:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: node-exporter-4kq9z
+  namespace: monitoring
+  labels:
+    app: node-exporter
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: DaemonSet
+      name: node-exporter
+      uid: node-exporter-uid
+      controller: true
+spec:
+  nodeName: worker-01
+  containers:
+    - name: app
+      image: example/app:1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: node-exporter-7tr2m
+  namespace: monitoring
+  labels:
+    app: node-exporter
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: DaemonSet
+      name: node-exporter
+      uid: node-exporter-uid
+      controller: true
+spec:
+  nodeName: worker-02
+  containers:
+    - name: app
+      image: example/app:1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: node-exporter-b8v5c
+  namespace: monitoring
+  labels:
+    app: node-exporter
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: DaemonSet
+      name: node-exporter
+      uid: node-exporter-uid
+      controller: true
+spec:
+  nodeName: worker-03
+  containers:
+    - name: app
+      image: example/app:1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: node-exporter-h3w6d
+  namespace: monitoring
+  labels:
+    app: node-exporter
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: DaemonSet
+      name: node-exporter
+      uid: node-exporter-uid
+      controller: true
+spec:
+  nodeName: worker-04
+  containers:
+    - name: app
+      image: example/app:1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: node-exporter-m9x1n
+  namespace: monitoring
+  labels:
+    app: node-exporter
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: DaemonSet
+      name: node-exporter
+      uid: node-exporter-uid
+      controller: true
+spec:
+  nodeName: worker-05
+  containers:
+    - name: app
+      image: example/app:1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: node-exporter-q2j7p
+  namespace: monitoring
+  labels:
+    app: node-exporter
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: DaemonSet
+      name: node-exporter
+      uid: node-exporter-uid
+      controller: true
+spec:
+  nodeName: worker-06
+  containers:
+    - name: app
+      image: example/app:1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: node-exporter-pdb
+  namespace: monitoring
+spec:
+  minAvailable: 6
+  selector:
+    matchLabels:
+      app: node-exporter
+status:
+  currentHealthy: 6
+  desiredHealthy: 6
+  disruptionsAllowed: 0
+  expectedPods: 6
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kube-proxy-4kq9z
+  namespace: kube-system
+  labels:
+    k8s-app: kube-proxy
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: DaemonSet
+      name: kube-proxy
+      uid: kube-proxy-uid
+      controller: true
+spec:
+  nodeName: worker-01
+  containers:
+    - name: app
+      image: example/app:1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kube-proxy-7tr2m
+  namespace: kube-system
+  labels:
+    k8s-app: kube-proxy
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: DaemonSet
+      name: kube-proxy
+      uid: kube-proxy-uid
+      controller: true
+spec:
+  nodeName: worker-02
+  containers:
+    - name: app
+      image: example/app:1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kube-proxy-b8v5c
+  namespace: kube-system
+  labels:
+    k8s-app: kube-proxy
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: DaemonSet
+      name: kube-proxy
+      uid: kube-proxy-uid
+      controller: true
+spec:
+  nodeName: worker-03
+  containers:
+    - name: app
+      image: example/app:1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kube-proxy-h3w6d
+  namespace: kube-system
+  labels:
+    k8s-app: kube-proxy
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: DaemonSet
+      name: kube-proxy
+      uid: kube-proxy-uid
+      controller: true
+spec:
+  nodeName: worker-04
+  containers:
+    - name: app
+      image: example/app:1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kube-proxy-m9x1n
+  namespace: kube-system
+  labels:
+    k8s-app: kube-proxy
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: DaemonSet
+      name: kube-proxy
+      uid: kube-proxy-uid
+      controller: true
+spec:
+  nodeName: worker-05
+  containers:
+    - name: app
+      image: example/app:1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kube-proxy-q2j7p
+  namespace: kube-system
+  labels:
+    k8s-app: kube-proxy
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: DaemonSet
+      name: kube-proxy
+      uid: kube-proxy-uid
+      controller: true
+spec:
+  nodeName: worker-06
+  containers:
+    - name: app
+      image: example/app:1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: etcd-worker-01
+  namespace: kube-system
+  labels:
+    component: etcd
+  annotations:
+    kubernetes.io/config.mirror: "mirror-etcd-worker-01"
+spec:
+  nodeName: worker-01
+  containers:
+    - name: etcd
+      image: example/app:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kube-apiserver-worker-01
+  namespace: kube-system
+  labels:
+    component: kube-apiserver
+  annotations:
+    kubernetes.io/config.mirror: "mirror-kube-apiserver-worker-01"
+spec:
+  nodeName: worker-01
+  containers:
+    - name: kube-apiserver
+      image: example/app:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: etcd-worker-02
+  namespace: kube-system
+  labels:
+    component: etcd
+  annotations:
+    kubernetes.io/config.mirror: "mirror-etcd-worker-02"
+spec:
+  nodeName: worker-02
+  containers:
+    - name: etcd
+      image: example/app:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kube-apiserver-worker-02
+  namespace: kube-system
+  labels:
+    component: kube-apiserver
+  annotations:
+    kubernetes.io/config.mirror: "mirror-kube-apiserver-worker-02"
+spec:
+  nodeName: worker-02
+  containers:
+    - name: kube-apiserver
+      image: example/app:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: etcd-worker-03
+  namespace: kube-system
+  labels:
+    component: etcd
+  annotations:
+    kubernetes.io/config.mirror: "mirror-etcd-worker-03"
+spec:
+  nodeName: worker-03
+  containers:
+    - name: etcd
+      image: example/app:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kube-apiserver-worker-03
+  namespace: kube-system
+  labels:
+    component: kube-apiserver
+  annotations:
+    kubernetes.io/config.mirror: "mirror-kube-apiserver-worker-03"
+spec:
+  nodeName: worker-03
+  containers:
+    - name: kube-apiserver
+      image: example/app:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: agent-1
+  namespace: storage-system
+  labels:
+    node-agent: agent-1
+  ownerReferences:
+    - apiVersion: storage.example.com/v1
+      kind: NodeAgent
+      name: agent-1
+      uid: agent-1-uid
+      controller: true
+spec:
+  nodeName: worker-01
+  containers:
+    - name: app
+      image: example/app:1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: agent-1-pdb
+  namespace: storage-system
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      node-agent: agent-1
+status:
+  currentHealthy: 1
+  desiredHealthy: 1
+  disruptionsAllowed: 0
+  expectedPods: 1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: agent-2
+  namespace: storage-system
+  labels:
+    node-agent: agent-2
+  ownerReferences:
+    - apiVersion: storage.example.com/v1
+      kind: NodeAgent
+      name: agent-2
+      uid: agent-2-uid
+      controller: true
+spec:
+  nodeName: worker-02
+  containers:
+    - name: app
+      image: example/app:1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: agent-2-pdb
+  namespace: storage-system
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      node-agent: agent-2
+status:
+  currentHealthy: 1
+  desiredHealthy: 1
+  disruptionsAllowed: 0
+  expectedPods: 1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: agent-3
+  namespace: storage-system
+  labels:
+    node-agent: agent-3
+  ownerReferences:
+    - apiVersion: storage.example.com/v1
+      kind: NodeAgent
+      name: agent-3
+      uid: agent-3-uid
+      controller: true
+spec:
+  nodeName: worker-03
+  containers:
+    - name: app
+      image: example/app:1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: agent-3-pdb
+  namespace: storage-system
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      node-agent: agent-3
+status:
+  currentHealthy: 1
+  desiredHealthy: 1
+  disruptionsAllowed: 0
+  expectedPods: 1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: agent-4
+  namespace: storage-system
+  labels:
+    node-agent: agent-4
+  ownerReferences:
+    - apiVersion: storage.example.com/v1
+      kind: NodeAgent
+      name: agent-4
+      uid: agent-4-uid
+      controller: true
+spec:
+  nodeName: worker-04
+  containers:
+    - name: app
+      image: example/app:1
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: agent-4-pdb
+  namespace: storage-system
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      node-agent: agent-4
+status:
+  currentHealthy: 1
+  desiredHealthy: 1
+  disruptionsAllowed: 0
+  expectedPods: 1
