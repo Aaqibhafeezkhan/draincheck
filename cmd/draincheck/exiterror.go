@@ -21,6 +21,15 @@ type exitError struct {
 
 func (e *exitError) Error() string { return e.msg }
 
+// exitCode returns the process exit code for the result of a run: 0 for nil,
+// otherwise the code of err.
+func exitCode(err error) int {
+	if err == nil {
+		return 0
+	}
+	return exitCodeOf(err)
+}
+
 // exitCodeOf returns the exit code carried by err, or exitFailure.
 func exitCodeOf(err error) int {
 	var ee *exitError

@@ -43,7 +43,7 @@ Read-only preflight analyzer for multi-node `kubectl drain`. Tells you what woul
 ## Usage
 
 ```sh
-draincheck --nodes worker-02,worker-04 [--kubeconfig PATH] [--context NAME] [--output text|json] [--verbose] [--fail-on blocked|risk|any]
+draincheck --nodes worker-02,worker-04 [--kubeconfig PATH] [--context NAME] [--output text|json] [--verbose] [--fail-on blocked|risk|any] [--debug]
 ```
 
 | Flag           | Description                                    | Default                |
@@ -54,6 +54,10 @@ draincheck --nodes worker-02,worker-04 [--kubeconfig PATH] [--context NAME] [--o
 | `--output`     | Output format: `text` or `json`                | `text`                 |
 | `--verbose`    | Text output only: print every finding in full  | off                    |
 | `--fail-on`    | Lowest finding level that exits `1`: `blocked`, `risk` or `any` | `blocked` |
+| `--debug`      | Write one line to stderr for each action; the report on stdout does not change | off |
+
+> [!TIP]
+> Something looks wrong, or you want to report a problem? Run again with `--debug`. It writes a line to stderr for each action draincheck takes: the settings it uses, every API call with its object count and time, how the target nodes were resolved, each rule with its number of findings, and the exit code. The report on stdout stays the same, and the lines never contain tokens or kubeconfig contents. See [Debug output](docs/USAGE.md#debug-output).
 
 > [!TIP]
 > You usually do not need `--kubeconfig` or `--context`. draincheck loads your kubeconfig with the same rules as `kubectl`: the `KUBECONFIG` environment variable if set, otherwise `~/.kube/config`, using the current context. If `kubectl get nodes` works for the user running draincheck, `draincheck --nodes worker-02` works too. It does not call the `kubectl` binary; it reads the same kubeconfig and talks to the API server directly, so `kubectl` does not have to be installed.

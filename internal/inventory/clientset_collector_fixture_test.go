@@ -22,7 +22,7 @@ func TestClientsetCollectorFixtures(t *testing.T) {
 		t.Run(tt.file, func(t *testing.T) {
 			client := fake.NewClientset(loadFixture(t, tt.file)...)
 
-			s, err := NewClientsetCollector(client).Collect(context.Background())
+			s, err := NewClientsetCollector(client, nil).Collect(context.Background())
 			if err != nil {
 				t.Fatalf("Collect() error = %v", err)
 			}

@@ -99,7 +99,7 @@ func TestPDBDisruptionBlockedOperatorManaged(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := Run(Input{Snapshot: s, Targets: tt.targets}, PDBDisruptionBlocked{})
+			got := Run(nil, Input{Snapshot: s, Targets: tt.targets}, PDBDisruptionBlocked{})
 
 			// Ignore prose; it is covered by the description tests below.
 			for i := range got {

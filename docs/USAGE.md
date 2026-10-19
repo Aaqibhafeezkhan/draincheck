@@ -5,7 +5,7 @@
 ## Synopsis
 
 ```sh
-draincheck --nodes NODE[,NODE...] [--kubeconfig PATH] [--context NAME] [--output text|json] [--verbose] [--fail-on blocked|risk|any]
+draincheck --nodes NODE[,NODE...] [--kubeconfig PATH] [--context NAME] [--output text|json] [--verbose] [--fail-on blocked|risk|any] [--debug]
 draincheck --version
 ```
 
@@ -19,6 +19,7 @@ draincheck --version
 | `--output`     | `text`                 | `text` (human-readable) or `json`. |
 | `--verbose`    | off                    | Text output only: print every finding in full instead of the compact layout. JSON always carries every finding. |
 | `--fail-on`    | `blocked`              | Lowest finding level that makes the run exit `1`: `blocked`, `risk` or `any`. |
+| `--debug`      | off                    | Write one line to stderr for each action draincheck takes. The report on stdout does not change. See [Debug output](#debug-output). |
 | `--version`    |                        | Print the version and exit.                                  |
 
 `'*'` cannot be combined with node names. Quote it so the shell does not expand it. Surrounding whitespace in names is trimmed; empty names are error.
@@ -236,6 +237,46 @@ Read-only. Needs `list` on:
 
 draincheck never cordons, evicts or modifies anything.
 
+## Debug output
+
+`--debug` makes every action draincheck takes visible. Each one writes a line at level `DEBUG` to **stderr**, in `key=value` form, so a debug log shows what draincheck read from the cluster, what it decided and how the run ended. Use it to find out why a run behaved as it did, and attach it when you report a problem.
+
+stdout is not touched. The text or JSON report is byte-for-byte the same with and without `--debug`, so scripts that read stdout keep working. Without `--debug`, nothing is written to stderr except errors. `--debug` does not change the exit code either; the one exception is stderr piped into a command that quits early, which ends the run with `141`. See [Closed pipes](#closed-pipes).
+
+| Message | Written | Fields |
+| --- | --- | --- |
+| `settings` | when the run starts | `kubeconfig` (the files that are read), `context`, `nodes`, `all_nodes`, `output`, `verbose`, `fail_on` |
+| `list` | after each list call to the API server | `resource`, `count`, `duration` |
+| `list failed` | when a list call fails | `resource`, `duration`, `error` |
+| `resolve target nodes` | when the target nodes are accepted | `requested`, `all`, `targets` |
+| `resolve target nodes failed` | when a node does not exist or the cluster has no nodes | `requested`, `all`, `error` |
+| `rule start` and `rule done` | around each rule | `rule`; `findings` on `rule done` |
+| `summary` | when all rules are done | `blocked`, `risk`, `unknown`, `fail_on` |
+| `write report` | just before the report is written | `format`, `verbose`, `findings` |
+| `finished` | when the run ends, also after an error | `exit_code` |
+
+Example, with the path anonymized and the rule lines shortened:
+
+```text
+$ draincheck --nodes worker-1 --debug >report.txt
+time=2026-10-18T17:29:41.507Z level=DEBUG msg=settings kubeconfig=[/home/user/.kube/config] context=dev nodes=[worker-1] all_nodes=false output=text verbose=false fail_on=blocked
+time=2026-10-18T17:29:41.514Z level=DEBUG msg=list resource=nodes count=1 duration=4.807574ms
+time=2026-10-18T17:29:41.515Z level=DEBUG msg=list resource=pods count=1 duration=1.629527ms
+time=2026-10-18T17:29:41.516Z level=DEBUG msg=list resource=replicasets count=0 duration=433.921µs
+time=2026-10-18T17:29:41.516Z level=DEBUG msg=list resource=poddisruptionbudgets count=0 duration=399.377µs
+time=2026-10-18T17:29:41.516Z level=DEBUG msg="resolve target nodes" requested=[worker-1] all=false targets=[worker-1]
+time=2026-10-18T17:29:41.516Z level=DEBUG msg="rule start" rule=PDB_DISRUPTION_BLOCKED
+time=2026-10-18T17:29:41.516Z level=DEBUG msg="rule done" rule=PDB_DISRUPTION_BLOCKED findings=0
+...
+time=2026-10-18T17:29:41.516Z level=DEBUG msg="rule done" rule=POD_OWNERSHIP findings=1
+...
+time=2026-10-18T17:29:41.516Z level=DEBUG msg=summary blocked=0 risk=1 unknown=0 fail_on=blocked
+time=2026-10-18T17:29:41.516Z level=DEBUG msg="write report" format=text verbose=false findings=1
+time=2026-10-18T17:29:41.516Z level=DEBUG msg=finished exit_code=0
+```
+
+Debug lines name files, resources, rules and nodes, and give counts. They never contain tokens, client certificates, `Authorization` headers or anything read from the kubeconfig besides its path. The `kubeconfig` field lists the files draincheck reads: the path from `--kubeconfig`, or else the files in `KUBECONFIG`, or else `~/.kube/config`. An empty `context` means the current context of the kubeconfig.
+
 ## Exit codes
 
 | Code | Meaning                                                                 |
@@ -255,6 +296,23 @@ draincheck never cordons, evicts or modifies anything.
 `UNKNOWN` findings, which are `PDB_STALE_STATUS` and the operator-managed budgets of `PDB_DISRUPTION_BLOCKED`, make the run exit `1` only with `--fail-on any`.
 
 The report is written before the exit code is decided, so a run that exits `1` still prints every finding.
+
+`--debug` does not change the exit code. The same run ends with the same code with and without it, and the `finished` debug line shows the code the process exits with.
+
+### Closed pipes
+
+draincheck is a Go program, and Go ends a program with `SIGPIPE` when it writes to stdout or stderr and the other end of the pipe has already been closed. The process then does not exit with `0`, `1` or `2`; a shell reports `141` (128 + 13). This happens in two cases:
+
+- stdout is piped into a command that quits before reading everything, such as `head`. This happens with or without `--debug`.
+- stderr is piped into such a command and `--debug` is set. Without `--debug`, stderr is written only when a run fails and exits `2`, so runs that exit `0` or `1` are not affected. With `--debug`, every run writes to stderr, so a run that would exit `0` or `1` can end with `141` instead.
+
+In a CI step that gates on the exit code, write the report and the debug lines to files or to a reader that reads until the end:
+
+```sh
+draincheck --nodes worker-1 --debug >report.txt 2>debug.log
+```
+
+When the exit code decides whether a pipeline passes, treat `141` as a failed run and not as `1`.
 
 ## See also
 

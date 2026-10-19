@@ -83,7 +83,7 @@ func TestPDBDisruptionBlocked(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := Run(Input{Snapshot: s, Targets: tt.targets}, PDBDisruptionBlocked{})
+			got := Run(nil, Input{Snapshot: s, Targets: tt.targets}, PDBDisruptionBlocked{})
 
 			// Ignore prose; it is covered by TestPDBDisruptionBlockedDescribesFinding.
 			for i := range got {

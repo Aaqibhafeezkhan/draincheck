@@ -13,6 +13,13 @@ entries under `[Unreleased]` in the same pull request as the change (see
 
 ### Added
 
+- `--debug` flag. It writes one line to stderr for each action draincheck
+  takes: the settings, every list call to the API server with its object count
+  and duration, how the target nodes were resolved, each rule with its number
+  of findings, the finding counts per severity and the exit code. The report on
+  stdout is byte-for-byte the same with and without the flag, and the lines
+  never contain tokens or kubeconfig contents (#21).
+
 #### Analyzer rules
 
 - `PDB_STALE_STATUS`: a PodDisruptionBudget whose `status.observedGeneration`

@@ -29,5 +29,6 @@ func newRootCmd(version string, run func(context.Context, options) error) *cobra
 	f.StringVar(&opts.Output, "output", outputText, "output format: text or json")
 	f.BoolVar(&opts.Verbose, "verbose", false, "text output: print every finding in full instead of the compact layout")
 	f.StringVar(&opts.FailOn, "fail-on", failOnBlocked, "exit 1 when a finding is at or above this level: blocked, risk or any")
+	f.BoolVar(&opts.Debug, "debug", false, "write diagnostic lines to stderr; the report on stdout does not change")
 	return cmd
 }
