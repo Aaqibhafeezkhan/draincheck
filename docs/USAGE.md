@@ -56,6 +56,7 @@ A finding covers one cause, not one pod. A cause that reaches many pods, such as
 | `PDB_DISRUPTION_BLOCKED` (`BLOCKED`) | PodDisruptionBudget | the PodDisruptionBudget |
 | `PDB_DISRUPTION_BLOCKED` (`UNKNOWN`) | operator and namespace | the namespace |
 | `PDB_STALE_STATUS` | PodDisruptionBudget | the PodDisruptionBudget |
+| `PDB_SYNC_FAILED` | PodDisruptionBudget | the PodDisruptionBudget |
 | `PDB_OVERLAPPING_SELECTORS` | pod | the pod |
 | `POD_OWNERSHIP` | DaemonSet, node (for its static pods) or pod without a controller | the DaemonSet, node or pod |
 | `MISSING_RESOURCE_REQUESTS` | owning workload | the workload; a pod without a controller is its own workload |
@@ -193,6 +194,20 @@ Raised for a PodDisruptionBudget whose `status.observedGeneration` differs from 
 - A PDB whose status is only briefly behind (right after its spec was edited) clears up once the disruption controller catches up; run draincheck again. One that stays stale points to an unhealthy kube-controller-manager.
 - Reporting a PDB whose selector matches no pod at all (probably a typo) is *planned*.
 
+### `PDB_SYNC_FAILED`
+
+Severity: `UNKNOWN`.
+
+Raised for a PodDisruptionBudget whose `DisruptionAllowed` condition has the reason `SyncFailed` while it selects pods on the target nodes. The disruption controller could not compute the budget, for example because the owner of the pods has no scale subresource. It then records that no disruption is allowed, which says nothing about the real budget, so draincheck cannot say whether the drain will be refused. The finding replaces the `PDB_DISRUPTION_BLOCKED` one for the same budget. It is `UNKNOWN`, so it makes the run exit `1` only with `--fail-on any`.
+
+- **Resource:** the PDB (`PodDisruptionBudget/<namespace>/<name>`), one finding per PDB.
+- **Description:** names the error the controller recorded, and how many pods on how many target nodes are affected.
+- **Evidence:** the same fields as `PDB_DISRUPTION_BLOCKED` (the numbers as last reported, `nodes` and `pods`) plus `reason` (`SyncFailed`) and `message` (the condition message, empty when the controller gave none).
+- A failed PDB is reported whatever its status allows, since the numbers cannot be trusted either way.
+- A PDB that is stale as well is reported only by `PDB_STALE_STATUS`, so one budget is one finding.
+- A budget at 0 with the reason `InsufficientPods` is a plain budget at 0 (`PDB_DISRUPTION_BLOCKED`), not a failure.
+- The pods counted are the same as for `PDB_DISRUPTION_BLOCKED`: only pods on a target node, without finished, DaemonSet-managed and static pods.
+
 ### `POD_OWNERSHIP`
 
 Severity: `RISK`.
@@ -295,7 +310,7 @@ Debug lines name files, resources, rules and nodes, and give counts. They never 
 | `risk`    | `BLOCKED` or `RISK`                |
 | `any`     | any finding, including `UNKNOWN`   |
 
-`UNKNOWN` findings, which are `PDB_STALE_STATUS` and the operator-managed budgets of `PDB_DISRUPTION_BLOCKED`, make the run exit `1` only with `--fail-on any`.
+`UNKNOWN` findings, which are `PDB_STALE_STATUS`, `PDB_SYNC_FAILED` and the operator-managed budgets of `PDB_DISRUPTION_BLOCKED`, make the run exit `1` only with `--fail-on any`.
 
 The report is written before the exit code is decided, so a run that exits `1` still prints every finding.
 

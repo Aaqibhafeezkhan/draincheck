@@ -1,0 +1,278 @@
+# Cluster for PDB_SYNC_FAILED, and for its interplay with PDB_DISRUPTION_BLOCKED
+# and PDB_STALE_STATUS.
+#
+# A PDB is sync-failed when its DisruptionAllowed condition has the reason
+# SyncFailed: the disruption controller could not compute the budget, so the
+# numbers in the status cannot be trusted.
+#
+# billing/api-pdb is sync-failed and allows 0: without the check it would be a
+# BLOCKED finding. It covers api-0 (worker-01) and api-1 (worker-02).
+# shop/web-pdb is sync-failed but its status says 1 is allowed: the number
+# cannot be trusted either, so it is reported too. cache/cache-pdb is settled
+# (reason SufficientPods) and allows 1: no finding. batch/job-pdb has no
+# condition at all and allows 0: BLOCKED, not sync-failed.
+# monitoring/agent-pdb is sync-failed but selects only a DaemonSet pod, which
+# kubectl never evicts, so there is no finding. edge/proxy-pdb is sync-failed
+# but its only pod runs on worker-03; it matters only when worker-03 is a
+# target. legacy/old-pdb is both stale and sync-failed: PDB_STALE_STATUS
+# reports it, PDB_SYNC_FAILED does not, so it is one finding.
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-01
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-02
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-03
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-0
+  namespace: billing
+  labels:
+    app: api
+spec:
+  nodeName: worker-01
+  containers:
+    - name: api
+      image: example/api:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-1
+  namespace: billing
+  labels:
+    app: api
+spec:
+  nodeName: worker-02
+  containers:
+    - name: api
+      image: example/api:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-0
+  namespace: shop
+  labels:
+    app: web
+spec:
+  nodeName: worker-01
+  containers:
+    - name: web
+      image: example/web:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cache-0
+  namespace: cache
+  labels:
+    app: cache
+spec:
+  nodeName: worker-01
+  containers:
+    - name: cache
+      image: example/cache:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: job-0
+  namespace: batch
+  labels:
+    app: job
+spec:
+  nodeName: worker-01
+  containers:
+    - name: job
+      image: example/job:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: agent-x1
+  namespace: monitoring
+  labels:
+    app: agent
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: DaemonSet
+      name: agent
+      uid: 11111111-1111-1111-1111-111111111111
+      controller: true
+spec:
+  nodeName: worker-01
+  containers:
+    - name: agent
+      image: example/agent:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: proxy-0
+  namespace: edge
+  labels:
+    app: proxy
+spec:
+  nodeName: worker-03
+  containers:
+    - name: proxy
+      image: example/proxy:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: old-0
+  namespace: legacy
+  labels:
+    app: old
+spec:
+  nodeName: worker-01
+  containers:
+    - name: old
+      image: example/old:1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api-pdb
+  namespace: billing
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: api
+status:
+  currentHealthy: 2
+  desiredHealthy: 2
+  disruptionsAllowed: 0
+  conditions:
+    - type: DisruptionAllowed
+      status: "False"
+      reason: SyncFailed
+      message: "found no controllers for pod api-0"
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web-pdb
+  namespace: shop
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: web
+status:
+  currentHealthy: 2
+  desiredHealthy: 1
+  disruptionsAllowed: 1
+  conditions:
+    - type: DisruptionAllowed
+      status: "False"
+      reason: SyncFailed
+      message: "scale subresource not found"
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: cache-pdb
+  namespace: cache
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: cache
+status:
+  currentHealthy: 2
+  desiredHealthy: 1
+  disruptionsAllowed: 1
+  conditions:
+    - type: DisruptionAllowed
+      status: "True"
+      reason: SufficientPods
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: job-pdb
+  namespace: batch
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: job
+status:
+  currentHealthy: 1
+  desiredHealthy: 1
+  disruptionsAllowed: 0
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: agent-pdb
+  namespace: monitoring
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: agent
+status:
+  currentHealthy: 1
+  desiredHealthy: 1
+  disruptionsAllowed: 0
+  conditions:
+    - type: DisruptionAllowed
+      status: "False"
+      reason: SyncFailed
+      message: "scale subresource not found"
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: proxy-pdb
+  namespace: edge
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: proxy
+status:
+  currentHealthy: 1
+  desiredHealthy: 1
+  disruptionsAllowed: 0
+  conditions:
+    - type: DisruptionAllowed
+      status: "False"
+      reason: SyncFailed
+      message: "scale subresource not found"
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: old-pdb
+  namespace: legacy
+  generation: 2
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: old
+status:
+  observedGeneration: 1
+  currentHealthy: 1
+  desiredHealthy: 1
+  disruptionsAllowed: 0
+  conditions:
+    - type: DisruptionAllowed
+      status: "False"
+      reason: SyncFailed
+      message: "scale subresource not found"

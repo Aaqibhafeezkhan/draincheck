@@ -26,6 +26,8 @@ const PDBDisruptionBlockedID = "PDB_DISRUPTION_BLOCKED"
 //
 // A budget whose status is stale (see PDBStaleStatus) is skipped too: its
 // numbers cannot be trusted, so PDBStaleStatus reports it as UNKNOWN instead.
+// So is a budget whose disruption controller failed to compute it (see
+// PDBSyncFailed): the 0 it records is not a real budget.
 //
 // A budget that selects a pod controlled by a custom resource (an operator, see
 // operatorOwned) is not BLOCKED but UNKNOWN: whether the drain stops depends on
@@ -44,6 +46,9 @@ func (PDBDisruptionBlocked) Evaluate(in Input) []findings.Finding {
 	for _, sel := range selectedPDBs(in) {
 		pdb := sel.pdb
 		if pdb.Status.DisruptionsAllowed != 0 || pdbStale(pdb) {
+			continue
+		}
+		if _, failed := pdbSyncFailure(pdb); failed {
 			continue
 		}
 		if len(sel.operators) > 0 {
