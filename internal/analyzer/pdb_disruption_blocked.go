@@ -24,6 +24,13 @@ const PDBDisruptionBlockedID = "PDB_DISRUPTION_BLOCKED"
 // pod gives no finding. A budget with an invalid selector is skipped: it
 // cannot be matched reliably.
 //
+// Pods that bypass every budget (Pending, terminating, see bypassesBudget) are
+// skipped like finished ones. A pod that is not Ready is skipped too when the
+// eviction API lets it past the budget (see evictedPastBudget); it is listed in
+// the evidence apart from the pods the budget refuses, and a budget left with
+// no refusable pod gives no finding. A budget whose unhealthyPodEvictionPolicy
+// is a value draincheck does not know is UNKNOWN, not guessed.
+//
 // A budget whose status is stale (see PDBStaleStatus) is skipped too: its
 // numbers cannot be trusted, so PDBStaleStatus reports it as UNKNOWN instead.
 // So is a budget whose disruption controller failed to compute it (see
@@ -51,23 +58,49 @@ func (PDBDisruptionBlocked) Evaluate(in Input) []findings.Finding {
 		if _, failed := pdbSyncFailure(pdb); failed {
 			continue
 		}
+		if !sel.policyKnown {
+			out = append(out, unknownPolicyFinding(sel))
+			continue
+		}
 		if len(sel.operators) > 0 {
 			operatorManaged = append(operatorManaged, sel)
 			continue
 		}
+		description := fmt.Sprintf(
+			"PodDisruptionBudget %s/%s allows 0 disruptions (%d healthy, %d desired), so eviction of its %s on %s will be refused.",
+			pdb.Namespace, pdb.Name, pdb.Status.CurrentHealthy, pdb.Status.DesiredHealthy,
+			plural(len(sel.pods), "pod"), plural(len(sel.nodes), "target node"))
+		if sel.unready > 0 {
+			description += " The budget itself is unhealthy, so with IfHealthyBudget it refuses the pods that are not Ready as well."
+		}
 		out = append(out, findings.Finding{
-			RuleID:   PDBDisruptionBlockedID,
-			Severity: findings.Blocked,
-			Resource: sel.resource(),
-			Evidence: sel.evidence(),
-			Description: fmt.Sprintf(
-				"PodDisruptionBudget %s/%s allows 0 disruptions (%d healthy, %d desired), so eviction of its %s on %s will be refused.",
-				pdb.Namespace, pdb.Name, pdb.Status.CurrentHealthy, pdb.Status.DesiredHealthy,
-				plural(len(sel.pods), "pod"), plural(len(sel.nodes), "target node")),
+			RuleID:      PDBDisruptionBlockedID,
+			Severity:    findings.Blocked,
+			Resource:    sel.resource(),
+			Evidence:    sel.evidence(),
+			Description: description,
 			Remediation: "Add healthy replicas, or relax minAvailable/maxUnavailable on the PodDisruptionBudget, before draining.",
 		})
 	}
 	return append(out, operatorManagedFindings(operatorManaged)...)
+}
+
+// unknownPolicyFinding is the UNKNOWN finding for a budget at 0 whose
+// unhealthyPodEvictionPolicy draincheck does not know: which of its pods
+// eviction refuses depends on that policy, so nothing is guessed.
+func unknownPolicyFinding(sel pdbSelection) findings.Finding {
+	pdb := sel.pdb
+	return findings.Finding{
+		RuleID:   PDBDisruptionBlockedID,
+		Severity: findings.Unknown,
+		Resource: sel.resource(),
+		Evidence: sel.evidence(),
+		Description: fmt.Sprintf(
+			"PodDisruptionBudget %s/%s allows 0 disruptions (%d healthy, %d desired), but its unhealthyPodEvictionPolicy %q is not one draincheck knows, so it cannot tell whether eviction of its %s on %s will be refused.",
+			pdb.Namespace, pdb.Name, pdb.Status.CurrentHealthy, pdb.Status.DesiredHealthy,
+			configuredPolicy(pdb), plural(len(sel.pods), "pod"), plural(len(sel.nodes), "target node")),
+		Remediation: "Check unhealthyPodEvictionPolicy on the PodDisruptionBudget against the Kubernetes version of the cluster, then run draincheck again. Until then, drain with care.",
+	}
 }
 
 func terminal(pod corev1.Pod) bool {

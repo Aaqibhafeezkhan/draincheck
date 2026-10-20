@@ -38,7 +38,7 @@ func (PDBOverlappingSelectors) Evaluate(in Input) []findings.Finding {
 	var out []findings.Finding
 	pdbs := in.Snapshot.PodDisruptionBudgets()
 	for _, pod := range in.Snapshot.Pods() {
-		if !slices.Contains(in.Targets, pod.Spec.NodeName) || terminal(pod) || skippedByDrain(pod, owners) {
+		if !slices.Contains(in.Targets, pod.Spec.NodeName) || bypassesBudget(pod) || skippedByDrain(pod, owners) {
 			continue
 		}
 		var matched []string

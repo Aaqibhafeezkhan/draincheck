@@ -13,6 +13,7 @@ import (
 	"github.com/Veinar/draincheck/internal/analyzer"
 	"github.com/Veinar/draincheck/internal/findings"
 	"github.com/Veinar/draincheck/internal/inventory"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes/fake"
@@ -46,6 +47,12 @@ func runFixture(t *testing.T, name string) []findings.Finding {
 		obj, _, err := scheme.Codecs.UniversalDeserializer().Decode(doc, nil, nil)
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
+		}
+		if pod, ok := obj.(*corev1.Pod); ok && pod.Status.Phase == "" && len(pod.Status.Conditions) == 0 {
+			// A pod with no status is a healthy one: the eviction handler treats a
+			// pod with no Ready condition as not ready, which no running pod is.
+			pod.Status.Phase = corev1.PodRunning
+			pod.Status.Conditions = []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}
 		}
 		objs = append(objs, obj)
 	}

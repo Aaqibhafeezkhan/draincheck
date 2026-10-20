@@ -154,7 +154,9 @@ Raised for a PodDisruptionBudget with `status.disruptionsAllowed == 0` that sele
 - **Resource:** the PDB (`PodDisruptionBudget/<namespace>/<name>`), one finding per PDB.
 - **Description:** states the numbers once (healthy, desired, 0 allowed) and how many pods on how many target nodes are affected.
 - **Evidence:** the PDB `namespace` and `name`, `current_healthy`, `desired_healthy` and `disruptions_allowed`, then `nodes` (the target nodes the selected pods run on, sorted) and `pods`, each with its `namespace`, `name` and `node`, sorted by namespace and name. Every selected pod is listed, so grouping hides nothing. A pod selected by two blocked PDBs is listed under both.
-- Only pods scheduled on a target node count. Pods in phase `Succeeded` or `Failed`, DaemonSet-managed pods and static (mirror) pods are skipped, since `kubectl drain` does not evict them and the eviction API is never asked about them. They stay visible through `POD_OWNERSHIP`. A PDB that selects only such pods gives no finding.
+- Only pods scheduled on a target node count. Pods in phase `Succeeded`, `Failed` or `Pending` and pods that are already terminating are skipped, since the eviction API deletes them without consulting a budget. DaemonSet-managed pods and static (mirror) pods are skipped, since `kubectl drain` does not evict them; they stay visible through `POD_OWNERSHIP`. A PDB that selects only such pods gives no finding.
+- **Unhealthy pods.** A pod that is not Ready is evicted past its budget with `unhealthyPodEvictionPolicy: AlwaysAllow`, and with `IfHealthyBudget` (the default when the field is unset) while `currentHealthy >= desiredHealthy` and `desiredHealthy > 0`. Such a pod is not counted as blocked; the JSON `evidence` lists it as `evictable_unhealthy_pods`, apart from `pods`, and a PDB left with no pod it can refuse gives no finding. With an unhealthy budget (`currentHealthy < desiredHealthy`) under `IfHealthyBudget` the pod is still refused: the finding stays `BLOCKED` and the description says the budget itself is unhealthy. The `evidence` also carries `unhealthy_pod_eviction_policy` when the field is set.
+- A PDB whose `unhealthyPodEvictionPolicy` is a value draincheck does not know is reported as `UNKNOWN`, not guessed.
 - A PDB with an empty selector (`{}`) selects every pod in its namespace; one with no selector selects none.
 - A PDB whose selector is invalid is skipped.
 - A PDB whose status is stale is not reported here: `PDB_STALE_STATUS` reports it as `UNKNOWN`, because its numbers cannot be trusted.
@@ -176,21 +178,21 @@ Raised for a pod on a target node when more than one PodDisruptionBudget in the 
 
 - **Resource:** the pod (`Pod/<namespace>/<name>`), one finding per pod.
 - **Evidence:** the `namespace` and the `pdbs` that select the pod, sorted by name.
-- Only pods scheduled on a target node count. Pods in phase `Succeeded` or `Failed` are skipped, since eviction does not consult budgets for them. So are DaemonSet-managed pods and static (mirror) pods, which `kubectl drain` never evicts. They stay visible through `POD_OWNERSHIP`.
+- Only pods scheduled on a target node count. Pods in phase `Succeeded`, `Failed` or `Pending` and pods that are already terminating are skipped, since eviction does not consult budgets for them. So are DaemonSet-managed pods and static (mirror) pods, which `kubectl drain` never evicts. They stay visible through `POD_OWNERSHIP`.
 - An empty selector (`{}`) selects every pod in its namespace, so it overlaps with any other budget there; one with no selector selects none.
 - A PDB whose selector is invalid is skipped.
 - A pod that is both overlapped and covered by a zero-disruption budget is also listed in the `PDB_DISRUPTION_BLOCKED` finding of that budget.
 
 ### `PDB_BATCH_EXCEEDS_BUDGET`
 
-Raised as `RISK` for a PodDisruptionBudget with `status.disruptionsAllowed > 0` when the pods it selects on **all** target nodes together are more than it allows at once. `kubectl drain` takes one node at a time and sees each node fit; draincheck adds the pods of every target node that share a budget. With a disruption allowed the first eviction succeeds, its replacement restores the budget once it is Ready, and the drain proceeds in steps: it waits, it does not stall. A budget at 0 is the stall case and stays `BLOCKED` under `PDB_DISRUPTION_BLOCKED`, so one budget is never in both.
+Raised as `RISK` for a PodDisruptionBudget with `status.disruptionsAllowed > 0` when the pods it selects on **all** target nodes together are more than it allows at once. `kubectl drain` works through nodes one after another and a server dry run sees each node fit; draincheck adds the pods of every target node that share a budget. With a disruption allowed the first eviction succeeds, its replacement restores the budget once it is Ready, and the drain proceeds in steps: it waits, it does not stall. A budget at 0 is the stall case and stays `BLOCKED` under `PDB_DISRUPTION_BLOCKED`, so one budget is never in both.
 
 - **Resource:** the PDB (`PodDisruptionBudget/<namespace>/<name>`), one finding per PDB.
 - **Description:** states how many pods on how many target nodes the PDB selects, how many disruptions it allows at once, and that the drain waits for replacements.
 - **Evidence:** the same fields as `PDB_DISRUPTION_BLOCKED` (`nodes` and `pods` included) plus `pods_to_evict`, the number of pods the batch evicts.
-- The pods counted are the same as for `PDB_DISRUPTION_BLOCKED`: only pods on a target node, without finished, DaemonSet-managed and static pods.
+- The pods counted are the same as for `PDB_DISRUPTION_BLOCKED`: only pods on a target node, without pods that bypass every budget, DaemonSet-managed and static pods, and without unhealthy pods the eviction API lets past the budget (they do not use it up).
 - A stale budget (`PDB_STALE_STATUS`), a budget whose controller failed (`PDB_SYNC_FAILED`) and a budget over pods controlled by an operator are not reported here: their numbers say nothing reliable.
-- The count ignores `unhealthyPodEvictionPolicy`, so it can be too high for pods that are not Ready, never too low. Honouring the policy is *planned*.
+- A budget whose `unhealthyPodEvictionPolicy` is a value draincheck does not know is not reported here.
 - It is `RISK`, so it makes the run exit `1` only with `--fail-on risk` or `any`.
 
 ### `PDB_STALE_STATUS`

@@ -169,3 +169,30 @@ func TestFindingJSONPDBBatchEvidence(t *testing.T) {
 		t.Errorf("json mismatch\n got: %s\nwant: %s", b, want)
 	}
 }
+
+func TestFindingJSONPDBUnhealthyPolicyEvidence(t *testing.T) {
+	f := Finding{
+		RuleID:   "PDB_DISRUPTION_BLOCKED",
+		Severity: Blocked,
+		Resource: ResourceRef{Kind: "PodDisruptionBudget", Namespace: "shop", Name: "web-pdb"},
+		Evidence: PDBEvidence{
+			Namespace:                  "shop",
+			Name:                       "web-pdb",
+			CurrentHealthy:             2,
+			DesiredHealthy:             2,
+			Nodes:                      []string{"worker-01"},
+			Pods:                       []PDBPod{{Namespace: "shop", Name: "web-0", Node: "worker-01"}},
+			UnhealthyPodEvictionPolicy: "AlwaysAllow",
+			EvictableUnhealthyPods:     []PDBPod{{Namespace: "shop", Name: "web-1", Node: "worker-01"}},
+		},
+	}
+	b, err := json.Marshal(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Both fields are omitted when empty, so existing reports do not change.
+	want := `{"rule_id":"PDB_DISRUPTION_BLOCKED","severity":"BLOCKED","resource":"PodDisruptionBudget/shop/web-pdb","evidence":{"namespace":"shop","name":"web-pdb","current_healthy":2,"desired_healthy":2,"disruptions_allowed":0,"nodes":["worker-01"],"pods":[{"namespace":"shop","name":"web-0","node":"worker-01"}],"unhealthy_pod_eviction_policy":"AlwaysAllow","evictable_unhealthy_pods":[{"namespace":"shop","name":"web-1","node":"worker-01"}]},"description":"","remediation":""}`
+	if string(b) != want {
+		t.Errorf("json mismatch\n got: %s\nwant: %s", b, want)
+	}
+}

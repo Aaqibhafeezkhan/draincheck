@@ -96,13 +96,14 @@ draincheck --nodes worker-02,worker-04 [--kubeconfig PATH] [--context NAME] [--o
 
 ### Why not `kubectl drain --dry-run`?
 
-Use both. `kubectl drain --dry-run=server` asks the API server whether each eviction would be accepted now, one node per run. At that it is exact, and draincheck does not try to beat it: a budget that allows 0 disruptions shows up in both. draincheck is a different layer. `kubectl` answers "what happens if I drain this node now"; draincheck answers "what happens if I do this plan across several nodes, and what should I look at first".
+Use both. `kubectl drain --dry-run=server` asks the API server whether each eviction would be accepted now. It takes several node names in one run, but checks them one after another, each against the cluster as it is now. At that it is exact, and draincheck does not try to beat it: a budget that allows 0 disruptions shows up in both. draincheck is a different layer. `kubectl` answers "what happens if I drain this node now"; draincheck answers "what happens if I do this plan across several nodes, and what should I look at first".
 
 What a server dry run cannot show, and draincheck reports:
 
-- **Several nodes against one budget.** A dry-run eviction does not use up the budget, so each node passes alone. `PDB_BATCH_EXCEEDS_BUDGET` adds up the pods of all target nodes behind one PodDisruptionBudget and reports a batch the budget allows only in steps.
+- **Several nodes against one budget.** A dry-run eviction does not use up the budget, so every node passes, even when a real drain of the same nodes cannot finish (checked with kubectl v1.36.1: three nodes, one pod each, a budget allowing 1; the dry run exits 0, the real drain evicts the first pod, retries the others against the budget until `--timeout` runs out for each node, and exits 1 with those nodes left cordoned). `PDB_BATCH_EXCEEDS_BUDGET` adds up the pods of all target nodes behind one PodDisruptionBudget and reports a batch the budget allows only in steps.
 - **Operators that react to a cordon.** A dry run does not really cordon, so it cannot show what an operator does when the node is cordoned. draincheck marks such budgets `UNKNOWN` instead of guessing. Checking what the operator does is *planned*.
-- **What the drain leaves behind.** Static pods, DaemonSet pods and containers without resource requests.
+- **What the drain leaves behind.** Static pods and DaemonSet pods, which kubectl never evicts and which stay until the node goes down.
+- **What may not fit when rescheduled.** Evicted pods whose containers have no resource requests, because the scheduler treats a missing request as needing nothing.
 - **All nodes in one run**, with exit codes for CI, and no retry loop.
 
 draincheck reads a snapshot, so it cannot be more exact than the API server on a single eviction, and it does not predict whether evicted pods will fit elsewhere yet (*planned*).
