@@ -21,9 +21,18 @@ type PDBEvidence struct {
 	// Nodes are the target nodes the selected pods run on, sorted, without
 	// duplicates.
 	Nodes []string `json:"nodes"`
-	// Pods are all pods on the target nodes that the budget selects and
-	// kubectl drain would evict, sorted by namespace, name and node.
+	// Pods are the pods on the target nodes that the budget selects and
+	// kubectl drain would evict, and that eviction puts through the budget,
+	// sorted by namespace, name and node.
 	Pods []PDBPod `json:"pods"`
+	// UnhealthyPodEvictionPolicy is spec.unhealthyPodEvictionPolicy as
+	// configured; empty when unset, which means IfHealthyBudget.
+	UnhealthyPodEvictionPolicy string `json:"unhealthy_pod_eviction_policy,omitempty"`
+	// EvictableUnhealthyPods are pods the budget selects that are not Ready and
+	// that the eviction API lets through whatever the budget says (see the
+	// policy). They are not in Pods and do not use up the budget. Sorted like
+	// Pods; omitted when there are none.
+	EvictableUnhealthyPods []PDBPod `json:"evictable_unhealthy_pods,omitempty"`
 }
 
 func (PDBEvidence) isEvidence() {}

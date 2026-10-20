@@ -16,8 +16,23 @@ import (
 // it selects and kubectl drain would evict.
 type pdbSelection struct {
 	pdb policyv1.PodDisruptionBudget
-	// pods are sorted by namespace, name and node.
+	// pods are the selected pods that eviction puts through the budget, sorted
+	// by namespace, name and node. Pods that bypass every budget (see
+	// bypassesBudget) are not selected, and pods the eviction API lets past
+	// this one (see evictedPastBudget) are in evictable instead.
 	pods []findings.PDBPod
+	// evictable are the selected pods that are not Ready and that eviction lets
+	// through whatever the budget says, sorted like pods. Always empty for a
+	// budget whose status cannot be trusted (stale, sync failed) or whose
+	// policy is unknown.
+	evictable []findings.PDBPod
+	// unready is the number of pods that are not Ready among pods: eviction
+	// refuses them like any other pod because the budget itself is unhealthy.
+	unready int
+	// policyKnown is false when unhealthyPodEvictionPolicy holds a value
+	// draincheck does not know. Nothing is let past such a budget, and its pods
+	// cannot be judged.
+	policyKnown bool
 	// nodes are the nodes of pods, sorted, without duplicates.
 	nodes []string
 	// operators are the custom-resource controllers (see operatorOwned) of the
@@ -43,14 +58,29 @@ func (s pdbSelection) evidence() findings.PDBEvidence {
 		DisruptionsAllowed: s.pdb.Status.DisruptionsAllowed,
 		Nodes:              s.nodes,
 		Pods:               s.pods,
+
+		UnhealthyPodEvictionPolicy: configuredPolicy(s.pdb),
+		EvictableUnhealthyPods:     s.evictable,
 	}
 }
 
+// configuredPolicy is spec.unhealthyPodEvictionPolicy as written, empty when
+// unset.
+func configuredPolicy(pdb policyv1.PodDisruptionBudget) string {
+	if pdb.Spec.UnhealthyPodEvictionPolicy == nil {
+		return ""
+	}
+	return string(*pdb.Spec.UnhealthyPodEvictionPolicy)
+}
+
 // selectedPDBs returns every PodDisruptionBudget that selects at least one pod
-// on a target node that kubectl drain would evict, in snapshot order. Pods in a
-// terminal phase and pods drain never evicts (see skippedByDrain) are not
-// counted, and a budget with an invalid selector is skipped. What the budget's
-// status says is for the caller to judge.
+// on a target node that kubectl drain would evict, in snapshot order. Pods that
+// bypass every budget (see bypassesBudget) and pods drain never evicts (see
+// skippedByDrain) are not counted, and a budget with an invalid selector is
+// skipped. A pod that is not Ready and that the eviction API lets past the
+// budget (see evictedPastBudget) is kept apart in evictable, and a budget left
+// with no other pod is skipped. What the budget's status says is for the caller
+// to judge.
 //
 // The PDB rules build on this one selection, so a budget that one of them
 // reports and another one skips cannot fall between them unreported.
@@ -62,7 +92,7 @@ func selectedPDBs(in Input) []pdbSelection {
 	owners := inventory.NewOwnerResolver(in.Snapshot)
 	var evicted []corev1.Pod // pods on the target nodes that kubectl drain would evict
 	for _, pod := range in.Snapshot.Pods() {
-		if slices.Contains(in.Targets, pod.Spec.NodeName) && !terminal(pod) && !skippedByDrain(pod, owners) {
+		if slices.Contains(in.Targets, pod.Spec.NodeName) && !bypassesBudget(pod) && !skippedByDrain(pod, owners) {
 			evicted = append(evicted, pod)
 		}
 	}
@@ -74,26 +104,43 @@ func selectedPDBs(in Input) []pdbSelection {
 			continue
 		}
 
-		var pods []findings.PDBPod
+		// The numbers of a budget that is stale or failed to sync cannot tell
+		// which unhealthy pods are let through, so none is.
+		_, known := unhealthyPolicy(pdb)
+		_, failed := pdbSyncFailure(pdb)
+		judged := known && !pdbStale(pdb) && !failed
+
+		var pods, evictable []findings.PDBPod
 		var operators []findings.ManagedBy
+		unready := 0
 		for _, pod := range evicted {
 			if pod.Namespace == pdb.Namespace && sel.Matches(labels.Set(pod.Labels)) {
-				pods = append(pods, findings.PDBPod{Namespace: pod.Namespace, Name: pod.Name, Node: pod.Spec.NodeName})
+				entry := findings.PDBPod{Namespace: pod.Namespace, Name: pod.Name, Node: pod.Spec.NodeName}
+				if judged && evictedPastBudget(pod, pdb) {
+					evictable = append(evictable, entry)
+					continue
+				}
+				pods = append(pods, entry)
+				if !podReady(pod) {
+					unready++
+				}
 				if owner := owners.Resolve(pod); operatorOwned(owner) {
 					operators = append(operators, findings.ManagedBy{APIGroup: owner.APIGroup, Kind: owner.Kind})
 				}
 			}
 		}
 		if len(pods) == 0 {
-			continue
+			continue // nothing the budget can refuse
 		}
 		slices.SortFunc(operators, func(a, b findings.ManagedBy) int {
 			return cmp.Or(cmp.Compare(a.APIGroup, b.APIGroup), cmp.Compare(a.Kind, b.Kind))
 		})
 		operators = slices.Compact(operators)
-		slices.SortFunc(pods, func(a, b findings.PDBPod) int {
+		byName := func(a, b findings.PDBPod) int {
 			return cmp.Or(cmp.Compare(a.Namespace, b.Namespace), cmp.Compare(a.Name, b.Name), cmp.Compare(a.Node, b.Node))
-		})
+		}
+		slices.SortFunc(pods, byName)
+		slices.SortFunc(evictable, byName)
 		nodes := make([]string, len(pods))
 		for i, p := range pods {
 			nodes[i] = p.Node
@@ -101,7 +148,7 @@ func selectedPDBs(in Input) []pdbSelection {
 		slices.Sort(nodes)
 		nodes = slices.Compact(nodes)
 
-		out = append(out, pdbSelection{pdb: pdb, pods: pods, nodes: nodes, operators: operators})
+		out = append(out, pdbSelection{pdb: pdb, pods: pods, evictable: evictable, unready: unready, policyKnown: known, nodes: nodes, operators: operators})
 	}
 	return out
 }

@@ -143,3 +143,27 @@ func TestPDBBatchExceedsBudgetDescribesFinding(t *testing.T) {
 		})
 	}
 }
+
+// A pod the eviction API lets past its budget does not use the budget up, so
+// it is not counted: cnt-pdb allows 2 and three pods are on the targets, but
+// one is not Ready and AlwaysAllow, so the batch fits. cnt2-pdb allows 1 and
+// is exceeded by the two pods that do use the budget, not by three.
+func TestPDBBatchExceedsBudgetIgnoresUnhealthyEvictions(t *testing.T) {
+	s := snapshotFromFixture(t, "pdb-unhealthy-pods.yaml")
+
+	got := Run(nil, Input{Snapshot: s, Targets: []string{"worker-01", "worker-02", "worker-03"}}, PDBBatchExceedsBudget{})
+	for i := range got {
+		got[i].Description, got[i].Remediation = "", ""
+	}
+
+	want := batchFinding("cnt2", "cnt2-pdb", 3, 2, 1, []string{"worker-01", "worker-02"},
+		pdbPod("cnt2", "cnt2-0", "worker-01"), pdbPod("cnt2", "cnt2-1", "worker-02"))
+	ev := want.Evidence.(findings.PDBBatchEvidence)
+	ev.UnhealthyPodEvictionPolicy = "AlwaysAllow"
+	ev.EvictableUnhealthyPods = []findings.PDBPod{pdbPod("cnt2", "cnt2-2", "worker-03")}
+	want.Evidence = ev
+
+	if !reflect.DeepEqual(got, []findings.Finding{want}) {
+		t.Errorf("findings mismatch\n got: %+v\nwant: %+v", got, []findings.Finding{want})
+	}
+}

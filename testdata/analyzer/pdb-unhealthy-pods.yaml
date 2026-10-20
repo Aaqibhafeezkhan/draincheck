@@ -1,0 +1,464 @@
+# Cluster for unhealthyPodEvictionPolicy and the pods that bypass a budget
+# (Pending, terminating). Mirrors the eviction handler of kube-apiserver.
+#
+# A pod that is not Ready can be evicted past its budget: always with the
+# policy AlwaysAllow, and with IfHealthyBudget (also when the field is unset)
+# while currentHealthy >= desiredHealthy and desiredHealthy > 0. Such an
+# eviction does not use up the budget. Pods without a status are healthy: the
+# test helper gives them phase Running and Ready=True.
+#
+# worker-01 .. worker-03 are the targets, worker-04 is not.
+#
+# mix/mix-pdb        allows 0, healthy budget. mix-0 and mix-1 are Ready, mix-2
+#                    is not: BLOCKED for mix-0 and mix-1, mix-2 is let through.
+# solo/solo-pdb      allows 0, healthy budget. The only pod on a target is not
+#                    Ready: let through, no finding.
+# sick/sick-pdb      allows 0, budget unhealthy (1 healthy, 2 desired). sick-0
+#                    is not Ready and still cannot be evicted: BLOCKED.
+# aa/aa-pdb          AlwaysAllow, budget unhealthy. aa-0 is not Ready: let
+#                    through whatever the budget says, no finding.
+# odd/odd-pdb        a policy value draincheck does not know: UNKNOWN.
+# bypass/bypass-pdb  allows 0. Its pods are Pending and terminating, which
+#                    bypass every budget: no finding.
+# stale/stale-pdb    AlwaysAllow, but its status is stale. Its numbers cannot be
+#                    trusted, so no pod is let through: PDB_STALE_STATUS lists
+#                    stale-0 although it is not Ready.
+# cnt/cnt-pdb        AlwaysAllow, allows 2, three pods; cnt-2 is not Ready, so
+#                    two evictions use the budget and it is not exceeded.
+# cnt2/cnt2-pdb      AlwaysAllow, allows 1, three pods; cnt2-2 is not Ready, so
+#                    two evictions use the budget and it is exceeded.
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-01
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-02
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-03
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-04
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mix-0
+  namespace: mix
+  labels:
+    app: mix
+spec:
+  nodeName: worker-01
+  containers:
+    - name: c
+      image: example/c:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mix-1
+  namespace: mix
+  labels:
+    app: mix
+spec:
+  nodeName: worker-01
+  containers:
+    - name: c
+      image: example/c:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mix-2
+  namespace: mix
+  labels:
+    app: mix
+spec:
+  nodeName: worker-01
+  containers:
+    - name: c
+      image: example/c:1
+status:
+  phase: Running
+  conditions:
+    - type: Ready
+      status: "False"
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: solo-0
+  namespace: solo
+  labels:
+    app: solo
+spec:
+  nodeName: worker-04
+  containers:
+    - name: c
+      image: example/c:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: solo-1
+  namespace: solo
+  labels:
+    app: solo
+spec:
+  nodeName: worker-01
+  containers:
+    - name: c
+      image: example/c:1
+status:
+  phase: Running
+  conditions:
+    - type: Ready
+      status: "False"
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sick-0
+  namespace: sick
+  labels:
+    app: sick
+spec:
+  nodeName: worker-01
+  containers:
+    - name: c
+      image: example/c:1
+status:
+  phase: Running
+  conditions:
+    - type: Ready
+      status: "False"
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sick-1
+  namespace: sick
+  labels:
+    app: sick
+spec:
+  nodeName: worker-04
+  containers:
+    - name: c
+      image: example/c:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: aa-0
+  namespace: aa
+  labels:
+    app: aa
+spec:
+  nodeName: worker-01
+  containers:
+    - name: c
+      image: example/c:1
+status:
+  phase: Running
+  conditions:
+    - type: Ready
+      status: "False"
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: odd-0
+  namespace: odd
+  labels:
+    app: odd
+spec:
+  nodeName: worker-01
+  containers:
+    - name: c
+      image: example/c:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bypass-0
+  namespace: bypass
+  labels:
+    app: bypass
+spec:
+  nodeName: worker-01
+  containers:
+    - name: c
+      image: example/c:1
+status:
+  phase: Pending
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bypass-1
+  namespace: bypass
+  labels:
+    app: bypass
+  deletionTimestamp: "2026-10-20T10:00:00Z"
+  finalizers:
+    - example.com/hold
+spec:
+  nodeName: worker-01
+  containers:
+    - name: c
+      image: example/c:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cnt-0
+  namespace: cnt
+  labels:
+    app: cnt
+spec:
+  nodeName: worker-01
+  containers:
+    - name: c
+      image: example/c:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cnt-1
+  namespace: cnt
+  labels:
+    app: cnt
+spec:
+  nodeName: worker-02
+  containers:
+    - name: c
+      image: example/c:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cnt-2
+  namespace: cnt
+  labels:
+    app: cnt
+spec:
+  nodeName: worker-03
+  containers:
+    - name: c
+      image: example/c:1
+status:
+  phase: Running
+  conditions:
+    - type: Ready
+      status: "False"
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cnt2-0
+  namespace: cnt2
+  labels:
+    app: cnt2
+spec:
+  nodeName: worker-01
+  containers:
+    - name: c
+      image: example/c:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cnt2-1
+  namespace: cnt2
+  labels:
+    app: cnt2
+spec:
+  nodeName: worker-02
+  containers:
+    - name: c
+      image: example/c:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cnt2-2
+  namespace: cnt2
+  labels:
+    app: cnt2
+spec:
+  nodeName: worker-03
+  containers:
+    - name: c
+      image: example/c:1
+status:
+  phase: Running
+  conditions:
+    - type: Ready
+      status: "False"
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: mix-pdb
+  namespace: mix
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: mix
+status:
+  currentHealthy: 2
+  desiredHealthy: 2
+  disruptionsAllowed: 0
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: solo-pdb
+  namespace: solo
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: solo
+status:
+  currentHealthy: 1
+  desiredHealthy: 1
+  disruptionsAllowed: 0
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: sick-pdb
+  namespace: sick
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: sick
+status:
+  currentHealthy: 1
+  desiredHealthy: 2
+  disruptionsAllowed: 0
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: aa-pdb
+  namespace: aa
+spec:
+  minAvailable: 2
+  unhealthyPodEvictionPolicy: AlwaysAllow
+  selector:
+    matchLabels:
+      app: aa
+status:
+  currentHealthy: 1
+  desiredHealthy: 2
+  disruptionsAllowed: 0
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: odd-pdb
+  namespace: odd
+spec:
+  minAvailable: 1
+  unhealthyPodEvictionPolicy: SometimesAllow
+  selector:
+    matchLabels:
+      app: odd
+status:
+  currentHealthy: 1
+  desiredHealthy: 1
+  disruptionsAllowed: 0
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: bypass-pdb
+  namespace: bypass
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: bypass
+status:
+  currentHealthy: 1
+  desiredHealthy: 1
+  disruptionsAllowed: 0
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: cnt-pdb
+  namespace: cnt
+spec:
+  minAvailable: 1
+  unhealthyPodEvictionPolicy: AlwaysAllow
+  selector:
+    matchLabels:
+      app: cnt
+status:
+  currentHealthy: 3
+  desiredHealthy: 1
+  disruptionsAllowed: 2
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: cnt2-pdb
+  namespace: cnt2
+spec:
+  minAvailable: 2
+  unhealthyPodEvictionPolicy: AlwaysAllow
+  selector:
+    matchLabels:
+      app: cnt2
+status:
+  currentHealthy: 3
+  desiredHealthy: 2
+  disruptionsAllowed: 1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: stale-0
+  namespace: stale
+  labels:
+    app: stale
+spec:
+  nodeName: worker-01
+  containers:
+    - name: c
+      image: example/c:1
+status:
+  phase: Running
+  conditions:
+    - type: Ready
+      status: "False"
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: stale-pdb
+  namespace: stale
+  generation: 2
+spec:
+  minAvailable: 1
+  unhealthyPodEvictionPolicy: AlwaysAllow
+  selector:
+    matchLabels:
+      app: stale
+status:
+  observedGeneration: 1
+  currentHealthy: 1
+  desiredHealthy: 1
+  disruptionsAllowed: 0

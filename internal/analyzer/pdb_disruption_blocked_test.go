@@ -118,6 +118,7 @@ func TestPDBDisruptionBlockedGroupsReplicas(t *testing.T) {
 		pods = append(pods, corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{Namespace: "billing", Name: fmt.Sprintf("api-%d", i), Labels: labels},
 			Spec:       corev1.PodSpec{NodeName: fmt.Sprintf("worker-%02d", i%4)},
+			Status:     podWithReady(corev1.ConditionTrue).Status, // a pod with no Ready condition is not ready
 		})
 	}
 	pdb := policyv1.PodDisruptionBudget{
@@ -200,5 +201,77 @@ func TestPDBDisruptionBlockedNilSnapshot(t *testing.T) {
 func TestPDBDisruptionBlockedID(t *testing.T) {
 	if got := (PDBDisruptionBlocked{}).ID(); got != "PDB_DISRUPTION_BLOCKED" {
 		t.Errorf("ID() = %q", got)
+	}
+}
+
+// The eviction API lets a pod that is not Ready past its budget (see
+// evictedPastBudget) and never consults a budget for a Pending or terminating
+// pod. A budget at 0 is BLOCKED only for the pods it can refuse.
+func TestPDBDisruptionBlockedUnhealthyPods(t *testing.T) {
+	s := snapshotFromFixture(t, "pdb-unhealthy-pods.yaml")
+	targets := []string{"worker-01", "worker-02", "worker-03"}
+
+	mix := pdbFinding("mix", "mix-pdb", 2, 2, []string{"worker-01"}, pdbPod("mix", "mix-0", "worker-01"), pdbPod("mix", "mix-1", "worker-01"))
+	mixEv := mix.Evidence.(findings.PDBEvidence)
+	mixEv.EvictableUnhealthyPods = []findings.PDBPod{pdbPod("mix", "mix-2", "worker-01")}
+	mix.Evidence = mixEv
+
+	// An unhealthy budget still refuses an unhealthy pod under IfHealthyBudget.
+	sick := pdbFinding("sick", "sick-pdb", 1, 2, []string{"worker-01"}, pdbPod("sick", "sick-0", "worker-01"))
+
+	// A policy value draincheck does not know: nothing is guessed.
+	odd := pdbFinding("odd", "odd-pdb", 1, 1, []string{"worker-01"}, pdbPod("odd", "odd-0", "worker-01"))
+	odd.Severity = findings.Unknown
+	oddEv := odd.Evidence.(findings.PDBEvidence)
+	oddEv.UnhealthyPodEvictionPolicy = "SometimesAllow"
+	odd.Evidence = oddEv
+
+	got := Run(nil, Input{Snapshot: s, Targets: targets}, PDBDisruptionBlocked{})
+	for i := range got {
+		got[i].Description, got[i].Remediation = "", ""
+	}
+	// solo, aa and bypass select only pods the budget cannot refuse; stale is
+	// left to PDB_STALE_STATUS; cnt and cnt2 allow disruptions.
+	want := []findings.Finding{mix, odd, sick}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("findings mismatch\n got: %+v\nwant: %+v", got, want)
+	}
+}
+
+func TestPDBDisruptionBlockedDescribesUnhealthyPods(t *testing.T) {
+	s := snapshotFromFixture(t, "pdb-unhealthy-pods.yaml")
+	targets := []string{"worker-01", "worker-02", "worker-03"}
+
+	tests := []struct {
+		name string
+		pdb  string
+		want string
+	}{
+		{
+			name: "an unhealthy budget says it refuses unhealthy pods too",
+			pdb:  "sick-pdb",
+			want: "PodDisruptionBudget sick/sick-pdb allows 0 disruptions (1 healthy, 2 desired), so eviction of its 1 pod on 1 target node will be refused. The budget itself is unhealthy, so with IfHealthyBudget it refuses the pods that are not Ready as well.",
+		},
+		{
+			name: "an unknown policy says why the answer is not known",
+			pdb:  "odd-pdb",
+			want: "PodDisruptionBudget odd/odd-pdb allows 0 disruptions (1 healthy, 1 desired), but its unhealthyPodEvictionPolicy \"SometimesAllow\" is not one draincheck knows, so it cannot tell whether eviction of its 1 pod on 1 target node will be refused.",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got *findings.Finding
+			for _, f := range (PDBDisruptionBlocked{}).Evaluate(Input{Snapshot: s, Targets: targets}) {
+				if f.Resource.Name == tt.pdb {
+					got = &f
+				}
+			}
+			if got == nil {
+				t.Fatalf("no finding for %s", tt.pdb)
+			}
+			if got.Description != tt.want {
+				t.Errorf("description\n got: %s\nwant: %s", got.Description, tt.want)
+			}
+		})
 	}
 }

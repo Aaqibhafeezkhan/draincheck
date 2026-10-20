@@ -48,6 +48,16 @@ entries under `[Unreleased]` in the same pull request as the change (see
 
 #### Analyzer rules
 
+- `unhealthyPodEvictionPolicy` is honoured by the PodDisruptionBudget rules.
+  A pod that is not Ready is evicted past its budget with `AlwaysAllow`, and
+  with `IfHealthyBudget` (the default) while the budget is healthy. Such a pod
+  is no longer counted as blocked: `PDB_DISRUPTION_BLOCKED` gives no finding
+  for a budget at 0 whose only pods it lets through, and
+  `PDB_BATCH_EXCEEDS_BUDGET` does not count them. With an unhealthy budget the
+  pod is still refused and the finding says so. A budget with a policy value
+  draincheck does not know is `UNKNOWN`. The JSON `evidence` gains
+  `unhealthy_pod_eviction_policy` and `evictable_unhealthy_pods`, both omitted
+  when empty (#5).
 - `MISSING_RESOURCE_REQUESTS` now reports one finding per owning workload
   (Deployment, StatefulSet, Job or a pod with no controller) instead of one
   per pod, so 10 replicas without requests are one finding. The finding points
@@ -91,6 +101,10 @@ entries under `[Unreleased]` in the same pull request as the change (see
 
 #### Analyzer rules
 
+- `PDB_DISRUPTION_BLOCKED`, `PDB_BATCH_EXCEEDS_BUDGET` and
+  `PDB_OVERLAPPING_SELECTORS` no longer count pods in phase `Pending` or pods
+  that are already terminating. The eviction API deletes them without
+  consulting a budget, so reporting them was a false `BLOCKED` (#5).
 - `PDB_DISRUPTION_BLOCKED` and `PDB_OVERLAPPING_SELECTORS` no longer report
   DaemonSet pods and static pods. `kubectl drain` never evicts them, so no
   PodDisruptionBudget can refuse their eviction; a budget that selects only

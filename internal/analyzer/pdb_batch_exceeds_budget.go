@@ -29,8 +29,11 @@ const PDBBatchExceedsBudgetID = "PDB_BATCH_EXCEEDS_BUDGET"
 // controlled by an operator (see operatorOwned) are skipped: their numbers say
 // nothing reliable about the drain.
 //
-// The count ignores unhealthyPodEvictionPolicy: an unhealthy pod may be
-// evictable past the budget, so the count can be too high, never too low.
+// Only pods that use the budget up are counted: a pod that is not Ready and
+// that the eviction API lets past the budget (see evictedPastBudget) is not,
+// and neither are pods that bypass every budget (see bypassesBudget). A budget
+// whose unhealthyPodEvictionPolicy is a value draincheck does not know is
+// skipped, since it cannot be counted reliably.
 type PDBBatchExceedsBudget struct{}
 
 // ID implements Rule.
@@ -42,7 +45,7 @@ func (PDBBatchExceedsBudget) Evaluate(in Input) []findings.Finding {
 	for _, sel := range selectedPDBs(in) {
 		pdb := sel.pdb
 		allowed := pdb.Status.DisruptionsAllowed
-		if allowed <= 0 || len(sel.pods) <= int(allowed) || pdbStale(pdb) || len(sel.operators) > 0 {
+		if allowed <= 0 || len(sel.pods) <= int(allowed) || pdbStale(pdb) || !sel.policyKnown || len(sel.operators) > 0 {
 			continue
 		}
 		if _, failed := pdbSyncFailure(pdb); failed {

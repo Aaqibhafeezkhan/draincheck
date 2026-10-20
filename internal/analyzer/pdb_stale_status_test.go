@@ -189,3 +189,29 @@ func TestPDBStaleStatusID(t *testing.T) {
 		t.Errorf("ID() = %q", got)
 	}
 }
+
+// The numbers of a stale budget cannot be trusted, so no pod is taken to be
+// evicted past it: the pod that is not Ready is still listed.
+func TestPDBStaleStatusKeepsUnhealthyPods(t *testing.T) {
+	s := snapshotFromFixture(t, "pdb-unhealthy-pods.yaml")
+
+	var got *findings.Finding
+	for _, f := range (PDBStaleStatus{}).Evaluate(Input{Snapshot: s, Targets: []string{"worker-01"}}) {
+		if f.Resource.Name == "stale-pdb" {
+			got = &f
+		}
+	}
+	if got == nil {
+		t.Fatal("no finding for stale-pdb")
+	}
+	ev, ok := got.Evidence.(findings.PDBStaleStatusEvidence)
+	if !ok {
+		t.Fatalf("evidence is %T", got.Evidence)
+	}
+	if want := []findings.PDBPod{pdbPod("stale", "stale-0", "worker-01")}; !reflect.DeepEqual(ev.Pods, want) {
+		t.Errorf("pods = %v, want %v", ev.Pods, want)
+	}
+	if len(ev.EvictableUnhealthyPods) != 0 {
+		t.Errorf("evictable unhealthy pods = %v, want none", ev.EvictableUnhealthyPods)
+	}
+}
