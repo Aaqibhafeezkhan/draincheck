@@ -14,6 +14,7 @@ Read-only Go CLI that preflight-checks a multi-node `kubectl drain`. Spec: `docs
 - **Deterministic output.** Sort findings with `findings.Sort` before printing or serializing.
 - **Account for every action.** Each cluster read, rule run and decision that shapes the result writes a `DEBUG` line (`--debug`, stderr only). Never log secrets. Details under Code conventions.
 - **Ask, don't guess.** Open questions go to the user.
+- **A human reviews everything.** The operator reads, runs and commits every change (see Workflow); this project does not accept vibe-coded work (README, CONTRIBUTING). Keep each change small and explainable, say what you changed and why, say what you did not verify, and never call work done without running the checks and showing the result.
 
 ## Layout
 

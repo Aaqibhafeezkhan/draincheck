@@ -145,6 +145,7 @@ Add an entry under `## [Unreleased]` in `CHANGELOG.md` in the same pull request.
 - [ ] Branch is based on `develop` and named `<type>/<scope>-<slug>`
 - [ ] Title and commits follow Conventional Commits
 - [ ] Every commit is signed (`-S`) and signed off (`-s`)
+- [ ] I read and understand every line, and can explain it in review
 - [ ] Tests were added or updated, and written first
 - [ ] `gofmt -l .`, `go vet ./...` and `go test ./...` are clean
 - [ ] `docs/` is updated if behaviour changed
@@ -152,7 +153,9 @@ Add an entry under `## [Unreleased]` in `CHANGELOG.md` in the same pull request.
 
 ## AI-assisted contributions
 
-AI tools are fine. You are responsible for every line you submit: review it, run it, and be able to explain it. The sign-off certifies that you did.
+AI tools are fine. Vibe-coding is not. You are accountable for every line you submit: read it, run it, and be able to explain and defend it in review. The sign-off certifies that you did.
+
+A contribution the author cannot explain is closed, whichever tool wrote it. "The AI wrote it" is not an answer to a review question. If a tool wrote a significant part, say so in the PR description; it helps the review.
 
 ## Legal notice
 

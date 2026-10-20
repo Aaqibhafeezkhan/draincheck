@@ -1,44 +1,74 @@
 # draincheck
 
-![GitHub Created At](https://img.shields.io/github/created-at/Veinar/draincheck?color=%234ecca3)
-![GitHub last commit](https://img.shields.io/github/last-commit/Veinar/draincheck)
-[![Go](https://img.shields.io/badge/Go-%2300ADD8.svg?&logo=go&logoColor=white)](#)
-![GitHub top language](https://img.shields.io/github/languages/top/Veinar/draincheck)
-![GitHub License](https://img.shields.io/github/license/Veinar/draincheck?color=%23dc9c1d)
-[![GitHub Release](https://img.shields.io/github/v/release/Veinar/draincheck?include_prereleases&sort=semver)](https://github.com/Veinar/draincheck/releases/latest)
-![GitHub Downloads](https://img.shields.io/github/downloads/Veinar/draincheck/total)
-![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/Veinar/draincheck?color=%233c5c68)
-![Platforms](https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows-lightgrey)
-![Contrib welcome](https://img.shields.io/badge/contributions-welcome-blue)
-
 [![CI](https://github.com/Veinar/draincheck/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/Veinar/draincheck/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/Veinar/draincheck/actions/workflows/codeql.yml/badge.svg?branch=develop)](https://github.com/Veinar/draincheck/actions/workflows/codeql.yml)
-[![govulncheck](https://github.com/Veinar/draincheck/actions/workflows/govulncheck.yml/badge.svg?branch=develop)](https://github.com/Veinar/draincheck/actions/workflows/govulncheck.yml)
 [![Release](https://github.com/Veinar/draincheck/actions/workflows/release.yml/badge.svg)](https://github.com/Veinar/draincheck/actions/workflows/release.yml)
+[![GitHub Release](https://img.shields.io/github/v/release/Veinar/draincheck?include_prereleases&sort=semver)](https://github.com/Veinar/draincheck/releases/latest)
+![GitHub License](https://img.shields.io/github/license/Veinar/draincheck?color=%23dc9c1d)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Veinar/draincheck/badge)](https://scorecard.dev/viewer/?uri=github.com/Veinar/draincheck)
-
 [![Signed with cosign](https://img.shields.io/badge/signed-cosign%20keyless-blue)](docs/RELEASE.md#verify)
 [![Read-only](https://img.shields.io/badge/cluster%20access-read--only-green)](docs/SPEC.md)
 
-[![Claude](https://img.shields.io/badge/Claude-D97757?logo=claude&logoColor=fff)](#)
+Read-only preflight analyzer for multi-node `kubectl drain`. `kubectl drain` tells you what is refused on one node, now. draincheck looks at the whole plan, several nodes at once, and tells you what would block it or put something at risk **before** you cordon anything.
 
-> [!NOTE]
-> **AI-assisted, not vibe-coded.** AI helps with code; every change is reviewed and committed by a human.
+## Example
 
-Read-only preflight analyzer for multi-node `kubectl drain`. Tells you what would block or put at risk a planned maintenance **before** you cordon anything.
+Output from a real cluster, with names anonymized. The text report is compact: findings are grouped by cause (one per PodDisruptionBudget, workload, DaemonSet or node, not one per pod), each remediation is printed once and a list is cut after 5 entries. `--verbose` prints every finding in full. The JSON report always carries every finding and every pod.
 
-> [!WARNING]
-> `--verbose` prints every finding in full, one block per pod with its own description and remediation. On a real cluster that can be hundreds of lines (one 5-node run produced 95 findings). The default text report is compact: findings are grouped by rule, each remediation is printed once and long lists are collapsed after 5 entries. Findings are still reported per pod; grouping per workload is *planned*.
+```text
+$ draincheck --nodes worker-01,worker-02
+draincheck - preflight maintenance analysis
+Timestamp: 2026-10-20T10:36:32Z
+
+=== FINDINGS SUMMARY ===
+  BLOCKED: 0
+  RISK:    37
+  UNKNOWN: 1
+
+=== RISK (37) ===
+
+[MISSING_RESOURCE_REQUESTS] 28 findings
+  Deployment/argocd/argocd-applicationset-controller: Missing resource requests in 1 of 1 pod of Deployment argocd/argocd-applicationset-controller on the target nodes: argocd-applicationset-controller (cpu, memory). The scheduler treats a missing request as needing nothing, so rescheduled pods may not fit where they land.
+  Deployment/argocd/argocd-dex-server: Missing resource requests in 1 of 1 pod of Deployment argocd/argocd-dex-server on the target nodes: dex (cpu, memory). The scheduler treats a missing request as needing nothing, so rescheduled pods may not fit where they land.
+  Deployment/argocd/argocd-notifications-controller: Missing resource requests in 1 of 1 pod of Deployment argocd/argocd-notifications-controller on the target nodes: argocd-notifications-controller (cpu, memory). The scheduler treats a missing request as needing nothing, so rescheduled pods may not fit where they land.
+  Deployment/argocd/argocd-redis: Missing resource requests in 1 of 1 pod of Deployment argocd/argocd-redis on the target nodes: redis (cpu, memory). The scheduler treats a missing request as needing nothing, so rescheduled pods may not fit where they land.
+  Deployment/argocd/argocd-repo-server: Missing resource requests in 1 of 1 pod of Deployment argocd/argocd-repo-server on the target nodes: argocd-repo-server (cpu, memory). The scheduler treats a missing request as needing nothing, so rescheduled pods may not fit where they land.
+  ... and 23 more
+  Remediation: Set CPU and memory requests on every container (or a pod-level request) so rescheduling and capacity checks can account for the workload.
+
+[POD_OWNERSHIP] 9 findings
+  Node/worker-01: Node worker-01 runs 1 static pod (kube-system/kube-proxy-worker-01). Static pods cannot be evicted or rescheduled and stop when the node goes down.
+  Node/worker-02: Node worker-02 runs 1 static pod (kube-system/kube-proxy-worker-02). Static pods cannot be evicted or rescheduled and stop when the node goes down.
+  DaemonSet/kube-system/cilium: DaemonSet kube-system/cilium has 2 pods on 2 target nodes. kubectl drain refuses DaemonSet pods without --ignore-daemonsets and never evicts them.
+  DaemonSet/kube-system/rke2-traefik: DaemonSet kube-system/rke2-traefik has 2 pods on 2 target nodes. kubectl drain refuses DaemonSet pods without --ignore-daemonsets and never evicts them.
+  DaemonSet/longhorn-system/engine-image-ei-a4d05f02: DaemonSet longhorn-system/engine-image-ei-a4d05f02 has 2 pods on 2 target nodes. kubectl drain refuses DaemonSet pods without --ignore-daemonsets and never evicts them.
+  ... and 4 more
+  Remediation (Node/worker-01, Node/worker-02): Plan for the static pods to be unavailable while the node is down; kubectl drain skips them.
+  Remediation (DaemonSet/kube-system/cilium, DaemonSet/kube-system/rke2-traefik, DaemonSet/longhorn-system/engine-image-ei-a4d05f02, DaemonSet/longhorn-system/engine-image-ei-db6c2b6f, DaemonSet/longhorn-system/longhorn-csi-plugin and 2 more): Drain with --ignore-daemonsets; DaemonSet pods stay until the node itself goes down.
+
+=== UNKNOWN (1) ===
+
+[PDB_DISRUPTION_BLOCKED] 1 finding
+  Namespace/longhorn-system: Operator longhorn.io (InstanceManager) manages 2 PodDisruptionBudgets in namespace longhorn-system with 0 allowed disruptions, covering 2 pods on 2 target nodes. Whether the drain stalls depends on operator state draincheck cannot see, and the operator may remove such budgets when a node is cordoned.
+  Remediation: Budgets managed by operator longhorn.io: check its drain documentation and the health of what it protects before draining. Do not relax minAvailable on them; the operator may recreate the budget. Longhorn can block a drain while the node holds the last healthy replica of a volume: check volume health and Longhorn's node drain policy setting before draining.
+
+Some lists are collapsed. Use --verbose to print every finding.
+
+This report describes the observed cluster state at 2026-10-20T10:36:32Z and does not guarantee execution success. Cluster state may drift immediately after analysis.
+$ echo $?
+0
+```
+
+The exit code is `0` here because no finding reaches the default `--fail-on blocked`. With `--fail-on risk` this run would exit `1`. See [docs/USAGE.md](docs/USAGE.md) for every flag, rule and exit code.
 
 ## What it is
 
-- A read-only Go CLI built on `client-go`. It never cordons, evicts or modifies anything.
+- A read-only Go CLI built on `client-go`. It lists and reads cluster state; it never cordons, evicts or modifies anything.
 - Findings are `BLOCKED`, `RISK` or `UNKNOWN`. There is deliberately no `SAFE`.
+- Not a controller and not a scheduler simulator.
 
-## What it is not
+## Install
 
-- Not a controller.
-- Not a scheduler simulator.
+Linux, macOS and Windows binaries (`amd64` and `arm64`) are on the [releases page](https://github.com/Veinar/draincheck/releases). Releases are signed with cosign (keyless) and ship SLSA provenance. Install and verification steps: [docs/RELEASE.md](docs/RELEASE.md).
 
 ## Usage
 
@@ -62,53 +92,20 @@ draincheck --nodes worker-02,worker-04 [--kubeconfig PATH] [--context NAME] [--o
 > [!TIP]
 > You usually do not need `--kubeconfig` or `--context`. draincheck loads your kubeconfig with the same rules as `kubectl`: the `KUBECONFIG` environment variable if set, otherwise `~/.kube/config`, using the current context. If `kubectl get nodes` works for the user running draincheck, `draincheck --nodes worker-02` works too. It does not call the `kubectl` binary; it reads the same kubeconfig and talks to the API server directly, so `kubectl` does not have to be installed.
 
-## Example
+## FAQ
 
-> [!NOTE]
-> Output from a real cluster, with names anonymized and the list shortened (a real run prints at most 5 findings per rule and then `... and M more`).
+### Why not `kubectl drain --dry-run`?
 
-```text
-$ draincheck --nodes worker-02
-draincheck - preflight maintenance analysis
-Timestamp: 2026-10-15T20:06:57Z
+Use both. `kubectl drain --dry-run=server` asks the API server whether each eviction would be accepted now, one node per run. At that it is exact, and draincheck does not try to beat it: a budget that allows 0 disruptions shows up in both. draincheck is a different layer. `kubectl` answers "what happens if I drain this node now"; draincheck answers "what happens if I do this plan across several nodes, and what should I look at first".
 
-=== FINDINGS SUMMARY ===
-  BLOCKED: 1
-  RISK:    7
-  UNKNOWN: 0
+What a server dry run cannot show, and draincheck reports:
 
-=== BLOCKED (1) ===
+- **Several nodes against one budget.** A dry-run eviction does not use up the budget, so each node passes alone. `PDB_BATCH_EXCEEDS_BUDGET` adds up the pods of all target nodes behind one PodDisruptionBudget and reports a batch the budget allows only in steps.
+- **Operators that react to a cordon.** A dry run does not really cordon, so it cannot show what an operator does when the node is cordoned. draincheck marks such budgets `UNKNOWN` instead of guessing. Checking what the operator does is *planned*.
+- **What the drain leaves behind.** Static pods, DaemonSet pods and containers without resource requests.
+- **All nodes in one run**, with exit codes for CI, and no retry loop.
 
-[PDB_DISRUPTION_BLOCKED] 1 finding
-  Pod/longhorn-system/instance-manager-9c1e7a4b: PodDisruptionBudget longhorn-system/instance-manager-9c1e7a4b allows 0 disruptions (1 healthy, 1 desired), so eviction of pod instance-manager-9c1e7a4b from node worker-02 will be refused.
-  Remediation: Add healthy replicas, or relax minAvailable/maxUnavailable on the PodDisruptionBudget, before draining.
-
-=== RISK (7) ===
-
-[MISSING_RESOURCE_REQUESTS] 4 findings
-  Pod/cert-manager/cert-manager-cainjector-5d8f7c9b6-x2k4p: Pod cert-manager/cert-manager-cainjector-5d8f7c9b6-x2k4p on node worker-02 has containers without resource requests: cert-manager-cainjector (cpu); the scheduler treats them as needing nothing, so the pod may not fit where it is rescheduled.
-  Pod/cert-manager/cert-manager-webhook-7b6d9f5c4-q8m2z: Pod cert-manager/cert-manager-webhook-7b6d9f5c4-q8m2z on node worker-02 has containers without resource requests: cert-manager-webhook (cpu); the scheduler treats them as needing nothing, so the pod may not fit where it is rescheduled.
-  Pod/monitoring/grafana-6c9d8b7f5-4tn7w: Pod monitoring/grafana-6c9d8b7f5-4tn7w on node worker-02 has containers without resource requests: grafana (cpu, memory); the scheduler treats them as needing nothing, so the pod may not fit where it is rescheduled.
-  Pod/shop/web-7f565f8df8-glh5k: Pod shop/web-7f565f8df8-glh5k on node worker-02 has containers without resource requests: web (cpu, memory), worker (cpu, memory); the scheduler treats them as needing nothing, so the pod may not fit where it is rescheduled.
-  Remediation: Set CPU and memory requests on every container (or a pod-level request) so rescheduling and capacity checks can account for the pod.
-
-[POD_OWNERSHIP] 3 findings
-  Pod/kube-system/cilium-x7k2p: Pod kube-system/cilium-x7k2p on node worker-02 is managed by DaemonSet cilium; kubectl drain refuses it without --ignore-daemonsets and never evicts it.
-  Pod/kube-system/kube-proxy-worker-02: Pod kube-system/kube-proxy-worker-02 is a static pod mirrored from node worker-02; it cannot be evicted or rescheduled and stops with the node.
-  Pod/longhorn-system/engine-image-ei-1a2b3c4d-8xk2q: Pod longhorn-system/engine-image-ei-1a2b3c4d-8xk2q on node worker-02 is managed by DaemonSet engine-image-ei-1a2b3c4d; kubectl drain refuses it without --ignore-daemonsets and never evicts it.
-  Remediation (Pod/kube-system/cilium-x7k2p, Pod/longhorn-system/engine-image-ei-1a2b3c4d-8xk2q): Drain with --ignore-daemonsets; the DaemonSet pod stays until the node itself goes down.
-  Remediation (Pod/kube-system/kube-proxy-worker-02): Plan for the static pod to be unavailable while the node is down; kubectl drain skips it.
-
-This report describes the observed cluster state at 2026-10-15T20:06:57Z and does not guarantee execution success. Cluster state may drift immediately after analysis.
-$ echo $?
-1
-```
-
-The exit code is `1` here because a `BLOCKED` finding reaches the default `--fail-on blocked`. See [docs/USAGE.md](docs/USAGE.md) for every flag, rule and exit code.
-
-## Install
-
-Linux, macOS and Windows binaries (`amd64` and `arm64`) are on the [releases page](https://github.com/Veinar/draincheck/releases). Releases are signed with cosign (keyless) and ship SLSA provenance. Install and verification steps: [docs/RELEASE.md](docs/RELEASE.md).
+draincheck reads a snapshot, so it cannot be more exact than the API server on a single eviction, and it does not predict whether evicted pods will fit elsewhere yet (*planned*).
 
 ## Build
 
@@ -122,6 +119,15 @@ Requires Go 1.26+.
 ## Docs
 
 [Specification](docs/SPEC.md) · [Rules and noise budget](docs/RULES.md) · [CI](docs/CI.md) · [Release and verification](docs/RELEASE.md)
+
+## About this project
+
+[![Claude](https://img.shields.io/badge/Claude-D97757?logo=claude&logoColor=fff)](#)
+
+> [!IMPORTANT]
+> **AI-assisted, not vibe-coded.** These days AI is part of how code gets written, and it is here too. A human stays in the loop for all of it: I read every change, run it, and commit it signed. The AI proposes, I decide.
+>
+> **Contributions the author cannot explain will be closed.** Use any tool you like, but you are accountable for every line you submit: understand it, run it, and be able to defend it in review. Vibe-coding is not welcome here.
 
 ## Contributing
 
