@@ -108,3 +108,32 @@ func TestFindingJSONClusterScopedNilEvidence(t *testing.T) {
 		t.Errorf("json mismatch\n got: %s\nwant: %s", b, want)
 	}
 }
+
+func TestFindingJSONPDBSyncFailedEvidence(t *testing.T) {
+	f := Finding{
+		RuleID:   "PDB_SYNC_FAILED",
+		Severity: Unknown,
+		Resource: ResourceRef{Kind: "PodDisruptionBudget", Namespace: "billing", Name: "payments-api-pdb"},
+		Evidence: PDBSyncFailedEvidence{
+			PDBEvidence: PDBEvidence{
+				Namespace:      "billing",
+				Name:           "payments-api-pdb",
+				CurrentHealthy: 3,
+				DesiredHealthy: 3,
+				Nodes:          []string{"worker-01"},
+				Pods:           []PDBPod{{Namespace: "billing", Name: "payments-api-0", Node: "worker-01"}},
+			},
+			Reason:  "SyncFailed",
+			Message: "scale subresource not found",
+		},
+	}
+	b, err := json.Marshal(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The budget fields sit next to the condition, not under a nested key.
+	want := `{"rule_id":"PDB_SYNC_FAILED","severity":"UNKNOWN","resource":"PodDisruptionBudget/billing/payments-api-pdb","evidence":{"namespace":"billing","name":"payments-api-pdb","current_healthy":3,"desired_healthy":3,"disruptions_allowed":0,"nodes":["worker-01"],"pods":[{"namespace":"billing","name":"payments-api-0","node":"worker-01"}],"reason":"SyncFailed","message":"scale subresource not found"},"description":"","remediation":""}`
+	if string(b) != want {
+		t.Errorf("json mismatch\n got: %s\nwant: %s", b, want)
+	}
+}

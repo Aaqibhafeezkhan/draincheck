@@ -91,6 +91,21 @@ Severity: `UNKNOWN`.
 | Fixture | `testdata/analyzer/pdb-stale-status.yaml`: a stale PDB that allows 0, a stale PDB that allows 1, settled PDBs (one allows 0 and stays `BLOCKED`), a stale PDB that selects only a DaemonSet pod and one whose pod is not on a target node. |
 | Visibility | Everything `PDB_DISRUPTION_BLOCKED` would have listed for the PDB stays in the evidence, so replacing that finding hides nothing. |
 
+### `PDB_SYNC_FAILED`
+
+Severity: `UNKNOWN`.
+
+| Criterion | Answer |
+| --- | --- |
+| False-positive case | The condition can be set briefly while the controller retries, for example while the owner of the pods is being replaced, so a run in that window reports a budget that is about to be fine. That is why the answer is `UNKNOWN`, not a verdict: run draincheck again after a short wait. A condition that stays points at a pod owner without a scale subresource or a selector the controller cannot resolve. |
+| Downgrade | This rule is the downgrade. A failed PDB records 0 allowed disruptions, which `PDB_DISRUPTION_BLOCKED` would report as `BLOCKED`; it is `UNKNOWN` here, and so is a failed PDB whose status claims to allow a disruption. Never `BLOCKED` or `RISK`: nothing is known about the real numbers. A budget that is stale as well is left to `PDB_STALE_STATUS`. |
+| Mirror kubectl | It counts the same pods as `PDB_DISRUPTION_BLOCKED` (they share one selection): terminal, DaemonSet-managed and static pods are not counted, so a failed PDB that selects only those gives no finding. A pod whose DaemonSet has been deleted is still skipped, see `PDB_DISRUPTION_BLOCKED`. |
+| Grouping | One finding per PDB, pointing at the PDB: 10 replicas behind one failed PDB give one finding. The description states the controller error and the pod and node counts once. |
+| Estimates | Not an estimate. The finding says the numbers cannot be trusted. |
+| Evidence | `findings.PDBSyncFailedEvidence`: everything in `findings.PDBEvidence` (the numbers as last reported, `nodes` and `pods`) plus `reason` and `message` of the condition. |
+| Fixture | `testdata/analyzer/pdb-sync-failed.yaml`: a failed PDB that allows 0, one that allows 1, a settled PDB (reason `SufficientPods`), a PDB at 0 with no condition (stays `BLOCKED`), a failed PDB that selects only a DaemonSet pod, one whose pod is not on a target node, and one that is stale as well. |
+| Visibility | Everything `PDB_DISRUPTION_BLOCKED` would have listed for the PDB stays in the evidence, so replacing that finding hides nothing. |
+
 ### `POD_OWNERSHIP`
 
 Severity: `RISK`.

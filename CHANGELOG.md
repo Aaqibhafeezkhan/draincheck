@@ -22,6 +22,12 @@ entries under `[Unreleased]` in the same pull request as the change (see
 
 #### Analyzer rules
 
+- `PDB_SYNC_FAILED`: a PodDisruptionBudget whose `DisruptionAllowed` condition
+  has the reason `SyncFailed` while it selects pods on the target nodes is
+  reported as `UNKNOWN`, one finding per budget. The disruption controller
+  could not compute the budget, so the 0 allowed disruptions it records is not
+  a real number. The JSON `evidence` has the budget fields of
+  `PDB_DISRUPTION_BLOCKED` plus the condition `reason` and `message` (#100).
 - `PDB_STALE_STATUS`: a PodDisruptionBudget whose `status.observedGeneration`
   differs from `metadata.generation` while it selects pods on the target nodes
   is reported as `UNKNOWN`, one finding per budget. Such a status describes an
@@ -56,6 +62,9 @@ entries under `[Unreleased]` in the same pull request as the change (see
   how many target nodes are affected. The JSON `evidence` gains `nodes` and a
   `pods` list (each pod with its `namespace`, `name` and `node`), next to the
   existing budget fields. No pod is dropped (#71).
+- `PDB_DISRUPTION_BLOCKED` no longer reports a PodDisruptionBudget whose
+  disruption controller failed to compute it (`PDB_SYNC_FAILED` reports it as
+  `UNKNOWN`) (#100).
 - `PDB_DISRUPTION_BLOCKED` no longer reports a PodDisruptionBudget whose status
   is stale as `BLOCKED`; `PDB_STALE_STATUS` reports it as `UNKNOWN` instead, so
   a drain is not failed on a number that may be out of date (#41).
