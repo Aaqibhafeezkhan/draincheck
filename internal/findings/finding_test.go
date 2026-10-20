@@ -137,3 +137,35 @@ func TestFindingJSONPDBSyncFailedEvidence(t *testing.T) {
 		t.Errorf("json mismatch\n got: %s\nwant: %s", b, want)
 	}
 }
+
+func TestFindingJSONPDBBatchEvidence(t *testing.T) {
+	f := Finding{
+		RuleID:   "PDB_BATCH_EXCEEDS_BUDGET",
+		Severity: Risk,
+		Resource: ResourceRef{Kind: "PodDisruptionBudget", Namespace: "shop", Name: "web-pdb"},
+		Evidence: PDBBatchEvidence{
+			PDBEvidence: PDBEvidence{
+				Namespace:          "shop",
+				Name:               "web-pdb",
+				CurrentHealthy:     2,
+				DesiredHealthy:     1,
+				DisruptionsAllowed: 1,
+				Nodes:              []string{"worker-01", "worker-02"},
+				Pods: []PDBPod{
+					{Namespace: "shop", Name: "web-0", Node: "worker-01"},
+					{Namespace: "shop", Name: "web-1", Node: "worker-02"},
+				},
+			},
+			PodsToEvict: 2,
+		},
+	}
+	b, err := json.Marshal(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The budget fields sit next to the count, not under a nested key.
+	want := `{"rule_id":"PDB_BATCH_EXCEEDS_BUDGET","severity":"RISK","resource":"PodDisruptionBudget/shop/web-pdb","evidence":{"namespace":"shop","name":"web-pdb","current_healthy":2,"desired_healthy":1,"disruptions_allowed":1,"nodes":["worker-01","worker-02"],"pods":[{"namespace":"shop","name":"web-0","node":"worker-01"},{"namespace":"shop","name":"web-1","node":"worker-02"}],"pods_to_evict":2},"description":"","remediation":""}`
+	if string(b) != want {
+		t.Errorf("json mismatch\n got: %s\nwant: %s", b, want)
+	}
+}

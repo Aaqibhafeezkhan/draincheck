@@ -1,0 +1,401 @@
+# Cluster for PDB_BATCH_EXCEEDS_BUDGET.
+#
+# A budget shared by pods on several target nodes allows only so many
+# disruptions at once. When the batch evicts more pods than that, kubectl drain
+# proceeds in steps: it waits for replacements. That is RISK, not BLOCKED.
+#
+# shop/web-pdb allows 1 and covers web-0 (worker-01) and web-1 (worker-02):
+# each node alone fits the budget, draining both does not. billing/api-pdb
+# allows 2 and covers api-0..api-2, one per worker: all three exceed it, any
+# two fit. cache/cache-pdb allows 3 and covers two pods: always fits.
+# batch/job-pdb allows 0: that is PDB_DISRUPTION_BLOCKED, not this rule.
+# legacy/old-pdb (stale), edge/proxy-pdb (sync failed) and
+# storage-system/agent-pdb (operator-controlled pods) would each exceed their
+# budget but are left to the rules that own them. monitoring/agent-pdb selects
+# DaemonSet pods only, which kubectl never evicts.
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-01
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-02
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-03
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-0
+  namespace: shop
+  labels:
+    app: web
+spec:
+  nodeName: worker-01
+  containers:
+    - name: web
+      image: example/web:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-1
+  namespace: shop
+  labels:
+    app: web
+spec:
+  nodeName: worker-02
+  containers:
+    - name: web
+      image: example/web:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-0
+  namespace: billing
+  labels:
+    app: api
+spec:
+  nodeName: worker-01
+  containers:
+    - name: api
+      image: example/api:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-1
+  namespace: billing
+  labels:
+    app: api
+spec:
+  nodeName: worker-02
+  containers:
+    - name: api
+      image: example/api:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-2
+  namespace: billing
+  labels:
+    app: api
+spec:
+  nodeName: worker-03
+  containers:
+    - name: api
+      image: example/api:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cache-0
+  namespace: cache
+  labels:
+    app: cache
+spec:
+  nodeName: worker-01
+  containers:
+    - name: cache
+      image: example/cache:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cache-1
+  namespace: cache
+  labels:
+    app: cache
+spec:
+  nodeName: worker-02
+  containers:
+    - name: cache
+      image: example/cache:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: job-0
+  namespace: batch
+  labels:
+    app: job
+spec:
+  nodeName: worker-01
+  containers:
+    - name: job
+      image: example/job:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: job-1
+  namespace: batch
+  labels:
+    app: job
+spec:
+  nodeName: worker-02
+  containers:
+    - name: job
+      image: example/job:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: old-0
+  namespace: legacy
+  labels:
+    app: old
+spec:
+  nodeName: worker-01
+  containers:
+    - name: old
+      image: example/old:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: old-1
+  namespace: legacy
+  labels:
+    app: old
+spec:
+  nodeName: worker-02
+  containers:
+    - name: old
+      image: example/old:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: proxy-0
+  namespace: edge
+  labels:
+    app: proxy
+spec:
+  nodeName: worker-01
+  containers:
+    - name: proxy
+      image: example/proxy:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: proxy-1
+  namespace: edge
+  labels:
+    app: proxy
+spec:
+  nodeName: worker-02
+  containers:
+    - name: proxy
+      image: example/proxy:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: agent-0
+  namespace: storage-system
+  labels:
+    app: agent
+  ownerReferences:
+    - apiVersion: storage.example.com/v1
+      kind: NodeAgent
+      name: agent
+      uid: 11111111-1111-1111-1111-111111111111
+      controller: true
+spec:
+  nodeName: worker-01
+  containers:
+    - name: agent
+      image: example/agent:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: agent-1
+  namespace: storage-system
+  labels:
+    app: agent
+  ownerReferences:
+    - apiVersion: storage.example.com/v1
+      kind: NodeAgent
+      name: agent
+      uid: 11111111-1111-1111-1111-111111111111
+      controller: true
+spec:
+  nodeName: worker-02
+  containers:
+    - name: agent
+      image: example/agent:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: agent-x1
+  namespace: monitoring
+  labels:
+    app: mon
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: DaemonSet
+      name: mon
+      uid: 11111111-1111-1111-1111-111111111111
+      controller: true
+spec:
+  nodeName: worker-01
+  containers:
+    - name: mon
+      image: example/mon:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: agent-x2
+  namespace: monitoring
+  labels:
+    app: mon
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: DaemonSet
+      name: mon
+      uid: 11111111-1111-1111-1111-111111111111
+      controller: true
+spec:
+  nodeName: worker-02
+  containers:
+    - name: mon
+      image: example/mon:1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web-pdb
+  namespace: shop
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: web
+status:
+  currentHealthy: 2
+  desiredHealthy: 1
+  disruptionsAllowed: 1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api-pdb
+  namespace: billing
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: api
+status:
+  currentHealthy: 3
+  desiredHealthy: 1
+  disruptionsAllowed: 2
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: cache-pdb
+  namespace: cache
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: cache
+status:
+  currentHealthy: 2
+  desiredHealthy: 1
+  disruptionsAllowed: 3
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: job-pdb
+  namespace: batch
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: job
+status:
+  currentHealthy: 2
+  desiredHealthy: 2
+  disruptionsAllowed: 0
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: old-pdb
+  namespace: legacy
+  generation: 2
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: old
+status:
+  observedGeneration: 1
+  currentHealthy: 2
+  desiredHealthy: 1
+  disruptionsAllowed: 1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: proxy-pdb
+  namespace: edge
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: proxy
+status:
+  currentHealthy: 2
+  desiredHealthy: 1
+  disruptionsAllowed: 1
+  conditions:
+    - type: DisruptionAllowed
+      status: "False"
+      reason: SyncFailed
+      message: "scale subresource not found"
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: agent-pdb
+  namespace: storage-system
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: agent
+status:
+  currentHealthy: 2
+  desiredHealthy: 1
+  disruptionsAllowed: 1
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: mon-pdb
+  namespace: monitoring
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: mon
+status:
+  currentHealthy: 2
+  desiredHealthy: 1
+  disruptionsAllowed: 1
