@@ -22,6 +22,14 @@ entries under `[Unreleased]` in the same pull request as the change (see
 
 #### Analyzer rules
 
+- `PDB_BATCH_EXCEEDS_BUDGET`: a PodDisruptionBudget that allows some
+  disruptions, but fewer than the target nodes together would cause, is
+  reported as `RISK`, one finding per budget. `kubectl drain` takes one node at
+  a time and sees each fit; draincheck sums the pods of all target nodes that
+  share the budget. The drain does not fail, it waits for replacements between
+  evictions. A budget at 0 stays `BLOCKED` under `PDB_DISRUPTION_BLOCKED`. The
+  JSON `evidence` has the budget fields of `PDB_DISRUPTION_BLOCKED` plus
+  `pods_to_evict` (#12).
 - `PDB_SYNC_FAILED`: a PodDisruptionBudget whose `DisruptionAllowed` condition
   has the reason `SyncFailed` while it selects pods on the target nodes is
   reported as `UNKNOWN`, one finding per budget. The disruption controller

@@ -106,6 +106,21 @@ Severity: `UNKNOWN`.
 | Fixture | `testdata/analyzer/pdb-sync-failed.yaml`: a failed PDB that allows 0, one that allows 1, a settled PDB (reason `SufficientPods`), a PDB at 0 with no condition (stays `BLOCKED`), a failed PDB that selects only a DaemonSet pod, one whose pod is not on a target node, and one that is stale as well. |
 | Visibility | Everything `PDB_DISRUPTION_BLOCKED` would have listed for the PDB stays in the evidence, so replacing that finding hides nothing. |
 
+### `PDB_BATCH_EXCEEDS_BUDGET`
+
+Severity: `RISK`.
+
+| Criterion | Answer |
+| --- | --- |
+| False-positive case | The budget is read as reported and the pods are counted from the snapshot. A budget that allows 1 and covers 3 pods on the batch makes the drain wait for two replacements; the finding says so and does not say the drain fails. Pods that are not Ready may be evictable past the budget when `unhealthyPodEvictionPolicy` is `AlwaysAllow`, so the count can be too high; it is never too low. |
+| Downgrade | Never `BLOCKED`: with at least one disruption allowed, `kubectl drain` retries and proceeds in steps. A budget at 0 is left to `PDB_DISRUPTION_BLOCKED`. A stale budget, a budget whose controller failed and a budget over operator-controlled pods are skipped (`PDB_STALE_STATUS`, `PDB_SYNC_FAILED`, operator-managed `PDB_DISRUPTION_BLOCKED`). |
+| Mirror kubectl | It counts the same pods as `PDB_DISRUPTION_BLOCKED` (they share one selection): terminal, DaemonSet-managed and static pods are not counted. What kubectl cannot do, and this rule does, is sum the pods of several nodes against one budget. |
+| Grouping | One finding per PDB, pointing at the PDB: 10 replicas behind one PDB give one finding. The description states the pod and node counts and the disruptions allowed once. |
+| Estimates | Not an estimate: both numbers come from the snapshot. It does not predict how long the wait is. |
+| Evidence | `findings.PDBBatchEvidence`: everything in `findings.PDBEvidence` (the numbers, `nodes` and `pods`) plus `pods_to_evict`. |
+| Fixture | `testdata/analyzer/pdb-batch-exceeds-budget.yaml`: a budget that fits per node and not as a batch, one exceeded by 3 pods against 2 allowed, one that always fits, one at 0, and stale, sync-failed, operator-controlled and DaemonSet-only budgets that are not reported. |
+| Visibility | The finding lists every pod the batch evicts for the budget, so nothing is hidden. |
+
 ### `POD_OWNERSHIP`
 
 Severity: `RISK`.

@@ -55,7 +55,7 @@ A PodDisruptionBudget at 0 is the reference case for `BLOCKED`. The disruption c
 | Situation | State | Why |
 | --------- | ----- | --- |
 | A budget selects pods on the target nodes and allows 0 disruptions | `BLOCKED` | The eviction is refused and retrying does not change the count. |
-| A budget allows 1 disruption, the batch evicts 3 pods of it | `RISK` (*planned*) | The drain waits for each replacement to be Ready; it proceeds. |
+| A budget allows 1 disruption, the batch evicts 3 pods of it | `RISK` (`PDB_BATCH_EXCEEDS_BUDGET`) | The drain waits for each replacement to be Ready; it proceeds. |
 | Every node a workload may run on is drained | `RISK` (*planned*) | The drain itself completes; the evicted pods stay Pending and the workload is down. |
 | The numbers needed to tell (a stale budget status, an operator-managed budget) are not reliable | `UNKNOWN` | Nothing can be said about the outcome. |
 

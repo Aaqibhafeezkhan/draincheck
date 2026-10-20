@@ -17,7 +17,7 @@ func TestDefaultRules(t *testing.T) {
 		}
 		seen[r.ID()] = true
 	}
-	for _, id := range []string{"PDB_DISRUPTION_BLOCKED", "PDB_OVERLAPPING_SELECTORS", "PDB_STALE_STATUS", "PDB_SYNC_FAILED", "POD_OWNERSHIP", "MISSING_RESOURCE_REQUESTS"} {
+	for _, id := range []string{"PDB_DISRUPTION_BLOCKED", "PDB_OVERLAPPING_SELECTORS", "PDB_STALE_STATUS", "PDB_SYNC_FAILED", "PDB_BATCH_EXCEEDS_BUDGET", "POD_OWNERSHIP", "MISSING_RESOURCE_REQUESTS"} {
 		if !seen[id] {
 			t.Errorf("rule %q is not registered", id)
 		}
