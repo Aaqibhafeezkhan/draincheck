@@ -296,6 +296,8 @@ Read-only. Needs `list` on:
 - `pods` (all namespaces)
 - `replicasets` (`apps`, all namespaces)
 - `poddisruptionbudgets` (`policy`, all namespaces)
+- `deployments` and `statefulsets` (`apps`, all namespaces)
+- `jobs` and `cronjobs` (`batch`, all namespaces)
 
 draincheck never cordons, evicts or modifies anything.
 
@@ -326,6 +328,10 @@ time=2026-10-18T17:29:41.514Z level=DEBUG msg=list resource=nodes count=1 durati
 time=2026-10-18T17:29:41.515Z level=DEBUG msg=list resource=pods count=1 duration=1.629527ms
 time=2026-10-18T17:29:41.516Z level=DEBUG msg=list resource=replicasets count=0 duration=433.921µs
 time=2026-10-18T17:29:41.516Z level=DEBUG msg=list resource=poddisruptionbudgets count=0 duration=399.377µs
+time=2026-10-18T17:29:41.516Z level=DEBUG msg=list resource=deployments count=0 duration=512.004µs
+time=2026-10-18T17:29:41.516Z level=DEBUG msg=list resource=statefulsets count=0 duration=401.118µs
+time=2026-10-18T17:29:41.516Z level=DEBUG msg=list resource=jobs count=0 duration=389.652µs
+time=2026-10-18T17:29:41.516Z level=DEBUG msg=list resource=cronjobs count=0 duration=377.230µs
 time=2026-10-18T17:29:41.516Z level=DEBUG msg="resolve target nodes" requested=[worker-1] all=false targets=[worker-1]
 time=2026-10-18T17:29:41.516Z level=DEBUG msg="rule start" rule=PDB_DISRUPTION_BLOCKED
 time=2026-10-18T17:29:41.516Z level=DEBUG msg="rule done" rule=PDB_DISRUPTION_BLOCKED findings=0

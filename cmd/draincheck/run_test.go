@@ -33,6 +33,10 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 		"/api/v1/pods":                         `{"kind":"PodList","apiVersion":"v1","items":[{"metadata":{"namespace":"default","name":"bare"},"spec":{"nodeName":"worker-1"}}]}`,
 		"/apis/apps/v1/replicasets":            `{"kind":"ReplicaSetList","apiVersion":"apps/v1","items":[]}`,
 		"/apis/policy/v1/poddisruptionbudgets": `{"kind":"PodDisruptionBudgetList","apiVersion":"policy/v1","items":[]}`,
+		"/apis/apps/v1/deployments":            `{"kind":"DeploymentList","apiVersion":"apps/v1","items":[]}`,
+		"/apis/apps/v1/statefulsets":           `{"kind":"StatefulSetList","apiVersion":"apps/v1","items":[]}`,
+		"/apis/batch/v1/jobs":                  `{"kind":"JobList","apiVersion":"batch/v1","items":[]}`,
+		"/apis/batch/v1/cronjobs":              `{"kind":"CronJobList","apiVersion":"batch/v1","items":[]}`,
 	}
 	api := &fakeAPI{}
 	api.Server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
