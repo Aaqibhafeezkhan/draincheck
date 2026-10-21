@@ -61,6 +61,7 @@ A finding covers one cause, not one pod. A cause that reaches many pods, such as
 | `PDB_OVERLAPPING_SELECTORS` | pod | the pod |
 | `NODE_NOT_SCHEDULABLE` | run (all affected nodes together) | the affected node names, joined by commas |
 | `NO_REMAINING_NODES` | run | the target node names, joined by commas |
+| `SINGLE_REPLICA_WORKLOAD` | Deployment or StatefulSet | the workload |
 | `POD_OWNERSHIP` | DaemonSet, node (for its static pods) or pod without a controller | the DaemonSet, node or pod |
 | `MISSING_RESOURCE_REQUESTS` | owning workload | the workload; a pod without a controller is its own workload |
 
@@ -252,6 +253,20 @@ Raised when the drain moves pods and no node is left that takes them: every node
 - When the nodes left exist but are all cordoned or not `Ready`, `NODE_NOT_SCHEDULABLE` is reported too and names them.
 - A node that reports no `Ready` condition counts as room.
 - Taints, affinity and capacity are not looked at, so a finding-free run does not promise the pods fit. Placement and capacity rules, and a per-workload variant of this rule, are *planned*.
+
+### `SINGLE_REPLICA_WORKLOAD`
+
+Severity: `RISK`.
+
+Raised when a pod on a target node belongs to a Deployment or StatefulSet that desires one replica. The pod is evicted before its replacement is Ready, so the workload is unavailable in between, even with no PodDisruptionBudget. `kubectl drain` does not warn about it. The drain itself completes, so it is `RISK`; it makes the run exit `1` only with `--fail-on risk` or `any`.
+
+- **Resource:** the Deployment or StatefulSet. One finding per workload.
+- **Description:** the workload, its replica count and the node its pod runs on.
+- **Evidence:** `owner_kind`, `owner_name`, `replicas` and `pods` (each with `namespace`, `name` and `node`, sorted in that order). A rollout in progress can run two pods of a one-replica Deployment; both are listed in one finding.
+- The count is the desired one, `spec.replicas` (1 when unset), not the number of live pods.
+- Finished pods, DaemonSet pods and static pods are skipped, because `kubectl drain` does not evict them. A pod that is already terminating is skipped too: the drain is not what removes it. A pod whose workload is not in the snapshot is skipped, because its replica count is unknown.
+- A HorizontalPodAutoscaler is not looked at: a workload that scales above 1 under load is still reported while it runs one replica.
+- Needs `list` on `deployments` and `statefulsets` (see *Cluster access*).
 
 ### `POD_OWNERSHIP`
 

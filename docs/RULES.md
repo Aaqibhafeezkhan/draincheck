@@ -151,6 +151,21 @@ Severity: `RISK`.
 | Fixture | `testdata/analyzer/node-not-schedulable.yaml`, with every node as a target and with all but the cordoned and not Ready nodes as targets; `testdata/regression/noise.yaml` (all six nodes drained). |
 | Visibility | When no pod moves, nothing is reported. When the nodes left are all cordoned or not Ready, `NODE_NOT_SCHEDULABLE` is reported as well and names them; this rule states the consequence. |
 
+### `SINGLE_REPLICA_WORKLOAD`
+
+Severity: `RISK`.
+
+| Criterion | Answer |
+| --- | --- |
+| False-positive case | A workload that is meant to run one replica and tolerates a restart (a batch-like worker, a dev service). The finding says the workload is unavailable until the new pod is Ready, which is true; it does not say the drain fails. A workload that an HPA scales above 1 under load is reported while it runs one replica, since the HPA is not read. |
+| Downgrade | Never `BLOCKED`: the drain completes. A pod whose Deployment or StatefulSet is not in the snapshot is skipped, not guessed. |
+| Mirror kubectl | Pods kubectl never evicts (DaemonSet, static), finished pods and pods already terminating give no finding. kubectl does not warn about downtime; this is information it lacks. |
+| Grouping | One finding per workload, however many of its pods are on the targets (a rollout can briefly run two). |
+| Estimates | Not an estimate: it reads `spec.replicas`, 1 when unset, not the live pod count. |
+| Evidence | `findings.SingleReplicaEvidence`: `owner_kind`, `owner_name`, `replicas` and `pods` (`namespace`, `name`, `node`). |
+| Fixture | `testdata/analyzer/single-replica-workload.yaml`: single replica, three replicas, unset replicas, a finished pod, a terminating pod, a DaemonSet pod, a static pod, a workload missing from the snapshot, `replicas: 0`, a same-named workload in another namespace, a custom kind also called `Deployment`, a bare ReplicaSet and a rollout with two pods. |
+| Visibility | Nothing is dropped silently except pods of unknown workloads, which cannot be judged. Every reported pod is in `pods`. |
+
 ### `POD_OWNERSHIP`
 
 Severity: `RISK`.

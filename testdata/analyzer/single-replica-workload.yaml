@@ -1,0 +1,303 @@
+# Cluster for SINGLE_REPLICA_WORKLOAD.
+#
+# A Deployment or StatefulSet whose spec.replicas is 1 is down between the
+# eviction of its pod and the new pod becoming Ready. Two nodes, worker-01 and
+# worker-02.
+#
+# worker-01:
+#   shop/web   Deployment, replicas 1            -> reported
+#   shop/db    StatefulSet, replicas 1           -> reported
+#   shop/api   Deployment, replicas 3            -> not reported (3 desired)
+#   shop/jobs-runner Deployment, replicas 1, pod Succeeded -> not reported (terminal)
+#   ops/agent  DaemonSet pod                     -> not reported (drain skips it)
+#   ops/static-x static (mirror) pod             -> not reported (drain skips it)
+#   shop/orphan Deployment missing from the snapshot -> not reported (replicas unknown)
+# worker-02:
+#   shop/cache Deployment, spec.replicas unset (defaults to 1) -> reported
+#   shop/surge Deployment, replicas 1, two pods (a rollout in progress) -> one finding, two pods
+#   shop/web   has no second pod, so draining worker-02 alone leaves it alone
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-01
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-02
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: web, namespace: shop}
+spec: {replicas: 1}
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: web-7d9
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: Deployment, name: web, controller: true}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-7d9-aaaaa
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: web-7d9, controller: true}
+spec: {nodeName: worker-01}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: {name: db, namespace: shop}
+spec: {replicas: 1}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: db-0
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: StatefulSet, name: db, controller: true}
+spec: {nodeName: worker-01}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: api, namespace: shop}
+spec: {replicas: 3}
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: api-5c4
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: Deployment, name: api, controller: true}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-5c4-aaaaa
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: api-5c4, controller: true}
+spec: {nodeName: worker-01}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: jobs-runner, namespace: shop}
+spec: {replicas: 1}
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: jobs-runner-1
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: Deployment, name: jobs-runner, controller: true}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: jobs-runner-1-aaaaa
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: jobs-runner-1, controller: true}
+spec: {nodeName: worker-01}
+status: {phase: Succeeded}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: agent-x1
+  namespace: ops
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: DaemonSet, name: agent, controller: true}
+spec: {nodeName: worker-01}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: static-x
+  namespace: ops
+  annotations:
+    kubernetes.io/config.mirror: abc123
+spec: {nodeName: worker-01}
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: orphan-1
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: Deployment, name: orphan, controller: true}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: orphan-1-aaaaa
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: orphan-1, controller: true}
+spec: {nodeName: worker-01}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: cache, namespace: shop}
+spec: {}
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: cache-9f
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: Deployment, name: cache, controller: true}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cache-9f-aaaaa
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: cache-9f, controller: true}
+spec: {nodeName: worker-02}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: surge, namespace: shop}
+spec: {replicas: 1}
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: surge-2
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: Deployment, name: surge, controller: true}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: surge-2-bbbbb
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: surge-2, controller: true}
+spec: {nodeName: worker-02}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: surge-2-ccccc
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: surge-2, controller: true}
+spec: {nodeName: worker-02}
+---
+# Edge cases, all on worker-01 and none reported.
+# shop/scaled-down: Deployment replicas 0, a pod still shutting down.
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: scaled-down, namespace: shop}
+spec: {replicas: 0}
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: scaled-down-1
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: Deployment, name: scaled-down, controller: true}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: scaled-down-1-aaaaa
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: scaled-down-1, controller: true}
+spec: {nodeName: worker-01}
+---
+# shop/leaving: replicas 1, its only pod is already terminating, so the drain
+# does not take it down.
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: leaving, namespace: shop}
+spec: {replicas: 1}
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: leaving-1
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: Deployment, name: leaving, controller: true}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: leaving-1-aaaaa
+  namespace: shop
+  deletionTimestamp: "2026-10-21T10:00:00Z"
+  finalizers: [example.com/hold]
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: leaving-1, controller: true}
+spec: {nodeName: worker-01}
+---
+# other/web: same name as shop/web but 3 replicas; must not be mixed up with it.
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: web, namespace: other}
+spec: {replicas: 3}
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: web-7d9
+  namespace: other
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: Deployment, name: web, controller: true}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-7d9-bbbbb
+  namespace: other
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: web-7d9, controller: true}
+spec: {nodeName: worker-01}
+---
+# A custom resource whose kind is also called Deployment, in another API group.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: lookalike-0
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: example.com/v1, kind: Deployment, name: lookalike, controller: true}
+spec: {nodeName: worker-01}
+---
+# A ReplicaSet with no Deployment above it: a bare ReplicaSet is not a workload
+# this rule reads.
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata: {name: bare-rs, namespace: shop}
+spec: {replicas: 1}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bare-rs-aaaaa
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: bare-rs, controller: true}
+spec: {nodeName: worker-01}

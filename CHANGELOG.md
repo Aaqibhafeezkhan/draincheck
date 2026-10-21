@@ -57,6 +57,12 @@ entries under `[Unreleased]` in the same pull request as the change (see
   `evidence` has the budget fields of `PDB_DISRUPTION_BLOCKED` (the numbers as
   last reported, `nodes` and `pods`) plus `observed_generation` and
   `generation` (#41).
+- `SINGLE_REPLICA_WORKLOAD`: a Deployment or StatefulSet that desires one
+  replica and has a pod on a target node is reported as `RISK`, one finding per
+  workload. The pod is evicted before its replacement is Ready, so the workload
+  is down in between, which `kubectl drain` does not warn about. Finished,
+  DaemonSet and static pods are skipped. The JSON `evidence` has `owner_kind`,
+  `owner_name`, `replicas` and `pods` (#40).
 
 ### Changed
 
