@@ -72,6 +72,9 @@ entries under `[Unreleased]` in the same pull request as the change (see
   needs `list` on `persistentvolumeclaims` and on `persistentvolumes`, which is
   cluster-scoped; a run without that permission stops with an error, it does
   not continue with an empty list (#39).
+- `examples/rbac/` holds a read-only `ClusterRole` (`list` on every resource
+  draincheck reads, no other verb) and a `ClusterRoleBinding` to adapt, so the
+  account that runs draincheck can be set up without writing the rules by hand.
 
 #### Analyzer rules
 

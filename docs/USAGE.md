@@ -302,6 +302,8 @@ Read-only. Needs `list` on:
 
 draincheck never cordons, evicts or modifies anything.
 
+[`examples/rbac/`](../examples/rbac) has a `ClusterRole` with exactly these permissions, each with the `list` verb only, and a `ClusterRoleBinding` to adapt. Apply them with `kubectl apply -f examples/rbac/` after replacing the subject. Keep the role and this list in step.
+
 ## Debug output
 
 `--debug` makes every action draincheck takes visible. Each one writes a line at level `DEBUG` to **stderr**, in `key=value` form, so a debug log shows what draincheck read from the cluster, what it decided and how the run ended. Use it to find out why a run behaved as it did, and attach it when you report a problem.
