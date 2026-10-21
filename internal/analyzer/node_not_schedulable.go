@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/Veinar/draincheck/internal/findings"
-	"github.com/Veinar/draincheck/internal/inventory"
 )
 
 // NodeNotSchedulableID is the rule ID reported by NodeNotSchedulable.
@@ -39,15 +38,8 @@ func (NodeNotSchedulable) Evaluate(in Input) []findings.Finding {
 		return nil
 	}
 
-	owners := inventory.NewOwnerResolver(in.Snapshot)
-	podsToMove := 0
-	for _, pod := range in.Snapshot.Pods() {
-		if slices.Contains(in.Targets, pod.Spec.NodeName) && !terminal(pod) &&
-			!skippedByDrain(pod, owners) && !owners.Resolve(pod).Unmanaged() {
-			podsToMove++
-		}
-	}
-	if podsToMove == 0 {
+	moving := podsToMove(in.Snapshot, in.Targets)
+	if moving == 0 {
 		return nil
 	}
 
@@ -77,11 +69,11 @@ func (NodeNotSchedulable) Evaluate(in Input) []findings.Finding {
 		RuleID:   NodeNotSchedulableID,
 		Severity: findings.Risk,
 		Resource: findings.ResourceRef{Kind: "Node", Name: strings.Join(names, ",")},
-		Evidence: findings.NodeNotSchedulableEvidence{PodsToMove: podsToMove, RemainingNodes: remaining, Nodes: blocked},
+		Evidence: findings.NodeNotSchedulableEvidence{PodsToMove: moving, RemainingNodes: remaining, Nodes: blocked},
 		Description: fmt.Sprintf(
 			"%d of the %s that stay up cannot take evicted pods: %s. The %s moved off the target nodes can land on at most %s; taints and capacity are not checked.",
 			len(blocked), plural(remaining, "node"), strings.Join(reasons, ", "),
-			plural(podsToMove, "pod"), plural(remaining-len(blocked), "node")),
+			plural(moving, "pod"), plural(remaining-len(blocked), "node")),
 		Remediation: "Uncordon or repair these nodes, or leave them out of the capacity you count on, before draining. Checks that estimate where pods can land assume the remaining nodes are usable.",
 	}}
 }

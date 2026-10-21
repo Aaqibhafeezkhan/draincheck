@@ -220,3 +220,20 @@ func TestFindingJSONNodeNotSchedulableEvidence(t *testing.T) {
 		t.Errorf("json mismatch\n got: %s\nwant: %s", b, want)
 	}
 }
+
+func TestFindingJSONNoRemainingNodesEvidence(t *testing.T) {
+	f := Finding{
+		RuleID:   "NO_REMAINING_NODES",
+		Severity: Risk,
+		Resource: ResourceRef{Kind: "Node", Name: "worker-01,worker-02"},
+		Evidence: NoRemainingNodesEvidence{PodsToMove: 3, TargetNodes: 2, TotalNodes: 3, RemainingSchedulable: 0},
+	}
+	b, err := json.Marshal(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"rule_id":"NO_REMAINING_NODES","severity":"RISK","resource":"Node/worker-01,worker-02","evidence":{"pods_to_move":3,"target_nodes":2,"total_nodes":3,"remaining_schedulable":0},"description":"","remediation":""}`
+	if string(b) != want {
+		t.Errorf("json mismatch\n got: %s\nwant: %s", b, want)
+	}
+}
