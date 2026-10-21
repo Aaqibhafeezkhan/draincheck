@@ -8,6 +8,7 @@ func DefaultRules() []Rule {
 		PDBBatchExceedsBudget{},
 		PDBStaleStatus{},
 		PDBSyncFailed{},
+		NodeNotSchedulable{},
 		PodOwnership{},
 		MissingResourceRequests{},
 	}

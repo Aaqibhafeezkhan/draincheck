@@ -121,6 +121,21 @@ Severity: `RISK`.
 | Fixture | `testdata/analyzer/pdb-batch-exceeds-budget.yaml`: a budget that fits per node and not as a batch, one exceeded by 3 pods against 2 allowed, one that always fits, one at 0, and stale, sync-failed, operator-controlled and DaemonSet-only budgets that are not reported. |
 | Visibility | The finding lists every pod the batch evicts for the budget, so nothing is hidden. |
 
+### `NODE_NOT_SCHEDULABLE`
+
+Severity: `RISK`.
+
+| Criterion | Answer |
+| --- | --- |
+| False-positive case | A remaining node is cordoned on purpose (kept for a debugging session, or waiting for its own maintenance) and the workloads have room elsewhere. The finding does not say the drain fails; it says the room is smaller than the node count suggests, with the nodes named. It is raised only when the drain moves pods, so a cordoned spare node alone does not cry wolf. |
+| Downgrade | Never `BLOCKED`: the drain completes whatever the remaining nodes look like. A node that reports no `Ready` condition is not flagged for readiness, since its absence says nothing. No pod to move means no finding. |
+| Mirror kubectl | A target that is already cordoned is not reported: `kubectl drain` cordons the targets itself and prints `already cordoned` (checked with kubectl v1.36.1). Pods kubectl never evicts (DaemonSet, static), finished pods and pods with no controller need no new home and are not counted. |
+| Grouping | One finding for the run, however many nodes are affected: ten cordoned nodes are one finding, with each node in the evidence. |
+| Estimates | Not an estimate: it reads `spec.unschedulable` and the `Ready` condition as reported. It does not say whether the pods fit on the nodes that are left. |
+| Evidence | `findings.NodeNotSchedulableEvidence`: `pods_to_move`, `remaining_nodes` and `nodes` (name, cordoned flag, Ready status). |
+| Fixture | `testdata/analyzer/node-not-schedulable.yaml`: a cordoned node, a node with `Ready=False`, one with `Ready=Unknown`, a healthy node, a node with no `Ready` condition, a cordoned target, and targets whose pods need no new home. |
+| Visibility | When no pod moves, nothing is reported and the node state is not in the output; `kubectl get nodes` shows it. Otherwise every affected node is in the evidence. |
+
 ### `POD_OWNERSHIP`
 
 Severity: `RISK`.

@@ -59,6 +59,7 @@ A finding covers one cause, not one pod. A cause that reaches many pods, such as
 | `PDB_STALE_STATUS` | PodDisruptionBudget | the PodDisruptionBudget |
 | `PDB_SYNC_FAILED` | PodDisruptionBudget | the PodDisruptionBudget |
 | `PDB_OVERLAPPING_SELECTORS` | pod | the pod |
+| `NODE_NOT_SCHEDULABLE` | run (all affected nodes together) | the affected node names, joined by commas |
 | `POD_OWNERSHIP` | DaemonSet, node (for its static pods) or pod without a controller | the DaemonSet, node or pod |
 | `MISSING_RESOURCE_REQUESTS` | owning workload | the workload; a pod without a controller is its own workload |
 
@@ -222,6 +223,20 @@ Raised for a PodDisruptionBudget whose `DisruptionAllowed` condition has the rea
 - A PDB that is stale as well is reported only by `PDB_STALE_STATUS`, so one budget is one finding.
 - A budget at 0 with the reason `InsufficientPods` is a plain budget at 0 (`PDB_DISRUPTION_BLOCKED`), not a failure.
 - The pods counted are the same as for `PDB_DISRUPTION_BLOCKED`: only pods on a target node, without finished, DaemonSet-managed and static pods.
+
+### `NODE_NOT_SCHEDULABLE`
+
+Severity: `RISK`.
+
+Raised when the drain moves pods and some nodes that stay up cannot take them: a node outside the target set that is cordoned (`spec.unschedulable`) or whose `Ready` condition is `False` or `Unknown`. The drain itself completes, but the evicted pods have fewer places to land than the node count suggests. It is `RISK`, so it makes the run exit `1` only with `--fail-on risk` or `any`.
+
+- **Resource:** `Node/<names>`, the affected nodes sorted and joined by commas. One finding covers all of them, since the cause is one.
+- **Description:** how many of the remaining nodes cannot take pods and why each cannot (`cordoned`, `not Ready`, or `cordoned and not Ready`), and how many pods move and at most how many nodes they can land on (taints and capacity are not checked, so the real number can be smaller).
+- **Evidence:** `pods_to_move`, `remaining_nodes` (every node outside the target set, whatever its state) and `nodes`, each with `name`, `cordoned` and `ready_status` (`True`, `False` or `Unknown`; omitted when the node reports no `Ready` condition).
+- It fires only when at least one pod on a target node moves: a pod that `kubectl drain` evicts and a controller recreates. DaemonSet pods, static pods, finished pods and pods with no controller need no new home, so a cordoned spare node does not matter for a drain that moves none.
+- A target node that is already cordoned is not reported. `kubectl drain` cordons the targets itself and prints `already cordoned`.
+- A node that reports no `Ready` condition is not flagged for readiness; real nodes always report one.
+- Taints, resource pressure and capacity are not looked at here. Placement and capacity rules are *planned*.
 
 ### `POD_OWNERSHIP`
 
