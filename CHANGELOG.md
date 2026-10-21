@@ -22,6 +22,13 @@ entries under `[Unreleased]` in the same pull request as the change (see
 
 #### Analyzer rules
 
+- `NODE_NOT_SCHEDULABLE`: when the drain moves pods, nodes outside the target
+  set that are cordoned or not `Ready` are reported as `RISK`, one finding for
+  all of them. The drain completes, but the evicted pods have fewer nodes to
+  land on than the node count suggests. A target that is already cordoned is
+  not reported, and nothing is reported when no pod needs a new home. The JSON
+  `evidence` has `pods_to_move`, `remaining_nodes` and the state of each
+  affected node (#42).
 - `PDB_BATCH_EXCEEDS_BUDGET`: a PodDisruptionBudget that allows some
   disruptions, but fewer than the target nodes together would cause, is
   reported as `RISK`, one finding per budget. `kubectl drain` takes one node at

@@ -1,0 +1,196 @@
+# Cluster for NODE_NOT_SCHEDULABLE.
+#
+# Evicted pods can only land on nodes that stay up and take new pods. Nodes:
+# worker-01 and worker-02 hold pods; worker-03 is already cordoned (a target
+# that is cordoned is kubectl's own business: it prints "already cordoned" and
+# goes on). spare-1 is cordoned, spare-2 is NotReady (Ready=False), spare-3 has
+# Ready=Unknown (the node controller lost contact), spare-4 is healthy, spare-5
+# reports no Ready condition at all, which draincheck does not flag.
+#
+# worker-01 holds two StatefulSet pods: they move, so they need room.
+# worker-02 holds only pods that need none: a DaemonSet pod and a static pod
+# (kubectl never evicts them), a Succeeded Job pod, and a pod with no
+# controller (it is deleted, never recreated elsewhere).
+# worker-03 holds one StatefulSet pod.
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-01
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-02
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-03
+spec:
+  unschedulable: true
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: spare-1
+spec:
+  unschedulable: true
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: spare-2
+status:
+  conditions:
+    - type: Ready
+      status: "False"
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: spare-3
+status:
+  conditions:
+    - type: Ready
+      status: Unknown
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: spare-4
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: spare-5
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: db-0
+  namespace: data
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: StatefulSet
+      name: db
+      uid: db-uid
+      controller: true
+spec:
+  nodeName: worker-01
+  containers:
+    - name: db
+      image: example/db:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: db-1
+  namespace: data
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: StatefulSet
+      name: db
+      uid: db-uid
+      controller: true
+spec:
+  nodeName: worker-01
+  containers:
+    - name: db
+      image: example/db:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: agent-x1
+  namespace: monitoring
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: DaemonSet
+      name: agent
+      uid: agent-uid
+      controller: true
+spec:
+  nodeName: worker-02
+  containers:
+    - name: agent
+      image: example/agent:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kube-proxy-worker-02
+  namespace: kube-system
+  annotations:
+    kubernetes.io/config.mirror: abc
+spec:
+  nodeName: worker-02
+  containers:
+    - name: proxy
+      image: example/proxy:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: import-1
+  namespace: batch
+  ownerReferences:
+    - apiVersion: batch/v1
+      kind: Job
+      name: import
+      uid: import-uid
+      controller: true
+spec:
+  nodeName: worker-02
+  containers:
+    - name: import
+      image: example/import:1
+status:
+  phase: Succeeded
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: scratch
+  namespace: default
+spec:
+  nodeName: worker-02
+  containers:
+    - name: scratch
+      image: example/scratch:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cache-0
+  namespace: data
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: StatefulSet
+      name: cache
+      uid: cache-uid
+      controller: true
+spec:
+  nodeName: worker-03
+  containers:
+    - name: cache
+      image: example/cache:1

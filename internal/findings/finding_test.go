@@ -196,3 +196,27 @@ func TestFindingJSONPDBUnhealthyPolicyEvidence(t *testing.T) {
 		t.Errorf("json mismatch\n got: %s\nwant: %s", b, want)
 	}
 }
+
+func TestFindingJSONNodeNotSchedulableEvidence(t *testing.T) {
+	f := Finding{
+		RuleID:   "NODE_NOT_SCHEDULABLE",
+		Severity: Risk,
+		Resource: ResourceRef{Kind: "Node", Name: "spare-1,spare-2"},
+		Evidence: NodeNotSchedulableEvidence{
+			PodsToMove:     2,
+			RemainingNodes: 4,
+			Nodes: []UnschedulableNode{
+				{Name: "spare-1", Cordoned: true, ReadyStatus: "True"},
+				{Name: "spare-2"},
+			},
+		},
+	}
+	b, err := json.Marshal(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"rule_id":"NODE_NOT_SCHEDULABLE","severity":"RISK","resource":"Node/spare-1,spare-2","evidence":{"pods_to_move":2,"remaining_nodes":4,"nodes":[{"name":"spare-1","cordoned":true,"ready_status":"True"},{"name":"spare-2","cordoned":false}]},"description":"","remediation":""}`
+	if string(b) != want {
+		t.Errorf("json mismatch\n got: %s\nwant: %s", b, want)
+	}
+}

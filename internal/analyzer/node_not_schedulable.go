@@ -1,0 +1,100 @@
+package analyzer
+
+import (
+	"fmt"
+	"slices"
+	"strings"
+
+	"github.com/Veinar/draincheck/internal/findings"
+	"github.com/Veinar/draincheck/internal/inventory"
+)
+
+// NodeNotSchedulableID is the rule ID reported by NodeNotSchedulable.
+const NodeNotSchedulableID = "NODE_NOT_SCHEDULABLE"
+
+// NodeNotSchedulable reports nodes outside the target set that evicted pods
+// cannot land on, because they are cordoned or not Ready (see unschedulable).
+// The drain itself completes, but the pods it moves have fewer places to go
+// than the node count suggests, and capacity and placement checks computed
+// against that node count are overstated.
+//
+// It is RISK and fires only when the drain moves something: at least one pod
+// on a target node that kubectl drain evicts and a controller recreates
+// (DaemonSet, static, terminal and controller-less pods need no new home, see
+// skippedByDrain and terminal). Without such a pod, a cordoned spare node
+// changes nothing about this drain, so it is not reported.
+//
+// A target node that is already cordoned is not reported: kubectl drain
+// cordons the targets itself and says "already cordoned". One finding covers
+// every affected node, with each node's state in typed evidence; its resource
+// is the affected node names, joined by commas.
+type NodeNotSchedulable struct{}
+
+// ID implements Rule.
+func (NodeNotSchedulable) ID() string { return NodeNotSchedulableID }
+
+// Evaluate implements Rule.
+func (NodeNotSchedulable) Evaluate(in Input) []findings.Finding {
+	if in.Snapshot == nil {
+		return nil
+	}
+
+	owners := inventory.NewOwnerResolver(in.Snapshot)
+	podsToMove := 0
+	for _, pod := range in.Snapshot.Pods() {
+		if slices.Contains(in.Targets, pod.Spec.NodeName) && !terminal(pod) &&
+			!skippedByDrain(pod, owners) && !owners.Resolve(pod).Unmanaged() {
+			podsToMove++
+		}
+	}
+	if podsToMove == 0 {
+		return nil
+	}
+
+	remaining := 0
+	var blocked []findings.UnschedulableNode
+	for _, node := range in.Snapshot.Nodes() {
+		if slices.Contains(in.Targets, node.Name) {
+			continue
+		}
+		remaining++
+		if state, ok := unschedulable(node); ok {
+			blocked = append(blocked, state)
+		}
+	}
+	if len(blocked) == 0 {
+		return nil
+	}
+	slices.SortFunc(blocked, func(a, b findings.UnschedulableNode) int { return strings.Compare(a.Name, b.Name) })
+
+	names := make([]string, len(blocked))
+	reasons := make([]string, len(blocked))
+	for i, n := range blocked {
+		names[i] = n.Name
+		reasons[i] = fmt.Sprintf("%s (%s)", n.Name, nodeStateWords(n))
+	}
+	return []findings.Finding{{
+		RuleID:   NodeNotSchedulableID,
+		Severity: findings.Risk,
+		Resource: findings.ResourceRef{Kind: "Node", Name: strings.Join(names, ",")},
+		Evidence: findings.NodeNotSchedulableEvidence{PodsToMove: podsToMove, RemainingNodes: remaining, Nodes: blocked},
+		Description: fmt.Sprintf(
+			"%d of the %s that stay up cannot take evicted pods: %s. The %s moved off the target nodes can land on at most %s; taints and capacity are not checked.",
+			len(blocked), plural(remaining, "node"), strings.Join(reasons, ", "),
+			plural(podsToMove, "pod"), plural(remaining-len(blocked), "node")),
+		Remediation: "Uncordon or repair these nodes, or leave them out of the capacity you count on, before draining. Checks that estimate where pods can land assume the remaining nodes are usable.",
+	}}
+}
+
+// nodeStateWords says why a node takes no pods.
+func nodeStateWords(n findings.UnschedulableNode) string {
+	notReady := n.ReadyStatus != "" && n.ReadyStatus != "True"
+	switch {
+	case n.Cordoned && notReady:
+		return "cordoned and not Ready"
+	case n.Cordoned:
+		return "cordoned"
+	default:
+		return "not Ready"
+	}
+}
