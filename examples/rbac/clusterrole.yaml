@@ -1,0 +1,30 @@
+# Read-only access draincheck needs. Every rule is `list` and nothing else:
+# draincheck never cordons, evicts or modifies anything.
+# Keep this in step with "Cluster access" in docs/USAGE.md.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: draincheck
+rules:
+  - apiGroups: [""]
+    resources:
+      - nodes
+      - pods
+      - persistentvolumeclaims
+      - persistentvolumes
+    verbs: ["list"]
+  - apiGroups: ["apps"]
+    resources:
+      - replicasets
+      - deployments
+      - statefulsets
+    verbs: ["list"]
+  - apiGroups: ["batch"]
+    resources:
+      - jobs
+      - cronjobs
+    verbs: ["list"]
+  - apiGroups: ["policy"]
+    resources:
+      - poddisruptionbudgets
+    verbs: ["list"]

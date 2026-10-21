@@ -60,6 +60,22 @@ entries under `[Unreleased]` in the same pull request as the change (see
 
 ### Changed
 
+- draincheck now also lists Deployments, StatefulSets, Jobs and CronJobs (all
+  namespaces), so planned workload rules can see them. No rule uses them yet and
+  the report does not change. The account that runs draincheck needs `list` on
+  `deployments` and `statefulsets` (`apps`) and `jobs` and `cronjobs`
+  (`batch`); a run without that permission stops with an error, it does not
+  continue with an empty list (#38).
+- draincheck now also lists PersistentVolumeClaims (all namespaces) and
+  PersistentVolumes, so the planned volume rules can see them. No rule uses
+  them yet and the report does not change. The account that runs draincheck
+  needs `list` on `persistentvolumeclaims` and on `persistentvolumes`, which is
+  cluster-scoped; a run without that permission stops with an error, it does
+  not continue with an empty list (#39).
+- `examples/rbac/` holds a read-only `ClusterRole` (`list` on every resource
+  draincheck reads, no other verb) and a `ClusterRoleBinding` to adapt, so the
+  account that runs draincheck can be set up without writing the rules by hand.
+
 #### Analyzer rules
 
 - `unhealthyPodEvictionPolicy` is honoured by the PodDisruptionBudget rules.

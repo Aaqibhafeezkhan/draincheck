@@ -4,6 +4,7 @@ import (
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
 )
@@ -17,17 +18,33 @@ type Snapshot struct {
 	rss       []appsv1.ReplicaSet
 	pdbs      []policyv1.PodDisruptionBudget
 	timestamp time.Time
+
+	deployments  []appsv1.Deployment
+	statefulSets []appsv1.StatefulSet
+	jobs         []batchv1.Job
+	cronJobs     []batchv1.CronJob
+
+	pvcs []corev1.PersistentVolumeClaim
+	pvs  []corev1.PersistentVolume
 }
 
+// SnapshotOption adds optional objects to a Snapshot.
+type SnapshotOption func(*Snapshot)
+
 // NewSnapshot builds a Snapshot from the given objects, taken at timestamp.
-func NewSnapshot(nodes []corev1.Node, pods []corev1.Pod, replicaSets []appsv1.ReplicaSet, pdbs []policyv1.PodDisruptionBudget, timestamp time.Time) *Snapshot {
-	return &Snapshot{
+// Options add the objects beyond nodes, pods, ReplicaSets and budgets.
+func NewSnapshot(nodes []corev1.Node, pods []corev1.Pod, replicaSets []appsv1.ReplicaSet, pdbs []policyv1.PodDisruptionBudget, timestamp time.Time, opts ...SnapshotOption) *Snapshot {
+	s := &Snapshot{
 		nodes:     copyNodes(nodes),
 		pods:      copyPods(pods),
 		rss:       copyReplicaSets(replicaSets),
 		pdbs:      copyPDBs(pdbs),
 		timestamp: timestamp,
 	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
 }
 
 // Nodes returns a copy of the nodes in the snapshot.

@@ -1,0 +1,14 @@
+# Grants the draincheck ClusterRole to one user. Replace the subject with the
+# user, group or ServiceAccount that runs draincheck.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: draincheck
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: draincheck
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: User
+    name: jane@example.com
