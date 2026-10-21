@@ -5,7 +5,9 @@
 # budget per node, and a few real problems. Before grouping, every pod was a
 # finding of its own. The test holds the grouped result: one finding per cause.
 #
-# Six nodes, all of them targets. Replicas are spread round-robin from worker-01.
+# Six nodes, all of them targets, so no node is left for the pods that move:
+# one NO_REMAINING_NODES RISK finding for the run. Replicas are spread
+# round-robin from worker-01.
 #
 # shop/web        Deployment, 12 pods, no requests. web-pdb allows 1: one RISK finding (12 pods).
 # shop/api        Deployment, 10 pods, no requests. api-pdb allows 1: one RISK finding (10 pods).

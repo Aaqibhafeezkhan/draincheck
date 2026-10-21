@@ -60,6 +60,7 @@ A finding covers one cause, not one pod. A cause that reaches many pods, such as
 | `PDB_SYNC_FAILED` | PodDisruptionBudget | the PodDisruptionBudget |
 | `PDB_OVERLAPPING_SELECTORS` | pod | the pod |
 | `NODE_NOT_SCHEDULABLE` | run (all affected nodes together) | the affected node names, joined by commas |
+| `NO_REMAINING_NODES` | run | the target node names, joined by commas |
 | `POD_OWNERSHIP` | DaemonSet, node (for its static pods) or pod without a controller | the DaemonSet, node or pod |
 | `MISSING_RESOURCE_REQUESTS` | owning workload | the workload; a pod without a controller is its own workload |
 
@@ -237,6 +238,20 @@ Raised when the drain moves pods and some nodes that stay up cannot take them: a
 - A target node that is already cordoned is not reported. `kubectl drain` cordons the targets itself and prints `already cordoned`.
 - A node that reports no `Ready` condition is not flagged for readiness; real nodes always report one.
 - Taints, resource pressure and capacity are not looked at here. Placement and capacity rules are *planned*.
+
+### `NO_REMAINING_NODES`
+
+Severity: `RISK`.
+
+Raised when the drain moves pods and no node is left that takes them: every node outside the target set is cordoned (`spec.unschedulable`) or has a `Ready` condition of `False` or `Unknown`, or all nodes are targets. The drain itself completes, but the evicted pods are recreated by their controllers and stay `Pending` until a node can take them, so the workloads are down. It is `RISK`, so it makes the run exit `1` only with `--fail-on risk` or `any`.
+
+- **Resource:** `Node/<names>`, the target nodes sorted and joined by commas. One finding for the run.
+- **Description:** how many of the nodes are targets, how many pods move and that they stay `Pending`.
+- **Evidence:** `pods_to_move`, `target_nodes`, `total_nodes` and `remaining_schedulable` (always `0`).
+- It fires only when at least one pod on a target node moves, counted as for `NODE_NOT_SCHEDULABLE`: DaemonSet pods, static pods, finished pods and pods with no controller need no new home.
+- When the nodes left exist but are all cordoned or not `Ready`, `NODE_NOT_SCHEDULABLE` is reported too and names them.
+- A node that reports no `Ready` condition counts as room.
+- Taints, affinity and capacity are not looked at, so a finding-free run does not promise the pods fit. Placement and capacity rules, and a per-workload variant of this rule, are *planned*.
 
 ### `POD_OWNERSHIP`
 

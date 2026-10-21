@@ -112,6 +112,7 @@ func TestNoiseRegression(t *testing.T) {
 	}{
 		{"PDB_DISRUPTION_BLOCKED", findings.Unknown, "Namespace", "", "storage-system", 4},
 		{"POD_OWNERSHIP", findings.Risk, "Node", "", "worker-01", 2},
+		{"NO_REMAINING_NODES", findings.Risk, "Node", "", "worker-01,worker-02,worker-03,worker-04,worker-05,worker-06", -1},
 		{"POD_OWNERSHIP", findings.Risk, "Node", "", "worker-02", 2},
 		{"POD_OWNERSHIP", findings.Risk, "Node", "", "worker-03", 2},
 		{"MISSING_RESOURCE_REQUESTS", findings.Risk, "Pod", "default", "debug-shell", 1},
@@ -160,7 +161,7 @@ func TestNoiseRegressionSeverities(t *testing.T) {
 	for _, f := range runFixture(t, "noise.yaml") {
 		counts[f.Severity]++
 	}
-	want := map[findings.Severity]int{findings.Blocked: 2, findings.Risk: 12, findings.Unknown: 2}
+	want := map[findings.Severity]int{findings.Blocked: 2, findings.Risk: 13, findings.Unknown: 2}
 	for sev, n := range want {
 		if counts[sev] != n {
 			t.Errorf("%s findings = %d, want %d", sev, counts[sev], n)

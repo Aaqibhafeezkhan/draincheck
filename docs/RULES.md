@@ -136,6 +136,21 @@ Severity: `RISK`.
 | Fixture | `testdata/analyzer/node-not-schedulable.yaml`: a cordoned node, a node with `Ready=False`, one with `Ready=Unknown`, a healthy node, a node with no `Ready` condition, a cordoned target, and targets whose pods need no new home. |
 | Visibility | When no pod moves, nothing is reported and the node state is not in the output; `kubectl get nodes` shows it. Otherwise every affected node is in the evidence. |
 
+### `NO_REMAINING_NODES`
+
+Severity: `RISK`.
+
+| Criterion | Answer |
+| --- | --- |
+| False-positive case | Draining everything on purpose: a cluster being retired, or a node pool replaced after new nodes are added by another tool. The finding says the pods that move stay `Pending` until a node takes them, which is true in both cases; it does not say the drain fails. It is raised only when the drain moves pods. |
+| Downgrade | Never `BLOCKED`: `kubectl drain` only evicts, so it completes whatever is left. Nothing is reported when no pod needs a new home. A node that reports no `Ready` condition counts as room, since its absence says nothing. |
+| Mirror kubectl | The pods counted are the ones `NODE_NOT_SCHEDULABLE` counts: pods kubectl never evicts (DaemonSet, static), finished pods and pods with no controller need no new home. kubectl cannot see this: it takes one node at a time and does not look at what the other nodes can take. |
+| Grouping | One finding for the run, however many nodes are drained. Its resource is the target nodes, sorted and joined by commas. |
+| Estimates | Not an estimate: it counts nodes outside the target set that are not cordoned and not `Ready`. It does not look at taints, affinity or capacity, so "some node is left" does not mean the pods fit. Those checks are *planned*; a per-workload variant ("this workload has no node left") is *planned* too. |
+| Evidence | `findings.NoRemainingNodesEvidence`: `pods_to_move`, `target_nodes`, `total_nodes` and `remaining_schedulable` (always 0 when reported). |
+| Fixture | `testdata/analyzer/node-not-schedulable.yaml`, with every node as a target and with all but the cordoned and not Ready nodes as targets; `testdata/regression/noise.yaml` (all six nodes drained). |
+| Visibility | When no pod moves, nothing is reported. When the nodes left are all cordoned or not Ready, `NODE_NOT_SCHEDULABLE` is reported as well and names them; this rule states the consequence. |
+
 ### `POD_OWNERSHIP`
 
 Severity: `RISK`.
