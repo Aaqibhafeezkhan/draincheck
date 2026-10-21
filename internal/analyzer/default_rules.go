@@ -10,6 +10,7 @@ func DefaultRules() []Rule {
 		PDBSyncFailed{},
 		NodeNotSchedulable{},
 		NoRemainingNodes{},
+		SingleReplicaWorkload{},
 		PodOwnership{},
 		MissingResourceRequests{},
 	}
