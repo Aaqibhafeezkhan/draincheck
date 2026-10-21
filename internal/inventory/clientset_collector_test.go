@@ -112,6 +112,8 @@ func TestClientsetCollectorLogsEveryList(t *testing.T) {
 		"resource=statefulsets count=0",
 		"resource=jobs count=0",
 		"resource=cronjobs count=0",
+		"resource=persistentvolumeclaims count=0",
+		"resource=persistentvolumes count=0",
 	}
 	if len(lines) != len(want) {
 		t.Fatalf("got %d log lines, want %d:\n%s", len(lines), len(want), buf.String())

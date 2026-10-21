@@ -28,8 +28,8 @@ func NewClientsetCollector(client kubernetes.Interface, logger *slog.Logger) *Cl
 }
 
 // Collect lists nodes, pods, ReplicaSets, PodDisruptionBudgets, Deployments,
-// StatefulSets, Jobs and CronJobs (all namespaces) and returns them as a
-// Snapshot.
+// StatefulSets, Jobs, CronJobs and PersistentVolumeClaims (all namespaces) and
+// PersistentVolumes, and returns them as a Snapshot.
 func (c *ClientsetCollector) Collect(ctx context.Context) (*Snapshot, error) {
 	taken := c.now()
 
@@ -66,7 +66,12 @@ func (c *ClientsetCollector) Collect(ctx context.Context) (*Snapshot, error) {
 		return nil, err
 	}
 
-	return NewSnapshot(nodes.Items, pods.Items, rss.Items, pdbs.Items, taken, WithWorkloads(workloads)), nil
+	storage, err := c.listStorage(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewSnapshot(nodes.Items, pods.Items, rss.Items, pdbs.Items, taken, WithWorkloads(workloads), WithStorage(storage)), nil
 }
 
 // listed logs a successful list call of resource.

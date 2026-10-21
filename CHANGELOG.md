@@ -66,6 +66,12 @@ entries under `[Unreleased]` in the same pull request as the change (see
   `deployments` and `statefulsets` (`apps`) and `jobs` and `cronjobs`
   (`batch`); a run without that permission stops with an error, it does not
   continue with an empty list (#38).
+- draincheck now also lists PersistentVolumeClaims (all namespaces) and
+  PersistentVolumes, so the planned volume rules can see them. No rule uses
+  them yet and the report does not change. The account that runs draincheck
+  needs `list` on `persistentvolumeclaims` and on `persistentvolumes`, which is
+  cluster-scoped; a run without that permission stops with an error, it does
+  not continue with an empty list (#39).
 
 #### Analyzer rules
 

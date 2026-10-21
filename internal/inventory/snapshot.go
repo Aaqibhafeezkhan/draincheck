@@ -23,6 +23,9 @@ type Snapshot struct {
 	statefulSets []appsv1.StatefulSet
 	jobs         []batchv1.Job
 	cronJobs     []batchv1.CronJob
+
+	pvcs []corev1.PersistentVolumeClaim
+	pvs  []corev1.PersistentVolume
 }
 
 // SnapshotOption adds optional objects to a Snapshot.

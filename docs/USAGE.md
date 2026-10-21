@@ -298,6 +298,7 @@ Read-only. Needs `list` on:
 - `poddisruptionbudgets` (`policy`, all namespaces)
 - `deployments` and `statefulsets` (`apps`, all namespaces)
 - `jobs` and `cronjobs` (`batch`, all namespaces)
+- `persistentvolumeclaims` (all namespaces) and `persistentvolumes`
 
 draincheck never cordons, evicts or modifies anything.
 
@@ -332,6 +333,8 @@ time=2026-10-18T17:29:41.516Z level=DEBUG msg=list resource=deployments count=0 
 time=2026-10-18T17:29:41.516Z level=DEBUG msg=list resource=statefulsets count=0 duration=401.118µs
 time=2026-10-18T17:29:41.516Z level=DEBUG msg=list resource=jobs count=0 duration=389.652µs
 time=2026-10-18T17:29:41.516Z level=DEBUG msg=list resource=cronjobs count=0 duration=377.230µs
+time=2026-10-18T17:29:41.516Z level=DEBUG msg=list resource=persistentvolumeclaims count=0 duration=402.771µs
+time=2026-10-18T17:29:41.516Z level=DEBUG msg=list resource=persistentvolumes count=0 duration=365.490µs
 time=2026-10-18T17:29:41.516Z level=DEBUG msg="resolve target nodes" requested=[worker-1] all=false targets=[worker-1]
 time=2026-10-18T17:29:41.516Z level=DEBUG msg="rule start" rule=PDB_DISRUPTION_BLOCKED
 time=2026-10-18T17:29:41.516Z level=DEBUG msg="rule done" rule=PDB_DISRUPTION_BLOCKED findings=0
