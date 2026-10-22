@@ -162,12 +162,12 @@ func TestPDBDisruptionBlockedDescribesFinding(t *testing.T) {
 		{
 			name:    "states the numbers once and the pod and node counts",
 			targets: []string{"worker-01", "worker-02", "worker-03"},
-			want:    "PodDisruptionBudget billing/api-pdb allows 0 disruptions (3 healthy, 3 desired), so eviction of its 3 pods on 3 target nodes will be refused.",
+			want:    "PodDisruptionBudget billing/api-pdb allows 0 disruptions (3 healthy, 3 desired), so eviction of its 3 pods on 3 target nodes will be refused. kubectl drain retries a refused eviction until --timeout, which is infinite by default, so it waits and does not complete.",
 		},
 		{
 			name:    "singular for one pod on one node",
 			targets: []string{"worker-02"},
-			want:    "PodDisruptionBudget billing/api-pdb allows 0 disruptions (3 healthy, 3 desired), so eviction of its 1 pod on 1 target node will be refused.",
+			want:    "PodDisruptionBudget billing/api-pdb allows 0 disruptions (3 healthy, 3 desired), so eviction of its 1 pod on 1 target node will be refused. kubectl drain retries a refused eviction until --timeout, which is infinite by default, so it waits and does not complete.",
 		},
 	}
 	for _, tt := range tests {
@@ -250,7 +250,7 @@ func TestPDBDisruptionBlockedDescribesUnhealthyPods(t *testing.T) {
 		{
 			name: "an unhealthy budget says it refuses unhealthy pods too",
 			pdb:  "sick-pdb",
-			want: "PodDisruptionBudget sick/sick-pdb allows 0 disruptions (1 healthy, 2 desired), so eviction of its 1 pod on 1 target node will be refused. The budget itself is unhealthy, so with IfHealthyBudget it refuses the pods that are not Ready as well.",
+			want: "PodDisruptionBudget sick/sick-pdb allows 0 disruptions (1 healthy, 2 desired), so eviction of its 1 pod on 1 target node will be refused. kubectl drain retries a refused eviction until --timeout, which is infinite by default, so it waits and does not complete. The budget itself is unhealthy, so with IfHealthyBudget it refuses the pods that are not Ready as well.",
 		},
 		{
 			name: "an unknown policy says why the answer is not known",

@@ -283,3 +283,13 @@ func TestOperatorOwned(t *testing.T) {
 		})
 	}
 }
+
+// The API group comes from the cluster and is printed in the remediation. A
+// backtick in it must not open a span that reads as a suggested command.
+func TestOperatorRemediationGroupCannotForgeACommand(t *testing.T) {
+	safe := strings.Count(operatorRemediation("safe.example.org"), "`")
+	got := operatorRemediation("evil`kubectl delete pdb x`.example.org")
+	if n := strings.Count(got, "`"); n != safe {
+		t.Errorf("a group changed the number of backticks from %d to %d: %s", safe, n, got)
+	}
+}

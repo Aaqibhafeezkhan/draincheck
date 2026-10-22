@@ -57,7 +57,7 @@ func (PDBSyncFailed) Evaluate(in Input) []findings.Finding {
 				"The disruption controller could not compute PodDisruptionBudget %s/%s%s, so the numbers in its status cannot be trusted and draincheck cannot tell whether eviction of its %s on %s will be refused.",
 				pdb.Namespace, pdb.Name, cause,
 				plural(len(sel.pods), "pod"), plural(len(sel.nodes), "target node")),
-			Remediation: "Fix what the disruption controller reports, usually a pod owner that has no scale subresource or a selector it cannot resolve, then run draincheck again. Until then, drain with care: the budget cannot be relied on either way.",
+			Remediation: "Confirm with `kubectl get pdb -n <namespace> <name> -o jsonpath='{.status.conditions}'` (reason SyncFailed and its message). Then fix what the disruption controller reports, usually a pod owner that has no scale subresource (look at it with `kubectl get <kind> -n <namespace> <owner> -o yaml`) or a selector it cannot resolve, and run draincheck again. Until then the budget cannot be relied on either way.",
 		})
 	}
 	return out

@@ -44,6 +44,45 @@ Severity: `BLOCKED` | `RISK` | `UNKNOWN`.
 
 Mark anything not implemented yet as *planned* and link the issue. Document only what the code does.
 
+## Advice standard
+
+A finding must give the operator more than `kubectl drain` would: not only what is wrong, but how to confirm it in seconds and what to do next. The `description` and the `remediation` of a finding carry five things between them.
+
+| # | What | Where | Requirement |
+| - | ---- | ----- | ----------- |
+| 1 | The fact | `description` | The numbers and names, taken from the evidence: `allows 0 disruptions (3 healthy, 3 desired)`, not `is too strict`. |
+| 2 | Why it matters for this drain | `description` | In terms of the definitions in [SPEC.md](SPEC.md#31-what-blocked-and-risk-mean-for-a-drain-that-retries): the drain waits (`BLOCKED`), completes with something lost or delayed (`RISK`), or the outcome is not known (`UNKNOWN`). |
+| 3 | What `kubectl drain` itself does with it | `description` | Only what has been checked against kubectl (see SPEC.md and *Mirror kubectl* in the entries). Where draincheck cannot establish it, the description says so. |
+| 4 | A read-only command that confirms it | `remediation` | One or more commands in backticks, starting with `kubectl get`, `kubectl describe` or `kubectl auth can-i`. A command never writes: none contains `delete`, `patch`, `apply`, `create`, `cordon`, `drain`, `evict`, `scale` or `edit`. |
+| 5 | The action, safest first | `remediation` | In order, after the command. An action that writes is described in words, never as a command. |
+
+Further requirements:
+
+- **`UNKNOWN` says what draincheck could not establish and what to look at to decide.** The description names the missing fact (a stale status, an operator, a policy value); the command reads exactly that.
+- **An estimate says it is an estimate and shows its inputs.** A count that ignores taints or capacity says so in the same sentence.
+- **Placeholders.** A command names the object with a placeholder in angle brackets (`<namespace>`, `<name>`, `<pod>`, `<node>`, `<kind>`, `<pdb>`, `<owner>`), taken from the `resource` and the evidence of the finding. The text stays the same for every finding of a rule, so the compact text report still prints it once.
+- **Plain commands.** A command is one `kubectl` invocation with no pipe, no shell and no `xargs`. To read a field, use `-o yaml` or `-o jsonpath=` and name the field in words.
+- **Permissions.** A verify command can need a permission that draincheck's own role does not have (`describe`, or `get` on a custom resource). It runs as the operator, not as draincheck.
+
+`TestAdviceContract` (`internal/analyzer/advice_contract_test.go`) enforces the fact (1) and the read-only command (4) for every finding of every default rule, and fails for a rule that has no case in its table. It also rejects a command that is not one plain `kubectl get`, `describe` or `auth can-i` invocation (no pipe, `;`, `&` or `$(`) and a placeholder not listed above. `TestAdviceTableListsEveryDefaultRule` fails for a rule that has no row below. A structured `verify` field in the JSON report is *planned* too (#130). Until then the commands are in the `remediation` text.
+
+### Advice per rule
+
+Each row is the advice of one rule; `<...>` are the placeholders described above. `kubectl behaviour` says only what is established: SPEC.md section 3.1, or checked with kubectl as the entry of the rule says.
+
+| Rule | Fact | What `kubectl drain` does | Verify | Action |
+| ---- | ---- | ------------------------- | ------ | ------ |
+| `PDB_DISRUPTION_BLOCKED` | The budget allows 0 disruptions (healthy and desired counts) and selects N pods on M target nodes. | Retries a refused eviction until `--timeout`, infinite by default: it waits and does not complete. | `kubectl get pdb -n <namespace> <name>`, `kubectl describe pdb -n <namespace> <name>` | Bring the selected pods to Ready until the budget allows a disruption; or relax `minAvailable` / `maxUnavailable` if the budget is stricter than the workload needs. `UNKNOWN` (policy not known): read `spec.unhealthyPodEvictionPolicy` with `kubectl get pdb -n <namespace> <name> -o yaml`, look up the value for the cluster version. `UNKNOWN` (operator-managed): `kubectl get pdb -n <namespace>`, `kubectl get pdb -n <namespace> <name> -o yaml`, then the operator's drain documentation; do not relax `minAvailable`. |
+| `PDB_OVERLAPPING_SELECTORS` | A pod is selected by N budgets in one namespace. | The eviction API refuses the pod whatever the budgets allow. `kubectl drain` reports `This pod has more than one PodDisruptionBudget, which the eviction subresource does not support.` for that pod at once and does not retry it (checked on a kind cluster, Kubernetes v1.37.0). | `kubectl get pod -n <namespace> <pod> --show-labels`, `kubectl describe pdb -n <namespace> <pdb>` | Narrow the selectors so each pod has one budget, or merge the budgets. |
+| `PDB_BATCH_EXCEEDS_BUDGET` | The batch evicts N pods of a budget that allows M at once. | Works through the nodes one after another and waits for each replacement; the drain proceeds. | `kubectl get pdb -n <namespace> <name>` | Expect a slower drain; to speed it up add replicas or relax the budget, or drain the nodes one after another. |
+| `PDB_STALE_STATUS` | `status.observedGeneration` differs from `metadata.generation`; the numbers are out of date. | Not established: it depends on what the eviction API makes of the stale status. | `kubectl get pdb -n <namespace> <name> -o jsonpath='{.metadata.generation} {.status.observedGeneration}'` | Wait and run draincheck again; if it stays stale, check kube-controller-manager. |
+| `PDB_SYNC_FAILED` | The disruption controller could not compute the budget (reason and message in the finding). | Not established: the recorded 0 is not a real budget. | `kubectl get pdb -n <namespace> <name> -o jsonpath='{.status.conditions}'` | Fix what the message names (a pod owner without a scale subresource, a selector it cannot resolve), run draincheck again. |
+| `NODE_NOT_SCHEDULABLE` | N of the M nodes that stay up are cordoned or not Ready; the moved pods can land on at most K nodes. An upper bound: taints and capacity are not checked. | Only evicts; completes whatever the remaining nodes look like. | `kubectl get nodes`, `kubectl describe node <node>` | Repair the not Ready nodes or uncordon the cordoned ones; otherwise count only the other nodes as room. |
+| `NO_REMAINING_NODES` | The drain targets N of M nodes and no node is left that takes new pods (cordons and readiness only). | Only evicts; completes, and the pods stay `Pending`. | `kubectl get nodes`, `kubectl get pods -A --field-selector=status.phase=Pending` | Add a node, or repair or uncordon one, or drain fewer nodes at once. |
+| `SINGLE_REPLICA_WORKLOAD` | The Deployment or StatefulSet has 1 replica and it runs on a target node. | Does not warn about the downtime. | `kubectl get <kind> -n <namespace> <name> -o jsonpath='{.spec.replicas}'`, `kubectl get pdb -n <namespace>` | Run at least 2 replicas, with a budget; or accept the downtime. |
+| `POD_OWNERSHIP` | DaemonSet pods, static pods or a pod with no controller are on a target node. | DaemonSet: refused without `--ignore-daemonsets`, never evicted. Static: skipped. No controller: refused without `--force`, not recreated. | DaemonSet: `kubectl get daemonset -n <namespace> <name>`. Static: `kubectl get pods -A --field-selector spec.nodeName=<node>`, `kubectl get pod -n <namespace> <pod> -o jsonpath='{.metadata.annotations}'`. No controller: `kubectl get pod -n <namespace> <name> -o jsonpath='{.metadata.ownerReferences}'` | DaemonSet: drain with `--ignore-daemonsets`. Static: plan for the node outage. No controller: put it under a controller, or accept the loss and use `--force`. |
+| `MISSING_RESOURCE_REQUESTS` | N of the workload's M pods on the targets have containers with no CPU or memory request. | Evicts the pods whatever they request. | `kubectl get pod -n <namespace> <pod> -o jsonpath='{.spec.containers[*].resources.requests}'` | Set requests on every container (or at pod level) in the pod template. |
+
 ## Pods a drain acts on
 
 One function, `classifyPod` in `internal/analyzer/pod_drain.go`, says what a drain does with a pod on a target node. Every rule asks it; no rule reads the phase, the deletion timestamp or the mirror annotation on its own (a test fails if one does). The same pod is therefore in every finding it belongs to, or in none.
@@ -85,7 +124,7 @@ Severity: `BLOCKED`.
 | --- | --- |
 | False-positive case | The eviction API rejects a pod selected by several PDBs whatever the budgets allow, so for a pod that is evicted the finding is exact. DaemonSet and static pods, which kubectl never evicts, are skipped (see *Mirror kubectl*). The rule reads the selectors from the PDB spec and never its status, so a stale status (see `PDB_STALE_STATUS`) does not affect it. |
 | Downgrade | Implemented: pods that bypass every budget (terminal, Pending, terminating), pods kubectl never evicts (below) and PDBs with an invalid selector are skipped. No other downgrade; none is needed for evicted pods. |
-| Mirror kubectl | Implemented: terminal pods, DaemonSet-managed pods and static (mirror) pods are skipped, because `kubectl drain` never evicts them, so the eviction API never sees them. They stay visible through `POD_OWNERSHIP`. A pod whose DaemonSet has been deleted is still skipped, for the reason given under `PDB_DISRUPTION_BLOCKED`. |
+| Mirror kubectl | Implemented: terminal pods, DaemonSet-managed pods and static (mirror) pods are skipped, because `kubectl drain` never evicts them, so the eviction API never sees them. For a pod that is evicted, `kubectl drain` gets the refusal as an error and does not retry it, unlike a budget at 0 (checked on a kind cluster, Kubernetes v1.37.0); with `--timeout` the other pods are still waited for. They stay visible through `POD_OWNERSHIP`. A pod whose DaemonSet has been deleted is still skipped, for the reason given under `PDB_DISRUPTION_BLOCKED`. |
 | Grouping | One finding per pod, with every matching PDB in evidence. Replicas sharing the same overlap each get a finding. |
 | Estimates | Not an estimate. |
 | Evidence | `findings.OverlappingPDBsEvidence`: `namespace` and the `pdbs` that select the pod, sorted by name. |

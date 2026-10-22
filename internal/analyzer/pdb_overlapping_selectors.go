@@ -62,9 +62,9 @@ func (PDBOverlappingSelectors) Evaluate(in Input) []findings.Finding {
 			Resource: findings.ResourceRef{Kind: "Pod", Namespace: pod.Namespace, Name: pod.Name},
 			Evidence: findings.OverlappingPDBsEvidence{Namespace: pod.Namespace, PDBs: matched},
 			Description: fmt.Sprintf(
-				"Pod %s on node %s is selected by %d PodDisruptionBudgets in namespace %s (%s); the eviction API does not support more than one and will refuse the eviction.",
+				"Pod %s on node %s is selected by %d PodDisruptionBudgets in namespace %s (%s); the eviction API does not support more than one and will refuse the eviction. kubectl drain reports this error for the pod at once and does not retry it.",
 				pod.Name, pod.Spec.NodeName, len(matched), pod.Namespace, strings.Join(matched, ", ")),
-			Remediation: "Narrow the PodDisruptionBudget selectors so that each pod is covered by exactly one budget, or merge the budgets, before draining.",
+			Remediation: "Confirm with `kubectl get pod -n <namespace> <pod> --show-labels` and `kubectl describe pdb -n <namespace> <pdb>` for each budget named in the finding (the selector of each). Then narrow the PodDisruptionBudget selectors so that each pod is covered by exactly one budget, or merge the budgets, before draining. Waiting does not help: the eviction API refuses a pod covered by several budgets whatever they allow.",
 		})
 	}
 	return out

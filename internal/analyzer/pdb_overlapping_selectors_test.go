@@ -66,6 +66,11 @@ func TestPDBOverlappingSelectorsDescribesFinding(t *testing.T) {
 	if got[0].Description == "" || got[0].Remediation == "" {
 		t.Errorf("description and remediation must be set: %+v", got[0])
 	}
+	// Checked on a kind cluster: kubectl drain gets the refusal as an error for
+	// the pod and does not retry it, unlike a budget at 0.
+	if !strings.Contains(got[0].Description, "kubectl drain reports this error for the pod at once and does not retry it") {
+		t.Errorf("description should say what kubectl drain does: %s", got[0].Description)
+	}
 	for _, name := range []string{"etl", "everything", "etl-0"} {
 		if !strings.Contains(got[0].Description, name) {
 			t.Errorf("description should mention %q: %s", name, got[0].Description)

@@ -132,6 +132,14 @@ entries under `[Unreleased]` in the same pull request as the change (see
   with the usual fields of each budget. Budgets over Deployments, StatefulSets,
   Jobs and the like stay `BLOCKED`. Findings of this kind make the run exit `1`
   only with `--fail-on any` (#72).
+- The `remediation` of every finding now names a read-only `kubectl`
+  command that confirms it (`kubectl get pdb -n <namespace> <name>` and the
+  like, with placeholders for the names in the finding), followed by the action,
+  safest first. The `description` of `PDB_DISRUPTION_BLOCKED`,
+  `PDB_OVERLAPPING_SELECTORS`, `NO_REMAINING_NODES` and
+  `SINGLE_REPLICA_WORKLOAD` also says what
+  `kubectl drain` does with the situation. The JSON fields and the severities
+  do not change (#128).
 
 ### Fixed
 

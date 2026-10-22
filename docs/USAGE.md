@@ -83,12 +83,13 @@ Timestamp: 2026-10-14T09:30:00Z
 === BLOCKED (1) ===
 
 [PDB_DISRUPTION_BLOCKED] 1 finding
-  PodDisruptionBudget/billing/payments-api-pdb: PodDisruptionBudget billing/payments-api-pdb allows 0 disruptions (3 healthy, 3 desired), so eviction of its 2 pods on 2 target nodes will be refused.
-  Remediation: Add healthy replicas, or relax minAvailable/maxUnavailable on the PodDisruptionBudget, before draining.
+  PodDisruptionBudget/billing/payments-api-pdb: PodDisruptionBudget billing/payments-api-pdb allows 0 disruptions (3 healthy, 3 desired), so eviction of its 2 pods on 2 target nodes will be refused. kubectl drain retries a refused eviction until --timeout, which is infinite by default, so it waits and does not complete.
+  Remediation: Confirm with `kubectl get pdb -n <namespace> <name>` (ALLOWED DISRUPTIONS is 0) and `kubectl describe pdb -n <namespace> <name>` (selector, current and desired). Then, safest first: bring the selected pods to Ready, by adding replicas or fixing the ones that are not, until the budget allows a disruption; or, if the budget is stricter than the workload needs, relax minAvailable/maxUnavailable. Do this before draining: the drain only waits.
 
 This report describes the observed cluster state at 2026-10-14T09:30:00Z and does not guarantee execution success. Cluster state may drift immediately after analysis.
 ```
 
+- Every remediation names the read-only `kubectl` command that confirms the finding (`get`, `describe` or `auth can-i`, with `<namespace>`, `<name>` and similar placeholders taken from the resource of the finding), then the action, safest first. The standard is in [RULES.md](RULES.md#advice-standard).
 - Findings of a rule that share a remediation print it once. A rule with several distinct remediations (for example `POD_OWNERSHIP` for DaemonSet versus static pods) prints each text once, with the resources it applies to: `Remediation (DaemonSet/a/ds-1, DaemonSet/a/ds-2): ...`.
 - Long lists are collapsed after 5 entries and end in `... and M more`. A line at the end of the report says when anything was collapsed. `--verbose` prints every finding.
 - `--verbose` prints one block per finding with its full description and remediation:
@@ -96,7 +97,7 @@ This report describes the observed cluster state at 2026-10-14T09:30:00Z and doe
 ```text
 [POD_OWNERSHIP] DaemonSet/monitoring/agent
   DaemonSet monitoring/agent has 2 pods on 2 target nodes. kubectl drain refuses DaemonSet pods without --ignore-daemonsets and never evicts them.
-  Remediation: Drain with --ignore-daemonsets; DaemonSet pods stay until the node itself goes down.
+  Remediation: Confirm with `kubectl get daemonset -n <namespace> <name>` and `kubectl get pods -A --field-selector spec.nodeName=<node> -o wide`. Then drain with --ignore-daemonsets; DaemonSet pods stay until the node itself goes down. If the DaemonSet is not found, its pods are orphans, which kubectl drain treats differently.
 ```
 
 - `Timestamp` is when the cluster snapshot was taken (RFC 3339, UTC), not when the report was printed. The closing disclaimer is mandatory and is always the last line.
@@ -155,7 +156,7 @@ Severity: `BLOCKED`; `UNKNOWN` for budgets managed by an operator (below).
 Raised for a PodDisruptionBudget with `status.disruptionsAllowed == 0` that selects pods on the target nodes, so the eviction API will refuse to evict them. Findings are grouped by budget: ten replicas behind one PDB are one finding, not ten.
 
 - **Resource:** the PDB (`PodDisruptionBudget/<namespace>/<name>`), one finding per PDB.
-- **Description:** states the numbers once (healthy, desired, 0 allowed) and how many pods on how many target nodes are affected.
+- **Description:** states the numbers once (healthy, desired, 0 allowed) and how many pods on how many target nodes are affected, and that `kubectl drain` retries a refused eviction until `--timeout` (infinite by default).
 - **Evidence:** the PDB `namespace` and `name`, `current_healthy`, `desired_healthy` and `disruptions_allowed`, then `nodes` (the target nodes the selected pods run on, sorted) and `pods`, each with its `namespace`, `name` and `node`, sorted by namespace and name. Every selected pod is listed, so grouping hides nothing. A pod selected by two blocked PDBs is listed under both.
 - Only pods scheduled on a target node count. Pods in phase `Succeeded`, `Failed` or `Pending` and pods that are already terminating are skipped, since the eviction API deletes them without consulting a budget. DaemonSet-managed pods and static (mirror) pods are skipped, since `kubectl drain` does not evict them; they stay visible through `POD_OWNERSHIP`. A PDB that selects only such pods gives no finding.
 - **Unhealthy pods.** A pod that is not Ready is evicted past its budget with `unhealthyPodEvictionPolicy: AlwaysAllow`, and with `IfHealthyBudget` (the default when the field is unset) while `currentHealthy >= desiredHealthy` and `desiredHealthy > 0`. Such a pod is not counted as blocked; the JSON `evidence` lists it as `evictable_unhealthy_pods`, apart from `pods`, and a PDB left with no pod it can refuse gives no finding. With an unhealthy budget (`currentHealthy < desiredHealthy`) under `IfHealthyBudget` the pod is still refused: the finding stays `BLOCKED` and the description says the budget itself is unhealthy. The `evidence` also carries `unhealthy_pod_eviction_policy` when the field is set.
@@ -170,14 +171,14 @@ Raised for a PodDisruptionBudget with `status.disruptionsAllowed == 0` that sele
 - **Resource:** the namespace (`Namespace/<name>`), one finding per operator and namespace.
 - **Evidence:** `managed_by` (the operator's `api_group` and `kind`), `namespace` and `pdbs`. `pdbs` lists the budgets sorted by name, each with the fields described above: `namespace`, `name`, the three numbers, `nodes` and `pods`. A budget over pods of several custom resources is listed under the first by API group, then kind.
 - **Description:** names the operator, says how many budgets it manages in the namespace, and how many pods on how many target nodes they cover.
-- **Remediation:** names the operator, says to check its drain documentation and the health of what it protects, and not to relax `minAvailable`, because the operator may recreate the budget. A few operators add a sentence of their own; every other operator gets the general text.
+- **Remediation:** names the operator, gives the commands that show the budgets and who manages them, says to check its drain documentation and the health of what it protects, and not to relax `minAvailable`, because the operator may recreate the budget. A few operators add a sentence of their own; every other operator gets the general text.
 - It is `UNKNOWN`, so it makes the run exit `1` only with `--fail-on any`.
 
 ### `PDB_OVERLAPPING_SELECTORS`
 
 Severity: `BLOCKED`.
 
-Raised for a pod on a target node when more than one PodDisruptionBudget in the same namespace selects it. The eviction API does not support a pod covered by several budgets and refuses the eviction, regardless of how many disruptions each budget allows.
+Raised for a pod on a target node when more than one PodDisruptionBudget in the same namespace selects it. The eviction API does not support a pod covered by several budgets and refuses the eviction, regardless of how many disruptions each budget allows. `kubectl drain` reports that error for the pod at once and does not retry it.
 
 - **Resource:** the pod (`Pod/<namespace>/<name>`), one finding per pod.
 - **Evidence:** the `namespace` and the `pdbs` that select the pod, sorted by name.
@@ -247,7 +248,7 @@ Severity: `RISK`.
 Raised when the drain moves pods and no node is left that takes them: every node outside the target set is cordoned (`spec.unschedulable`) or has a `Ready` condition of `False` or `Unknown`, or all nodes are targets. The drain itself completes, but the evicted pods are recreated by their controllers and stay `Pending` until a node can take them, so the workloads are down. It is `RISK`, so it makes the run exit `1` only with `--fail-on risk` or `any`.
 
 - **Resource:** `Node/<names>`, the target nodes sorted and joined by commas. One finding for the run.
-- **Description:** how many of the nodes are targets, how many pods move and that they stay `Pending`.
+- **Description:** how many of the nodes are targets, how many pods move, that they stay `Pending` and that `kubectl drain` completes.
 - **Evidence:** `pods_to_move`, `target_nodes`, `total_nodes` and `remaining_schedulable` (always `0`).
 - It fires only when at least one pod on a target node moves, counted as for `NODE_NOT_SCHEDULABLE`: DaemonSet pods, static pods, finished pods, pods that are already terminating and pods with no controller need no new home.
 - When the nodes left exist but are all cordoned or not `Ready`, `NODE_NOT_SCHEDULABLE` is reported too and names them.
@@ -261,7 +262,7 @@ Severity: `RISK`.
 Raised when a pod on a target node belongs to a Deployment or StatefulSet that desires one replica. The pod is evicted before its replacement is Ready, so the workload is unavailable in between, even with no PodDisruptionBudget. `kubectl drain` does not warn about it. The drain itself completes, so it is `RISK`; it makes the run exit `1` only with `--fail-on risk` or `any`.
 
 - **Resource:** the Deployment or StatefulSet. One finding per workload.
-- **Description:** the workload, its replica count and the node its pod runs on.
+- **Description:** the workload, its replica count and the node its pod runs on, and that `kubectl drain` does not warn about the downtime.
 - **Evidence:** `owner_kind`, `owner_name`, `replicas` and `pods` (each with `namespace`, `name` and `node`, sorted in that order). A rollout in progress can run two pods of a one-replica Deployment; both are listed in one finding.
 - The count is the desired one, `spec.replicas` (1 when unset), not the number of live pods.
 - Finished pods, DaemonSet pods and static pods are skipped, because `kubectl drain` does not evict them. A pod that is already terminating is skipped too: the drain is not what removes it. A pod whose workload is not in the snapshot is skipped, because its replica count is unknown.

@@ -74,7 +74,7 @@ func (NodeNotSchedulable) Evaluate(in Input) []findings.Finding {
 			"%d of the %s that stay up cannot take evicted pods: %s. The %s moved off the target nodes can land on at most %s; taints and capacity are not checked.",
 			len(blocked), plural(remaining, "node"), strings.Join(reasons, ", "),
 			plural(moving, "pod"), plural(remaining-len(blocked), "node")),
-		Remediation: "Uncordon or repair these nodes, or leave them out of the capacity you count on, before draining. Checks that estimate where pods can land assume the remaining nodes are usable.",
+		Remediation: "Confirm with `kubectl get nodes` (SchedulingDisabled or NotReady in STATUS) and `kubectl describe node <node>` (Unschedulable, Conditions). Then, safest first: repair the not Ready nodes, or uncordon the cordoned ones once the work they wait for is done; if they must stay out, count only the other nodes as room for the evicted pods. The count in the finding is an upper bound: taints and capacity are not checked.",
 	}}
 }
 
