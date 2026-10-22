@@ -13,10 +13,6 @@ import (
 // PodOwnershipID is the rule ID reported by PodOwnership.
 const PodOwnershipID = "POD_OWNERSHIP"
 
-// mirrorPodAnnotation is set by the kubelet on the API object that mirrors a
-// static pod.
-const mirrorPodAnnotation = "kubernetes.io/config.mirror"
-
 // PodOwnership reports pods on target nodes whose ownership gives them special
 // drain behaviour: DaemonSet-managed pods, static (mirror) pods and naked pods
 // with no controller.
@@ -31,7 +27,8 @@ const mirrorPodAnnotation = "kubernetes.io/config.mirror"
 // and none of them is a violated constraint on its own. Pods managed by any
 // other controller are not reported. Pods in a terminal phase (Succeeded,
 // Failed) are skipped because kubectl drain removes them without further
-// checks.
+// checks. A pod that is already terminating is still reported: kubectl drain
+// applies these checks to it as well.
 type PodOwnership struct{}
 
 // ID implements Rule.
@@ -54,22 +51,24 @@ func (PodOwnership) Evaluate(in Input) []findings.Finding {
 	byResource := make(map[findings.ResourceRef]*ownershipGroup)
 	var groups []*ownershipGroup // first-seen order, so output does not depend on map order
 	for _, pod := range in.Snapshot.Pods() {
-		if !slices.Contains(in.Targets, pod.Spec.NodeName) || terminal(pod) {
+		if !slices.Contains(in.Targets, pod.Spec.NodeName) {
 			continue
 		}
 
+		// Ownership is judged by class, not by fate: kubectl drain applies its
+		// DaemonSet, static and unreplicated checks to a pod that is already
+		// terminating too.
 		var ref findings.ResourceRef
 		var category findings.OwnershipCategory
 		owner := owners.Resolve(pod)
-		switch {
-		// A mirror pod also carries a Node owner reference, so it is checked first.
-		case hasAnnotation(pod.Annotations, mirrorPodAnnotation):
+		switch classifyPod(pod, owners).class {
+		case classStatic:
 			category = findings.OwnershipStaticPod
 			ref = findings.ResourceRef{Kind: "Node", Name: pod.Spec.NodeName}
-		case owner.Unmanaged():
+		case classUnmanaged:
 			category = findings.OwnershipUnmanaged
 			ref = findings.ResourceRef{Kind: "Pod", Namespace: pod.Namespace, Name: pod.Name}
-		case owner.Kind == "DaemonSet":
+		case classDaemonSet:
 			category = findings.OwnershipDaemonSet
 			ref = findings.ResourceRef{Kind: owner.Kind, Namespace: owner.Namespace, Name: owner.Name}
 		default:

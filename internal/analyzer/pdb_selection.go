@@ -18,7 +18,7 @@ type pdbSelection struct {
 	pdb policyv1.PodDisruptionBudget
 	// pods are the selected pods that eviction puts through the budget, sorted
 	// by namespace, name and node. Pods that bypass every budget (see
-	// bypassesBudget) are not selected, and pods the eviction API lets past
+	// podDrain.bypassesBudget) are not selected, and pods the eviction API lets past
 	// this one (see evictedPastBudget) are in evictable instead.
 	pods []findings.PDBPod
 	// evictable are the selected pods that are not Ready and that eviction lets
@@ -75,8 +75,8 @@ func configuredPolicy(pdb policyv1.PodDisruptionBudget) string {
 
 // selectedPDBs returns every PodDisruptionBudget that selects at least one pod
 // on a target node that kubectl drain would evict, in snapshot order. Pods that
-// bypass every budget (see bypassesBudget) and pods drain never evicts (see
-// skippedByDrain) are not counted, and a budget with an invalid selector is
+// bypass every budget and pods drain never evicts (see podDrain.consultsBudget)
+// are not counted, and a budget with an invalid selector is
 // skipped. A pod that is not Ready and that the eviction API lets past the
 // budget (see evictedPastBudget) is kept apart in evictable, and a budget left
 // with no other pod is skipped. What the budget's status says is for the caller
@@ -92,7 +92,7 @@ func selectedPDBs(in Input) []pdbSelection {
 	owners := inventory.NewOwnerResolver(in.Snapshot)
 	var evicted []corev1.Pod // pods on the target nodes that kubectl drain would evict
 	for _, pod := range in.Snapshot.Pods() {
-		if slices.Contains(in.Targets, pod.Spec.NodeName) && !bypassesBudget(pod) && !skippedByDrain(pod, owners) {
+		if slices.Contains(in.Targets, pod.Spec.NodeName) && classifyPod(pod, owners).consultsBudget() {
 			evicted = append(evicted, pod)
 		}
 	}

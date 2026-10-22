@@ -31,7 +31,7 @@ const PDBBatchExceedsBudgetID = "PDB_BATCH_EXCEEDS_BUDGET"
 //
 // Only pods that use the budget up are counted: a pod that is not Ready and
 // that the eviction API lets past the budget (see evictedPastBudget) is not,
-// and neither are pods that bypass every budget (see bypassesBudget). A budget
+// and neither are pods that bypass every budget (see podDrain.bypassesBudget). A budget
 // whose unhealthyPodEvictionPolicy is a value draincheck does not know is
 // skipped, since it cannot be counted reliably.
 type PDBBatchExceedsBudget struct{}

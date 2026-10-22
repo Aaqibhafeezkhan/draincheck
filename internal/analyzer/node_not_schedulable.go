@@ -19,8 +19,8 @@ const NodeNotSchedulableID = "NODE_NOT_SCHEDULABLE"
 //
 // It is RISK and fires only when the drain moves something: at least one pod
 // on a target node that kubectl drain evicts and a controller recreates
-// (DaemonSet, static, terminal and controller-less pods need no new home, see
-// skippedByDrain and terminal). Without such a pod, a cordoned spare node
+// (DaemonSet, static, finished, terminating and controller-less pods need no
+// new home, see classifyPod). Without such a pod, a cordoned spare node
 // changes nothing about this drain, so it is not reported.
 //
 // A target node that is already cordoned is not reported: kubectl drain
