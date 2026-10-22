@@ -64,7 +64,7 @@ Further requirements:
 - **Plain commands.** A command is one `kubectl` invocation with no pipe, no shell and no `xargs`. To read a field, use `-o yaml` or `-o jsonpath=` and name the field in words.
 - **Permissions.** A verify command can need a permission that draincheck's own role does not have (`describe`, or `get` on a custom resource). It runs as the operator, not as draincheck.
 
-A mechanical guard that fails when a remediation names no read-only command, or a command that writes, is *planned* (#129). A structured `verify` field in the JSON report is *planned* too (#130). Until then the commands are in the `remediation` text.
+`TestAdviceContract` (`internal/analyzer/advice_contract_test.go`) enforces the fact (1) and the read-only command (4) for every finding of every default rule, and fails for a rule that has no case in its table. It also rejects a command that is not one plain `kubectl get`, `describe` or `auth can-i` invocation (no pipe, `;`, `&` or `$(`) and a placeholder not listed above. `TestAdviceTableListsEveryDefaultRule` fails for a rule that has no row below. A structured `verify` field in the JSON report is *planned* too (#130). Until then the commands are in the `remediation` text.
 
 ### Advice per rule
 
