@@ -146,6 +146,13 @@ entries under `[Unreleased]` in the same pull request as the change (see
   PodDisruptionBudget can refuse their eviction; a budget that selects only
   such pods was a false `BLOCKED`. They are still reported by `POD_OWNERSHIP`
   (#71).
+- `NODE_NOT_SCHEDULABLE`, `NO_REMAINING_NODES` and `MISSING_RESOURCE_REQUESTS`
+  no longer count pods that are already terminating. Their controller has
+  already created the replacement, so the drain does not take them down; they
+  inflated the number of pods to move and could add a workload to the
+  missing-requests report. All rules now share one definition of which pods a
+  drain acts on. `POD_OWNERSHIP` still reports a terminating DaemonSet, static
+  or controller-less pod, because `kubectl drain` checks those too (#126).
 
 ## [0.0.1] - 2026-10-16
 

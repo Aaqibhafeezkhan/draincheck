@@ -25,9 +25,9 @@ const MissingResourceRequestsID = "MISSING_RESOURCE_REQUESTS"
 // affected pod, its node and the containers missing a request in typed
 // evidence. Init containers are not inspected: they do not contribute to
 // steady-state usage. A request set at pod level covers every container for
-// that resource. Pods in a terminal phase (Succeeded, Failed), DaemonSet pods
-// and static (mirror) pods are skipped because kubectl drain does not evict
-// them, so they are never rescheduled.
+// that resource. Pods in a terminal phase (Succeeded, Failed), pods that are
+// already terminating, DaemonSet pods and static (mirror) pods are skipped:
+// kubectl drain does not evict the last two, and the others need no new home.
 type MissingResourceRequests struct{}
 
 // ID implements Rule.
@@ -52,14 +52,13 @@ func (MissingResourceRequests) Evaluate(in Input) []findings.Finding {
 	byResource := make(map[findings.ResourceRef]*requestsGroup)
 	var groups []*requestsGroup // first-seen order, so output does not depend on map order
 	for _, pod := range in.Snapshot.Pods() {
-		if !slices.Contains(in.Targets, pod.Spec.NodeName) || terminal(pod) ||
-			hasAnnotation(pod.Annotations, mirrorPodAnnotation) {
+		if !slices.Contains(in.Targets, pod.Spec.NodeName) {
+			continue
+		}
+		if fate := classifyPod(pod, owners).fate(); fate != fateEvictedRescheduled && fate != fateEvictedUnmanaged {
 			continue
 		}
 		owner := owners.Resolve(pod)
-		if owner.Kind == "DaemonSet" {
-			continue
-		}
 
 		ref := findings.ResourceRef{Kind: "Pod", Namespace: pod.Namespace, Name: pod.Name}
 		if !owner.Unmanaged() {

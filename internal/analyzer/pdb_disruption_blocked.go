@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/Veinar/draincheck/internal/findings"
-	corev1 "k8s.io/api/core/v1"
 )
 
 // PDBDisruptionBlockedID is the rule ID reported by PDBDisruptionBlocked.
@@ -19,12 +18,12 @@ const PDBDisruptionBlockedID = "PDB_DISRUPTION_BLOCKED"
 // selected pods and their nodes are in the typed evidence and none is dropped;
 // a pod selected by two budgets is listed under each. Pods that kubectl drain
 // never evicts are skipped (DaemonSet pods and static pods, see
-// skippedByDrain), as are pods in a terminal phase (Succeeded, Failed),
+// podDrain.consultsBudget), as are pods in a terminal phase (Succeeded, Failed),
 // because eviction does not consult budgets for them. A budget left with no
 // pod gives no finding. A budget with an invalid selector is skipped: it
 // cannot be matched reliably.
 //
-// Pods that bypass every budget (Pending, terminating, see bypassesBudget) are
+// Pods that bypass every budget (Pending, terminating, see podDrain.bypassesBudget) are
 // skipped like finished ones. A pod that is not Ready is skipped too when the
 // eviction API lets it past the budget (see evictedPastBudget); it is listed in
 // the evidence apart from the pods the budget refuses, and a budget left with
@@ -101,8 +100,4 @@ func unknownPolicyFinding(sel pdbSelection) findings.Finding {
 			configuredPolicy(pdb), plural(len(sel.pods), "pod"), plural(len(sel.nodes), "target node")),
 		Remediation: "Check unhealthyPodEvictionPolicy on the PodDisruptionBudget against the Kubernetes version of the cluster, then run draincheck again. Until then, drain with care.",
 	}
-}
-
-func terminal(pod corev1.Pod) bool {
-	return pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed
 }

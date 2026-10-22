@@ -44,6 +44,22 @@ Severity: `BLOCKED` | `RISK` | `UNKNOWN`.
 
 Mark anything not implemented yet as *planned* and link the issue. Document only what the code does.
 
+## Pods a drain acts on
+
+One function, `classifyPod` in `internal/analyzer/pod_drain.go`, says what a drain does with a pod on a target node. Every rule asks it; no rule reads the phase, the deletion timestamp or the mirror annotation on its own (a test fails if one does). The same pod is therefore in every finding it belongs to, or in none.
+
+| State of the pod | Fate | Counted as a pod to move (`NODE_NOT_SCHEDULABLE`, `NO_REMAINING_NODES`) | Budget consulted (PDB rules) | Other rules |
+| --- | --- | --- | --- | --- |
+| Running or Unknown phase, controlled by a Deployment, StatefulSet, Job or other controller | evicted, recreated by its controller | yes | yes | `SINGLE_REPLICA_WORKLOAD`, `MISSING_RESOURCE_REQUESTS` |
+| Pending, with a controller | evicted, recreated by its controller | yes | no (eviction deletes it without a budget) | `SINGLE_REPLICA_WORKLOAD`, `MISSING_RESOURCE_REQUESTS` |
+| No controller (an owner reference that is not the controller counts as none) | evicted, not recreated | no | yes, unless Pending | `POD_OWNERSHIP`, `MISSING_RESOURCE_REQUESTS` (as its own workload) |
+| DaemonSet-controlled | left alone by `kubectl drain` | no | no | `POD_OWNERSHIP` |
+| Static (mirror annotation), even with a DaemonSet or Node owner reference | left alone by `kubectl drain` | no | no | `POD_OWNERSHIP` |
+| Succeeded or Failed (any owner, also DaemonSet and static) | finished | no | no | none |
+| Already terminating (deletion timestamp set, not finished) | already leaving | no | no | `POD_OWNERSHIP` only |
+
+Order of precedence: finished, then already terminating, then left alone, then evicted. For `POD_OWNERSHIP` the class decides, not the fate: a terminating DaemonSet, static or controller-less pod is still reported, because `kubectl drain` applies its DaemonSet, static and unreplicated checks to it as well. For every other rule a terminating pod is skipped: its controller has already created the replacement, so the drain does not take anything down.
+
 ## Entries
 
 ### `PDB_DISRUPTION_BLOCKED`
@@ -129,7 +145,7 @@ Severity: `RISK`.
 | --- | --- |
 | False-positive case | A remaining node is cordoned on purpose (kept for a debugging session, or waiting for its own maintenance) and the workloads have room elsewhere. The finding does not say the drain fails; it says the room is smaller than the node count suggests, with the nodes named. It is raised only when the drain moves pods, so a cordoned spare node alone does not cry wolf. |
 | Downgrade | Never `BLOCKED`: the drain completes whatever the remaining nodes look like. A node that reports no `Ready` condition is not flagged for readiness, since its absence says nothing. No pod to move means no finding. |
-| Mirror kubectl | A target that is already cordoned is not reported: `kubectl drain` cordons the targets itself and prints `already cordoned` (checked with kubectl v1.36.1). Pods kubectl never evicts (DaemonSet, static), finished pods and pods with no controller need no new home and are not counted. |
+| Mirror kubectl | A target that is already cordoned is not reported: `kubectl drain` cordons the targets itself and prints `already cordoned` (checked with kubectl v1.36.1). Pods kubectl never evicts (DaemonSet, static), finished pods, pods already terminating (their replacement exists) and pods with no controller need no new home and are not counted (see *Pods a drain acts on*). |
 | Grouping | One finding for the run, however many nodes are affected: ten cordoned nodes are one finding, with each node in the evidence. |
 | Estimates | Not an estimate: it reads `spec.unschedulable` and the `Ready` condition as reported. It does not say whether the pods fit on the nodes that are left. |
 | Evidence | `findings.NodeNotSchedulableEvidence`: `pods_to_move`, `remaining_nodes` and `nodes` (name, cordoned flag, Ready status). |
@@ -144,7 +160,7 @@ Severity: `RISK`.
 | --- | --- |
 | False-positive case | Draining everything on purpose: a cluster being retired, or a node pool replaced after new nodes are added by another tool. The finding says the pods that move stay `Pending` until a node takes them, which is true in both cases; it does not say the drain fails. It is raised only when the drain moves pods. |
 | Downgrade | Never `BLOCKED`: `kubectl drain` only evicts, so it completes whatever is left. Nothing is reported when no pod needs a new home. A node that reports no `Ready` condition counts as room, since its absence says nothing. |
-| Mirror kubectl | The pods counted are the ones `NODE_NOT_SCHEDULABLE` counts: pods kubectl never evicts (DaemonSet, static), finished pods and pods with no controller need no new home. kubectl cannot see this: it takes one node at a time and does not look at what the other nodes can take. |
+| Mirror kubectl | The pods counted are the ones `NODE_NOT_SCHEDULABLE` counts: pods kubectl never evicts (DaemonSet, static), finished pods, pods already terminating and pods with no controller need no new home. kubectl cannot see this: it takes one node at a time and does not look at what the other nodes can take. |
 | Grouping | One finding for the run, however many nodes are drained. Its resource is the target nodes, sorted and joined by commas. |
 | Estimates | Not an estimate: it counts nodes outside the target set that are not cordoned and not `Ready`. It does not look at taints, affinity or capacity, so "some node is left" does not mean the pods fit. Those checks are *planned*; a per-workload variant ("this workload has no node left") is *planned* too. |
 | Evidence | `findings.NoRemainingNodesEvidence`: `pods_to_move`, `target_nodes`, `total_nodes` and `remaining_schedulable` (always 0 when reported). |
@@ -174,7 +190,7 @@ Severity: `RISK`.
 | --- | --- |
 | False-positive case | The facts are true, but kubectl handles DaemonSet and static pods on its own, so the finding is information, not a fault. One corner is not covered: a pod whose DaemonSet has been deleted is still reported as a DaemonSet pod, because draincheck does not list DaemonSets. kubectl treats that orphan differently: without `--force` it fails that node with `cannot delete daemonsets.apps "<name>" not found` and goes on to the next node, and with `--force` it evicts the pod (checked with kubectl v1.36.1). Handling it is *planned*, see *POD_OWNERSHIP must handle orphaned DaemonSet pods (DaemonSet no longer exists)*. |
 | Downgrade | Never `BLOCKED`: whether the drain stops depends on kubectl flags draincheck cannot observe, so every category is `RISK`. |
-| Mirror kubectl | Terminal pods are skipped. DaemonSet and static pods are reported on purpose, because the operator needs the `--ignore-daemonsets` flag and must plan for the node outage; the remediation says kubectl skips them. Because that advice is the same for every pod of a kind, it is given once per finding, not once per pod. |
+| Mirror kubectl | Terminal pods are skipped. A pod that is already terminating is **not** skipped here, unlike in every other rule: `kubectl drain` applies its DaemonSet, static and unreplicated checks to it too (checked with kubectl v1.36.1 on a kind cluster: a pod with no controller that was Terminating and still Running was refused with `cannot delete Pods that declare no controller`; see *Pods a drain acts on*). DaemonSet and static pods are reported on purpose, because the operator needs the `--ignore-daemonsets` flag and must plan for the node outage; the remediation says kubectl skips them. Because that advice is the same for every pod of a kind, it is given once per finding, not once per pod. |
 | Grouping | A DaemonSet is one finding, however many nodes it runs on (28 pods on 28 nodes is one finding). Static pods are one finding per node, listing the static pods that stop with it. A pod with no controller is one finding of its own, since each one is lost on drain. Collapsing static pods across nodes is left to the compact text report: the node is the unit of action, because `--nodes` picks nodes. |
 | Estimates | Not an estimate. |
 | Evidence | `findings.OwnershipEvidence`: `category`, `nodes` and `pods` (each with `namespace`, `name` and `node`), plus `owner_kind` and `owner_name` for a DaemonSet. |
@@ -189,7 +205,7 @@ Severity: `RISK`.
 | --- | --- |
 | False-positive case | Requests are read from the stored pod spec, so values from a LimitRange or an admission webhook count as set. A pod that is not rescheduled is not affected; those are skipped (below). A pod with no controller is reported as its own workload, although nothing recreates it after a drain; the finding only matters if the operator recreates it elsewhere. |
 | Downgrade | Estimate-class rule: it is only ever `RISK`. |
-| Mirror kubectl | Implemented: terminal pods, DaemonSet pods and static (mirror) pods are skipped, because the rule's rationale (the pod may not fit where it is rescheduled) does not apply to pods that are never rescheduled. They stay visible through `POD_OWNERSHIP`. |
+| Mirror kubectl | Implemented: terminal pods, pods already terminating (their replacement exists), DaemonSet pods and static (mirror) pods are skipped, because the rule's rationale (the pod may not fit where it is rescheduled) does not apply to pods that are never rescheduled. They stay visible through `POD_OWNERSHIP`. |
 | Grouping | Findings are grouped per owning workload (Deployment, StatefulSet, Job and so on), found with `inventory.OwnerResolver`. A pod with no controller counts as its own workload. Ten replicas missing requests give one finding. The description states the count once (for example "2 of 3 pods of Deployment shop/web") and the per-pod detail goes into the evidence. |
 | Estimates | Yes. The finding lists the containers and which request each lacks. Init containers are not inspected. |
 | Evidence | `findings.MissingRequestsEvidence`: `owner_kind` and `owner_name` (omitted for a pod with no controller), `pods_on_targets` (the workload's pods on the target nodes that kubectl would evict, the denominator of the count) and `pods`. Each entry of `pods` has `name`, `node` and `containers` with `missing_cpu` and `missing_memory`. |

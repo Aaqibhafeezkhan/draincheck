@@ -51,8 +51,7 @@ func (SingleReplicaWorkload) Evaluate(in Input) []findings.Finding {
 	owners := inventory.NewOwnerResolver(in.Snapshot)
 	pods := make(map[workloadKey][]findings.SingleReplicaPod)
 	for _, pod := range in.Snapshot.Pods() {
-		if !slices.Contains(in.Targets, pod.Spec.NodeName) || terminal(pod) || pod.DeletionTimestamp != nil ||
-			skippedByDrain(pod, owners) {
+		if !slices.Contains(in.Targets, pod.Spec.NodeName) || classifyPod(pod, owners).fate() != fateEvictedRescheduled {
 			continue
 		}
 		owner := owners.Resolve(pod)

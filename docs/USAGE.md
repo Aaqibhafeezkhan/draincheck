@@ -235,7 +235,7 @@ Raised when the drain moves pods and some nodes that stay up cannot take them: a
 - **Resource:** `Node/<names>`, the affected nodes sorted and joined by commas. One finding covers all of them, since the cause is one.
 - **Description:** how many of the remaining nodes cannot take pods and why each cannot (`cordoned`, `not Ready`, or `cordoned and not Ready`), and how many pods move and at most how many nodes they can land on (taints and capacity are not checked, so the real number can be smaller).
 - **Evidence:** `pods_to_move`, `remaining_nodes` (every node outside the target set, whatever its state) and `nodes`, each with `name`, `cordoned` and `ready_status` (`True`, `False` or `Unknown`; omitted when the node reports no `Ready` condition).
-- It fires only when at least one pod on a target node moves: a pod that `kubectl drain` evicts and a controller recreates. DaemonSet pods, static pods, finished pods and pods with no controller need no new home, so a cordoned spare node does not matter for a drain that moves none.
+- It fires only when at least one pod on a target node moves: a pod that `kubectl drain` evicts and a controller recreates. DaemonSet pods, static pods, finished pods, pods that are already terminating and pods with no controller need no new home, so a cordoned spare node does not matter for a drain that moves none.
 - A target node that is already cordoned is not reported. `kubectl drain` cordons the targets itself and prints `already cordoned`.
 - A node that reports no `Ready` condition is not flagged for readiness; real nodes always report one.
 - Taints, resource pressure and capacity are not looked at here. Placement and capacity rules are *planned*.
@@ -249,7 +249,7 @@ Raised when the drain moves pods and no node is left that takes them: every node
 - **Resource:** `Node/<names>`, the target nodes sorted and joined by commas. One finding for the run.
 - **Description:** how many of the nodes are targets, how many pods move and that they stay `Pending`.
 - **Evidence:** `pods_to_move`, `target_nodes`, `total_nodes` and `remaining_schedulable` (always `0`).
-- It fires only when at least one pod on a target node moves, counted as for `NODE_NOT_SCHEDULABLE`: DaemonSet pods, static pods, finished pods and pods with no controller need no new home.
+- It fires only when at least one pod on a target node moves, counted as for `NODE_NOT_SCHEDULABLE`: DaemonSet pods, static pods, finished pods, pods that are already terminating and pods with no controller need no new home.
 - When the nodes left exist but are all cordoned or not `Ready`, `NODE_NOT_SCHEDULABLE` is reported too and names them.
 - A node that reports no `Ready` condition counts as room.
 - Taints, affinity and capacity are not looked at, so a finding-free run does not promise the pods fit. Placement and capacity rules, and a per-workload variant of this rule, are *planned*.
@@ -284,7 +284,7 @@ Raised for pods on a target node whose ownership gives them special `kubectl dra
 - **Evidence:** `category`, `nodes` (the nodes the covered pods run on, sorted) and `pods`, each with its `namespace`, `name` and `node`, sorted by namespace and name. A DaemonSet finding also has `owner_kind` and `owner_name`. Every covered pod is listed, so grouping hides nothing.
 - Static pods get one finding per node rather than one for the whole drain, because the node is what you choose with `--nodes`. The description names the static pods; the point is to plan around the node outage, since kubectl skips them.
 - It is `RISK`, not `BLOCKED`, because whether the drain stops depends on flags draincheck cannot observe.
-- Only pods scheduled on a target node count. Pods in phase `Succeeded` or `Failed` are skipped, since `kubectl drain` removes them without further checks.
+- Only pods scheduled on a target node count. Pods in phase `Succeeded` or `Failed` are skipped, since `kubectl drain` removes them without further checks. A pod that is already terminating is still reported, unlike in the other rules, because `kubectl drain` applies its DaemonSet, static and unreplicated checks to it too.
 - Pods managed by any other controller (Deployment, StatefulSet, Job, ...) are not reported. A pod whose ReplicaSet is missing from the snapshot is treated as managed.
 - A pod with a mirror annotation is always `StaticPod`, even though it also has a `Node` owner reference.
 - A pod controlled by a DaemonSet that no longer exists is still reported as a DaemonSet pod, since draincheck does not list DaemonSets. `kubectl drain` handles such an orphan differently: it fails with a not-found error, and only `--force` deletes the pod. Handling this case is *planned*.
@@ -298,7 +298,7 @@ Raised for a workload with a pod on a target node that has at least one regular 
 - **Resource:** the owning workload (for example `Deployment/<namespace>/<name>`, `StatefulSet/...`, `Job/...`), one finding per workload however many replicas are affected. A pod with no controller is its own workload (`Pod/<namespace>/<name>`). A pod owned by a ReplicaSet resolves to the Deployment that owns the ReplicaSet.
 - **Description:** states how many of the workload's pods on the target nodes are affected, for example `2 of 3 pods of Deployment shop/web`.
 - **Evidence:** `owner_kind` and `owner_name` (omitted for a pod with no controller), `pods_on_targets` (the workload's pods on the target nodes that `kubectl drain` would evict, with or without requests) and `pods`. Each entry of `pods` has the pod `name`, its `node` and its `containers`: each container with a missing request, in spec order, with `missing_cpu` and `missing_memory`. Pods are sorted by name. The pod namespace is the namespace of the resource.
-- Only pods scheduled on a target node count, in `pods` and in `pods_on_targets`. Pods in phase `Succeeded` or `Failed`, DaemonSet-managed pods and static (mirror) pods are skipped, since `kubectl drain` does not evict them and they are never rescheduled. They stay visible through `POD_OWNERSHIP`.
+- Only pods scheduled on a target node count, in `pods` and in `pods_on_targets`. Pods in phase `Succeeded` or `Failed`, pods that are already terminating, DaemonSet-managed pods and static (mirror) pods are skipped: `kubectl drain` does not evict the last two, and the others need no new home. They stay visible through `POD_OWNERSHIP`.
 - Init containers are not inspected.
 - A CPU or memory request set at pod level (`spec.resources.requests`) covers every container for that resource.
 - Requests are read from the stored pod spec, so values filled in by a LimitRange or an admission webhook count as set.

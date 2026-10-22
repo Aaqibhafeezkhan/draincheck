@@ -20,7 +20,7 @@ const PDBOverlappingSelectorsID = "PDB_OVERLAPPING_SELECTORS"
 //
 // One BLOCKED finding is emitted per pod, with every matching PDB as
 // evidence. Pods that kubectl drain never evicts are skipped (DaemonSet pods
-// and static pods, see skippedByDrain), as are pods in a terminal phase
+// and static pods, see podDrain.consultsBudget), as are pods in a terminal phase
 // (Succeeded, Failed), because eviction does not consult budgets for them. A
 // PDB with an invalid selector is skipped: it cannot be matched reliably.
 type PDBOverlappingSelectors struct{}
@@ -38,7 +38,7 @@ func (PDBOverlappingSelectors) Evaluate(in Input) []findings.Finding {
 	var out []findings.Finding
 	pdbs := in.Snapshot.PodDisruptionBudgets()
 	for _, pod := range in.Snapshot.Pods() {
-		if !slices.Contains(in.Targets, pod.Spec.NodeName) || bypassesBudget(pod) || skippedByDrain(pod, owners) {
+		if !slices.Contains(in.Targets, pod.Spec.NodeName) || !classifyPod(pod, owners).consultsBudget() {
 			continue
 		}
 		var matched []string
