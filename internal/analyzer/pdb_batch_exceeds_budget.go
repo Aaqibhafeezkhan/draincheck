@@ -63,7 +63,7 @@ func (PDBBatchExceedsBudget) Evaluate(in Input) []findings.Finding {
 				"Draining %s evicts %s selected by PodDisruptionBudget %s/%s, which allows %s at once, so the drain will wait for replacements to become Ready between evictions.",
 				plural(len(sel.nodes), "target node"), plural(len(sel.pods), "pod"),
 				pdb.Namespace, pdb.Name, plural(int(allowed), "disruption")),
-			Remediation: "Expect the drain to take longer. To drain faster, add replicas or relax minAvailable/maxUnavailable on the PodDisruptionBudget, or drain the nodes one after another.",
+			Remediation: "Confirm with `kubectl get pdb -n <namespace> <name>` (ALLOWED DISRUPTIONS) and compare it with the pods named in the finding. Then, safest first: expect the drain to take longer, nothing is lost; to drain faster, add replicas or relax minAvailable/maxUnavailable on the PodDisruptionBudget, or drain the nodes one after another.",
 		})
 	}
 	return out

@@ -66,7 +66,7 @@ func (PDBDisruptionBlocked) Evaluate(in Input) []findings.Finding {
 			continue
 		}
 		description := fmt.Sprintf(
-			"PodDisruptionBudget %s/%s allows 0 disruptions (%d healthy, %d desired), so eviction of its %s on %s will be refused.",
+			"PodDisruptionBudget %s/%s allows 0 disruptions (%d healthy, %d desired), so eviction of its %s on %s will be refused. kubectl drain retries a refused eviction until --timeout, which is infinite by default, so it waits and does not complete.",
 			pdb.Namespace, pdb.Name, pdb.Status.CurrentHealthy, pdb.Status.DesiredHealthy,
 			plural(len(sel.pods), "pod"), plural(len(sel.nodes), "target node"))
 		if sel.unready > 0 {
@@ -78,7 +78,7 @@ func (PDBDisruptionBlocked) Evaluate(in Input) []findings.Finding {
 			Resource:    sel.resource(),
 			Evidence:    sel.evidence(),
 			Description: description,
-			Remediation: "Add healthy replicas, or relax minAvailable/maxUnavailable on the PodDisruptionBudget, before draining.",
+			Remediation: "Confirm with `kubectl get pdb -n <namespace> <name>` (ALLOWED DISRUPTIONS is 0) and `kubectl describe pdb -n <namespace> <name>` (selector, current and desired). Then, safest first: bring the selected pods to Ready, by adding replicas or fixing the ones that are not, until the budget allows a disruption; or, if the budget is stricter than the workload needs, relax minAvailable/maxUnavailable. Do this before draining: the drain only waits.",
 		})
 	}
 	return append(out, operatorManagedFindings(operatorManaged)...)
@@ -98,6 +98,6 @@ func unknownPolicyFinding(sel pdbSelection) findings.Finding {
 			"PodDisruptionBudget %s/%s allows 0 disruptions (%d healthy, %d desired), but its unhealthyPodEvictionPolicy %q is not one draincheck knows, so it cannot tell whether eviction of its %s on %s will be refused.",
 			pdb.Namespace, pdb.Name, pdb.Status.CurrentHealthy, pdb.Status.DesiredHealthy,
 			configuredPolicy(pdb), plural(len(sel.pods), "pod"), plural(len(sel.nodes), "target node")),
-		Remediation: "Check unhealthyPodEvictionPolicy on the PodDisruptionBudget against the Kubernetes version of the cluster, then run draincheck again. Until then, drain with care.",
+		Remediation: "Confirm with `kubectl get pdb -n <namespace> <name> -o yaml` and read spec.unhealthyPodEvictionPolicy. If the value is not AlwaysAllow or IfHealthyBudget, look up what it does in the Kubernetes documentation for the version of the cluster, then run draincheck again. Until then, treat the budget as one that may refuse the eviction.",
 	}
 }

@@ -49,7 +49,7 @@ func (PDBStaleStatus) Evaluate(in Input) []findings.Finding {
 				"PodDisruptionBudget %s/%s has not been reconciled (status.observedGeneration %d, metadata.generation %d), so the numbers in its status are out of date and draincheck cannot tell whether eviction of its %s on %s will be refused.",
 				pdb.Namespace, pdb.Name, pdb.Status.ObservedGeneration, pdb.Generation,
 				plural(len(sel.pods), "pod"), plural(len(sel.nodes), "target node")),
-			Remediation: "Wait for the disruption controller to update the PodDisruptionBudget status, then run draincheck again. If it stays out of date, check that kube-controller-manager is healthy.",
+			Remediation: "Confirm with `kubectl get pdb -n <namespace> <name> -o jsonpath='{.metadata.generation} {.status.observedGeneration}'` (two different numbers: the status is out of date). Then wait for the disruption controller to update the PodDisruptionBudget status and run draincheck again. If it stays out of date, check that kube-controller-manager is healthy (on a kubeadm cluster `kubectl get pods -n kube-system -l component=kube-controller-manager`).",
 		})
 	}
 	return out

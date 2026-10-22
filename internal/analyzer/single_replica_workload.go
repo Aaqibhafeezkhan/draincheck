@@ -73,9 +73,9 @@ func (SingleReplicaWorkload) Evaluate(in Input) []findings.Finding {
 			Resource: findings.ResourceRef{Kind: key.kind, Namespace: key.namespace, Name: key.name},
 			Evidence: findings.SingleReplicaEvidence{OwnerKind: key.kind, OwnerName: key.name, Replicas: 1, Pods: ps},
 			Description: fmt.Sprintf(
-				"%s %s/%s has 1 replica and it runs on node %s. The workload is unavailable from the eviction until the new pod is Ready.",
+				"%s %s/%s has 1 replica and it runs on node %s. The workload is unavailable from the eviction until the new pod is Ready; kubectl drain does not warn about it.",
 				key.kind, key.namespace, key.name, ps[0].Node),
-			Remediation: "Run at least 2 replicas, with a PodDisruptionBudget, so a drain does not take the workload down; or accept the downtime for this one.",
+			Remediation: "Confirm with `kubectl get <kind> -n <namespace> <name> -o jsonpath='{.spec.replicas}'` (1) and `kubectl get pdb -n <namespace>`. Then, safest first: run at least 2 replicas and wait until they are Ready, with a PodDisruptionBudget so a later drain keeps one up; or accept the downtime for this one. Replicas can also be raised by an autoscaler, which draincheck does not read.",
 		})
 	}
 	return out

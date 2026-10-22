@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/Veinar/draincheck/internal/findings"
 	"github.com/Veinar/draincheck/internal/inventory"
@@ -29,11 +30,13 @@ func operatorOwned(owner inventory.Owner) bool {
 	return !slices.Contains(builtinControllerGroups, owner.APIGroup)
 }
 
-// genericOperatorRemediation is the advice that holds for any operator.
+// genericOperatorRemediation is the advice that holds for any operator. The
+// group comes from the cluster, so a backtick in it is replaced: it must not
+// open a span that reads as a command.
 func genericOperatorRemediation(group string) string {
 	return fmt.Sprintf(
-		"Budgets managed by operator %s: check its drain documentation and the health of what it protects before draining. Do not relax minAvailable on them; the operator may recreate the budget.",
-		group)
+		"Budgets managed by operator %s: confirm the numbers with `kubectl get pdb -n <namespace>` (ALLOWED DISRUPTIONS) and see who manages a budget with `kubectl get pdb -n <namespace> <name> -o yaml` (labels, ownerReferences). Then check its drain documentation and the health of what it protects before draining. Do not relax minAvailable on them; the operator may recreate the budget.",
+		strings.ReplaceAll(group, "`", "'"))
 }
 
 // operatorRemediation is the remediation for the budgets of the operator in
