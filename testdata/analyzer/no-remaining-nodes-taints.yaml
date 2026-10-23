@@ -1,0 +1,118 @@
+# Cluster for NO_REMAINING_NODES and taints.
+#
+# The commonest small cluster: one worker and a control plane that carries the
+# NoSchedule control-plane taint, as kubeadm and kind set it up. The control
+# plane is Ready and not cordoned, yet only pods that tolerate the taint can
+# land there. A third node, "gpu", is Ready but carries a NoExecute taint, and
+# "soft" only a PreferNoSchedule one, which never removes room.
+#
+# worker holds three StatefulSet pods that move: web-0 tolerates nothing,
+# web-1 tolerates the control-plane taint (Exists, no effect), and
+# gpu-0 tolerates the gpu taint with Equal.
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: control-plane
+spec:
+  taints:
+    - key: node-role.kubernetes.io/control-plane
+      effect: NoSchedule
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: gpu
+spec:
+  taints:
+    - key: dedicated
+      value: gpu
+      effect: NoExecute
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: soft
+spec:
+  taints:
+    - key: prefer
+      effect: PreferNoSchedule
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-0
+  namespace: shop
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: StatefulSet
+      name: web
+      uid: web-uid
+      controller: true
+spec:
+  nodeName: worker
+  containers:
+    - name: web
+      image: example/web:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-1
+  namespace: shop
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: StatefulSet
+      name: web
+      uid: web-uid
+      controller: true
+spec:
+  nodeName: worker
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+  containers:
+    - name: web
+      image: example/web:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gpu-0
+  namespace: shop
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: StatefulSet
+      name: gpu
+      uid: gpu-uid
+      controller: true
+spec:
+  nodeName: worker
+  tolerations:
+    - key: dedicated
+      operator: Equal
+      value: gpu
+      effect: NoExecute
+  containers:
+    - name: gpu
+      image: example/gpu:1
