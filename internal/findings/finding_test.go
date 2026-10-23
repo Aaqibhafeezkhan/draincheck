@@ -221,6 +221,26 @@ func TestFindingJSONNodeNotSchedulableEvidence(t *testing.T) {
 	}
 }
 
+func TestFindingJSONNoRemainingNodesTaintedEvidence(t *testing.T) {
+	f := Finding{
+		RuleID:   "NO_REMAINING_NODES",
+		Severity: Risk,
+		Resource: ResourceRef{Kind: "Node", Name: "worker"},
+		Evidence: NoRemainingNodesEvidence{
+			PodsToMove: 2, TargetNodes: 1, TotalNodes: 2,
+			TaintedNodes: []TaintedNode{{Name: "cp", Taints: []NodeTaint{{Key: "node-role.kubernetes.io/control-plane", Effect: "NoSchedule"}}}},
+		},
+	}
+	b, err := json.Marshal(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"rule_id":"NO_REMAINING_NODES","severity":"RISK","resource":"Node/worker","evidence":{"pods_to_move":2,"target_nodes":1,"total_nodes":2,"remaining_schedulable":0,"tainted_nodes":[{"name":"cp","taints":[{"key":"node-role.kubernetes.io/control-plane","effect":"NoSchedule"}]}]},"description":"","remediation":""}`
+	if string(b) != want {
+		t.Errorf("json mismatch\n got: %s\nwant: %s", b, want)
+	}
+}
+
 func TestFindingJSONNoRemainingNodesEvidence(t *testing.T) {
 	f := Finding{
 		RuleID:   "NO_REMAINING_NODES",

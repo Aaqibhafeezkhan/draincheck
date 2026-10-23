@@ -245,15 +245,15 @@ Raised when the drain moves pods and some nodes that stay up cannot take them: a
 
 Severity: `RISK`.
 
-Raised when the drain moves pods and no node is left that takes them: every node outside the target set is cordoned (`spec.unschedulable`) or has a `Ready` condition of `False` or `Unknown`, or all nodes are targets. The drain itself completes, but the evicted pods are recreated by their controllers and stay `Pending` until a node can take them, so the workloads are down. It is `RISK`, so it makes the run exit `1` only with `--fail-on risk` or `any`.
+Raised when the drain moves pods and no node is left that takes them: every node outside the target set is cordoned (`spec.unschedulable`), has a `Ready` condition of `False` or `Unknown`, or carries a `NoSchedule` or `NoExecute` taint that none of the moving pods tolerates (a tainted control plane, for example), or all nodes are targets. The drain itself completes, but the evicted pods are recreated by their controllers and stay `Pending` until a node can take them, so the workloads are down. It is `RISK`, so it makes the run exit `1` only with `--fail-on risk` or `any`.
 
 - **Resource:** `Node/<names>`, the target nodes sorted and joined by commas. One finding for the run.
 - **Description:** how many of the nodes are targets, how many pods move, that they stay `Pending` and that `kubectl drain` completes.
-- **Evidence:** `pods_to_move`, `target_nodes`, `total_nodes` and `remaining_schedulable` (always `0`).
+- **Evidence:** `pods_to_move`, `target_nodes`, `total_nodes` and `remaining_schedulable` (always `0`). When a taint rules out a Ready node, `tainted_nodes` lists it with the `key` and `effect` of the taints; the description names them too.
 - It fires only when at least one pod on a target node moves, counted as for `NODE_NOT_SCHEDULABLE`: DaemonSet pods, static pods, finished pods, pods that are already terminating and pods with no controller need no new home.
 - When the nodes left exist but are all cordoned or not `Ready`, `NODE_NOT_SCHEDULABLE` is reported too and names them.
 - A node that reports no `Ready` condition counts as room.
-- Taints, affinity and capacity are not looked at, so a finding-free run does not promise the pods fit. Placement and capacity rules, and a per-workload variant of this rule, are *planned*.
+- Taints are judged as the scheduler does (`Equal` and `Exists`, empty key or effect, `tolerationSeconds` ignored; `PreferNoSchedule` never removes room). The rule is silent as soon as one moving pod can land on one node left; room for some pods and none for others is not reported yet and is *planned* as a per-workload finding. Affinity, selectors and capacity are not looked at, so a finding-free run does not promise the pods fit.
 
 ### `SINGLE_REPLICA_WORKLOAD`
 

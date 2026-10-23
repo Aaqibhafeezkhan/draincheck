@@ -23,12 +23,16 @@ entries under `[Unreleased]` in the same pull request as the change (see
 #### Analyzer rules
 
 - `NO_REMAINING_NODES`: when the drain moves pods and no node is left that
-  takes them, because every node is a target or the ones left are cordoned or
-  not `Ready`, it is reported as `RISK`, one finding for the run. The drain
+  takes them, because every node is a target or the ones left are cordoned,
+  not `Ready` or tainted `NoSchedule` or `NoExecute` where none of the moving
+  pods tolerates the taint (a one-worker cluster with a tainted control plane),
+  it is reported as `RISK`, one finding for the run. The drain
   completes, but the evicted pods stay `Pending` until a node can take them.
-  Nothing is reported when no pod needs a new home. The JSON `evidence` has
-  `pods_to_move`, `target_nodes`, `total_nodes` and `remaining_schedulable`
-  (#43).
+  Nothing is reported when no pod needs a new home, or when one moving pod can
+  land on a node left. The JSON `evidence` has
+  `pods_to_move`, `target_nodes`, `total_nodes` and `remaining_schedulable`,
+  and `tainted_nodes` (each node a taint rules out, with the taint `key` and
+  `effect`) when a taint is involved (#43, #132).
 - `NODE_NOT_SCHEDULABLE`: when the drain moves pods, nodes outside the target
   set that are cordoned or not `Ready` are reported as `RISK`, one finding for
   all of them. The drain completes, but the evicted pods have fewer nodes to

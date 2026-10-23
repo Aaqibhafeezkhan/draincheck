@@ -1,6 +1,7 @@
 package analyzer
 
 import (
+	"encoding/json"
 	"reflect"
 	"slices"
 	"strings"
@@ -120,5 +121,198 @@ func TestNoRemainingNodesIgnoresOrder(t *testing.T) {
 	got := NoRemainingNodes{}.Evaluate(Input{Snapshot: reversed, Targets: targets})
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("order changed the result\n got: %+v\nwant: %+v", got, want)
+	}
+}
+
+// podsNamed is the snapshot of no-remaining-nodes-taints.yaml with only the
+// named pods left, so each case below moves exactly the pods it is about.
+func podsNamed(t *testing.T, names ...string) *inventory.Snapshot {
+	t.Helper()
+	s := snapshotFromFixture(t, "no-remaining-nodes-taints.yaml")
+	var pods []corev1.Pod
+	for _, p := range s.Pods() {
+		if slices.Contains(names, p.Name) {
+			pods = append(pods, p)
+		}
+	}
+	return inventory.NewSnapshot(s.Nodes(), pods, s.ReplicaSets(), s.PodDisruptionBudgets(), s.Timestamp())
+}
+
+// The commonest small cluster: the nodes left are Ready and not cordoned, but
+// a taint keeps the moving pods off them.
+func TestNoRemainingNodesTaints(t *testing.T) {
+	cpTaint := findings.NodeTaint{Key: "node-role.kubernetes.io/control-plane", Effect: "NoSchedule"}
+	gpuTaint := findings.NodeTaint{Key: "dedicated", Effect: "NoExecute"}
+
+	tests := []struct {
+		name    string
+		pods    []string
+		targets []string
+		want    []findings.Finding
+	}{
+		{
+			name:    "no moving pod tolerates the taints of the nodes left",
+			pods:    []string{"web-0"},
+			targets: []string{"worker", "soft"},
+			want: []findings.Finding{{
+				RuleID:   "NO_REMAINING_NODES",
+				Severity: findings.Risk,
+				Resource: findings.ResourceRef{Kind: "Node", Name: "soft,worker"},
+				Evidence: findings.NoRemainingNodesEvidence{
+					PodsToMove: 1, TargetNodes: 2, TotalNodes: 4, RemainingSchedulable: 0,
+					TaintedNodes: []findings.TaintedNode{
+						{Name: "control-plane", Taints: []findings.NodeTaint{cpTaint}},
+						{Name: "gpu", Taints: []findings.NodeTaint{gpuTaint}},
+					},
+				},
+			}},
+		},
+		{
+			name:    "a pod that tolerates the control-plane taint can land there",
+			pods:    []string{"web-0", "web-1"},
+			targets: []string{"worker", "soft"},
+		},
+		{
+			name:    "a NoExecute taint is tolerated by Equal with the same value",
+			pods:    []string{"gpu-0"},
+			targets: []string{"worker", "soft"},
+		},
+		{
+			// Room for some pods and none for others is a per-workload finding
+			// that this rule does not make; it stays silent.
+			name:    "room for some of the moving pods is not reported",
+			pods:    []string{"web-0", "gpu-0"},
+			targets: []string{"worker", "soft"},
+		},
+		{
+			name:    "PreferNoSchedule never removes room",
+			pods:    []string{"web-0"},
+			targets: []string{"worker"},
+		},
+		{
+			name:    "a taint changes nothing when no pod moves",
+			pods:    nil,
+			targets: []string{"worker", "soft"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := NoRemainingNodes{}.Evaluate(Input{Snapshot: podsNamed(t, tt.pods...), Targets: tt.targets})
+			if !reflect.DeepEqual(got, withText(tt.want, got)) {
+				t.Fatalf("findings mismatch\n got: %+v\nwant: %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+// A node that is cordoned is named by NODE_NOT_SCHEDULABLE; this rule lists
+// only the nodes a taint alone rules out.
+func TestNoRemainingNodesTaintsSkipCordonedNodes(t *testing.T) {
+	cp := nodeWith("control-plane", false, corev1.ConditionTrue)
+	cp.Spec.Taints = []corev1.Taint{{Key: "node-role.kubernetes.io/control-plane", Effect: corev1.TaintEffectNoSchedule}}
+	cordoned := nodeWith("old", true, corev1.ConditionTrue)
+	cordoned.Spec.Taints = cp.Spec.Taints
+	pod := corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "web-0", Namespace: "shop", OwnerReferences: []metav1.OwnerReference{
+		{APIVersion: "apps/v1", Kind: "StatefulSet", Name: "web", Controller: ptr.To(true)}}},
+		Spec:   corev1.PodSpec{NodeName: "worker"},
+		Status: corev1.PodStatus{Phase: corev1.PodRunning}}
+	s := inventory.NewSnapshot([]corev1.Node{nodeWith("worker", false, corev1.ConditionTrue), cp, cordoned}, []corev1.Pod{pod}, nil, nil, time.Time{})
+
+	got := NoRemainingNodes{}.Evaluate(Input{Snapshot: s, Targets: []string{"worker"}})
+	if len(got) != 1 {
+		t.Fatalf("want 1 finding, got %+v", got)
+	}
+	ev, ok := got[0].Evidence.(findings.NoRemainingNodesEvidence)
+	if !ok || len(ev.TaintedNodes) != 1 || ev.TaintedNodes[0].Name != "control-plane" {
+		t.Errorf("want only control-plane listed as tainted, got %+v", got[0].Evidence)
+	}
+}
+
+func TestNoRemainingNodesTaintsText(t *testing.T) {
+	got := NoRemainingNodes{}.Evaluate(Input{Snapshot: podsNamed(t, "web-0"), Targets: []string{"worker", "soft"}})
+	if len(got) != 1 {
+		t.Fatalf("want 1 finding, got %d", len(got))
+	}
+	for _, want := range []string{"taints that none of the moving pods tolerates", "control-plane", "gpu"} {
+		if !strings.Contains(got[0].Description, want) {
+			t.Errorf("description %q lacks %q", got[0].Description, want)
+		}
+	}
+	if !strings.Contains(got[0].Remediation, "kubectl describe node") {
+		t.Errorf("remediation %q lacks the taint check", got[0].Remediation)
+	}
+}
+
+// A pressure taint is a taint like any other: the node is Ready and not
+// cordoned, yet a pod that tolerates nothing cannot land on it.
+func TestNoRemainingNodesPressureTaint(t *testing.T) {
+	pressure := taintedNode("left", corev1.Taint{Key: "node.kubernetes.io/memory-pressure", Effect: corev1.TaintEffectNoSchedule})
+	pod := ownedPod("web-0", "shop", "StatefulSet", "web", "worker", defaultTolerations...)
+	s := inventory.NewSnapshot([]corev1.Node{nodeWith("worker", false, corev1.ConditionTrue), pressure}, []corev1.Pod{pod}, nil, nil, time.Time{})
+
+	got := NoRemainingNodes{}.Evaluate(Input{Snapshot: s, Targets: []string{"worker"}})
+	if len(got) != 1 {
+		t.Fatalf("want 1 finding, got %+v", got)
+	}
+	ev := got[0].Evidence.(findings.NoRemainingNodesEvidence)
+	want := []findings.TaintedNode{{Name: "left", Taints: []findings.NodeTaint{{Key: "node.kubernetes.io/memory-pressure", Effect: "NoSchedule"}}}}
+	if !reflect.DeepEqual(ev.TaintedNodes, want) {
+		t.Errorf("tainted nodes = %+v, want %+v", ev.TaintedNodes, want)
+	}
+}
+
+// The tolerations the API server adds to every pod must not count as room on a
+// tainted control plane.
+func TestNoRemainingNodesDefaultTolerationsAreNotRoom(t *testing.T) {
+	cp := taintedNode("cp", corev1.Taint{Key: "node-role.kubernetes.io/control-plane", Effect: corev1.TaintEffectNoSchedule})
+	pod := ownedPod("web-0", "shop", "StatefulSet", "web", "worker", defaultTolerations...)
+	s := inventory.NewSnapshot([]corev1.Node{nodeWith("worker", false, corev1.ConditionTrue), cp}, []corev1.Pod{pod}, nil, nil, time.Time{})
+	if got := (NoRemainingNodes{}).Evaluate(Input{Snapshot: s, Targets: []string{"worker"}}); len(got) != 1 {
+		t.Errorf("want 1 finding, got %+v", got)
+	}
+}
+
+// A pod that is already terminating has its replacement already, so it is not
+// a pod that needs room, even when no node would take it.
+func TestNoRemainingNodesTerminatingPodNeedsNoRoom(t *testing.T) {
+	cp := taintedNode("cp", corev1.Taint{Key: "node-role.kubernetes.io/control-plane", Effect: corev1.TaintEffectNoSchedule})
+	pod := ownedPod("web-0", "shop", "StatefulSet", "web", "worker")
+	pod.DeletionTimestamp = &metav1.Time{Time: time.Unix(1, 0)}
+	s := inventory.NewSnapshot([]corev1.Node{nodeWith("worker", false, corev1.ConditionTrue), cp}, []corev1.Pod{pod}, nil, nil, time.Time{})
+	if got := (NoRemainingNodes{}).Evaluate(Input{Snapshot: s, Targets: []string{"worker"}}); got != nil {
+		t.Errorf("want nil, got %+v", got)
+	}
+}
+
+// Targets and nodes in any order give the same tainted nodes, sorted by name,
+// and the taints of a node stay in the order the node lists them.
+func TestNoRemainingNodesTaintsIgnoreOrder(t *testing.T) {
+	s := podsNamed(t, "web-0")
+	targets := []string{"worker", "soft"}
+	want := NoRemainingNodes{}.Evaluate(Input{Snapshot: s, Targets: targets})
+
+	nodes, pods := s.Nodes(), s.Pods()
+	slices.Reverse(nodes)
+	slices.Reverse(pods)
+	reversed := inventory.NewSnapshot(nodes, pods, s.ReplicaSets(), s.PodDisruptionBudgets(), s.Timestamp())
+	got := NoRemainingNodes{}.Evaluate(Input{Snapshot: reversed, Targets: []string{"soft", "worker"}})
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("order changed the result\n got: %+v\nwant: %+v", got, want)
+	}
+	ev := got[0].Evidence.(findings.NoRemainingNodesEvidence)
+	if len(ev.TaintedNodes) != 2 || ev.TaintedNodes[0].Name != "control-plane" || ev.TaintedNodes[1].Name != "gpu" {
+		t.Errorf("tainted nodes not sorted by name: %+v", ev.TaintedNodes)
+	}
+}
+
+// A list in the evidence is never null in the JSON.
+func TestNoRemainingNodesTaintsJSONHasNoNull(t *testing.T) {
+	got := NoRemainingNodes{}.Evaluate(Input{Snapshot: podsNamed(t, "web-0"), Targets: []string{"worker", "soft"}})
+	b, err := json.Marshal(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), "null") {
+		t.Errorf("the JSON has a null: %s", b)
 	}
 }
