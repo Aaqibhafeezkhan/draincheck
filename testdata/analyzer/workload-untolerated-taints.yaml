@@ -1,0 +1,153 @@
+# Cluster for WORKLOAD_UNTOLERATED_TAINTS.
+#
+# Nodes: "worker" holds the pods; "control-plane" is Ready and tainted
+# NoSchedule; "gpu" is Ready and tainted NoExecute; "soft" is Ready and carries
+# only a PreferNoSchedule taint, which never removes room. Draining "worker"
+# and "soft" leaves control-plane and gpu.
+#
+# db (StatefulSet, 2 pods) tolerates nothing: it cannot land on either node left.
+# proxy (StatefulSet, 1 pod) tolerates the control-plane taint: it can.
+# trainer (StatefulSet, 1 pod) tolerates neither taint by key but tolerates gpu
+# with Equal: it can land on gpu.
+# agent (DaemonSet) is not moved, whatever it tolerates.
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: control-plane
+spec:
+  taints:
+    - key: node-role.kubernetes.io/control-plane
+      effect: NoSchedule
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: gpu
+spec:
+  taints:
+    - key: dedicated
+      value: gpu
+      effect: NoExecute
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: soft
+spec:
+  taints:
+    - key: prefer
+      effect: PreferNoSchedule
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: db-0
+  namespace: shop
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: StatefulSet
+      name: db
+      uid: db-uid
+      controller: true
+spec:
+  nodeName: worker
+  containers:
+    - name: db
+      image: example/db:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: db-1
+  namespace: shop
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: StatefulSet
+      name: db
+      uid: db-uid
+      controller: true
+spec:
+  nodeName: worker
+  containers:
+    - name: db
+      image: example/db:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: proxy-0
+  namespace: shop
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: StatefulSet
+      name: proxy
+      uid: proxy-uid
+      controller: true
+spec:
+  nodeName: worker
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+  containers:
+    - name: proxy
+      image: example/proxy:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: trainer-0
+  namespace: shop
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: StatefulSet
+      name: trainer
+      uid: trainer-uid
+      controller: true
+spec:
+  nodeName: worker
+  tolerations:
+    - key: dedicated
+      operator: Equal
+      value: gpu
+      effect: NoExecute
+  containers:
+    - name: trainer
+      image: example/trainer:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: agent-x1
+  namespace: monitoring
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: DaemonSet
+      name: agent
+      uid: agent-uid
+      controller: true
+spec:
+  nodeName: worker
+  containers:
+    - name: agent
+      image: example/agent:1

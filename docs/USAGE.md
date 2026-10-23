@@ -61,6 +61,7 @@ A finding covers one cause, not one pod. A cause that reaches many pods, such as
 | `PDB_OVERLAPPING_SELECTORS` | pod | the pod |
 | `NODE_NOT_SCHEDULABLE` | run (all affected nodes together) | the affected node names, joined by commas |
 | `NO_REMAINING_NODES` | run | the target node names, joined by commas |
+| `WORKLOAD_UNTOLERATED_TAINTS` | owning workload | the workload |
 | `SINGLE_REPLICA_WORKLOAD` | Deployment or StatefulSet | the workload |
 | `POD_OWNERSHIP` | DaemonSet, node (for its static pods) or pod without a controller | the DaemonSet, node or pod |
 | `MISSING_RESOURCE_REQUESTS` | owning workload | the workload; a pod without a controller is its own workload |
@@ -253,7 +254,19 @@ Raised when the drain moves pods and no node is left that takes them: every node
 - It fires only when at least one pod on a target node moves, counted as for `NODE_NOT_SCHEDULABLE`: DaemonSet pods, static pods, finished pods, pods that are already terminating and pods with no controller need no new home.
 - When the nodes left exist but are all cordoned or not `Ready`, `NODE_NOT_SCHEDULABLE` is reported too and names them.
 - A node that reports no `Ready` condition counts as room.
-- Taints are judged as the scheduler does (`Equal` and `Exists`, empty key or effect, `tolerationSeconds` ignored; `PreferNoSchedule` never removes room). The rule is silent as soon as one moving pod can land on one node left; room for some pods and none for others is not reported yet and is *planned* as a per-workload finding. Affinity, selectors and capacity are not looked at, so a finding-free run does not promise the pods fit.
+- Taints are judged as the scheduler does (`Equal` and `Exists`, empty key or effect, `tolerationSeconds` ignored; `PreferNoSchedule` never removes room). The rule is silent as soon as one moving pod can land on one node left; room for some pods and none for others is `WORKLOAD_UNTOLERATED_TAINTS`. Affinity, selectors and capacity are not looked at, so a finding-free run does not promise the pods fit.
+
+### `WORKLOAD_UNTOLERATED_TAINTS`
+
+Severity: `RISK`.
+
+Raised for a workload none of whose evicted pods can land on a node left, because of taints, while pods of other workloads can (a tainted control plane is the usual case). The drain itself completes, but the workload's controller recreates the pods and they stay `Pending`. It is `RISK`, so it makes the run exit `1` only with `--fail-on risk` or `any`.
+
+- **Resource:** the owning workload (`Deployment`, `StatefulSet`, ...). One finding per workload.
+- **Description:** the workload, how many of its pods move, and each node left with the taints that rule the workload out.
+- **Evidence:** `owner_kind`, `owner_name`, `pods` (`name`, `node`), `remaining_nodes` and `tainted_nodes` (`name`, `taints` with `key` and `effect`).
+- Silent when no moving pod can land anywhere (`NO_REMAINING_NODES` states that for the run) and when no node is left at all.
+- Pods are counted as for `NO_REMAINING_NODES`. Taints are judged as the scheduler does. Affinity, selectors and capacity are not looked at, so the room that is left may still not fit the pods.
 
 ### `SINGLE_REPLICA_WORKLOAD`
 

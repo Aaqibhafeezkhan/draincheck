@@ -39,6 +39,7 @@ var adviceCases = []adviceCase{
 	{"PDB_SYNC_FAILED", "pdb-sync-failed.yaml", []string{"worker-01", "worker-02"}},
 	{"NODE_NOT_SCHEDULABLE", "node-not-schedulable.yaml", []string{"worker-01"}},
 	{"NO_REMAINING_NODES", "node-not-schedulable.yaml", allNodes},
+	{"WORKLOAD_UNTOLERATED_TAINTS", "workload-untolerated-taints.yaml", []string{"worker", "soft"}},
 	{"SINGLE_REPLICA_WORKLOAD", "single-replica-workload.yaml", []string{"worker-01", "worker-02"}},
 	// DaemonSet, static and controller-less pods each have their own advice.
 	{"POD_OWNERSHIP", "pod-ownership.yaml", workers123},
@@ -142,6 +143,7 @@ var adviceVariants = []string{
 	"PDB_SYNC_FAILED/UNKNOWN/findings.PDBSyncFailedEvidence",
 	"NODE_NOT_SCHEDULABLE/RISK/findings.NodeNotSchedulableEvidence",
 	"NO_REMAINING_NODES/RISK/findings.NoRemainingNodesEvidence",
+	"WORKLOAD_UNTOLERATED_TAINTS/RISK/findings.WorkloadUntoleratedTaintsEvidence",
 	"SINGLE_REPLICA_WORKLOAD/RISK/findings.SingleReplicaEvidence",
 	"POD_OWNERSHIP/RISK/DaemonSet",
 	"POD_OWNERSHIP/RISK/StaticPod",

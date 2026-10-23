@@ -33,6 +33,14 @@ entries under `[Unreleased]` in the same pull request as the change (see
   `pods_to_move`, `target_nodes`, `total_nodes` and `remaining_schedulable`,
   and `tainted_nodes` (each node a taint rules out, with the taint `key` and
   `effect`) when a taint is involved (#43, #132).
+- `WORKLOAD_UNTOLERATED_TAINTS`: a workload whose evicted pods cannot land on any node
+  left because of `NoSchedule` or `NoExecute` taints that they do not
+  tolerate, while pods of other workloads can (for example a Deployment
+  without a toleration on a cluster whose only other node is a tainted control
+  plane, next to `coredns`, which tolerates it), is reported as `RISK`, one
+  finding per workload. The drain completes, but the pods stay `Pending`. The
+  JSON `evidence` has `owner_kind`, `owner_name`, `pods`, `remaining_nodes`
+  and `tainted_nodes` (#9).
 - `NODE_NOT_SCHEDULABLE`: when the drain moves pods, nodes outside the target
   set that are cordoned or not `Ready` are reported as `RISK`, one finding for
   all of them. The drain completes, but the evicted pods have fewer nodes to
