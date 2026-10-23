@@ -1,0 +1,66 @@
+# draincheck and `kubectl drain --dry-run`
+
+`kubectl drain` answers one question: *what stops this node from draining, right now?* draincheck answers a different one: *what happens to the cluster when I drain these nodes together?* This page compares them rule by rule. It lists the cases where draincheck adds nothing, too.
+
+Scope: only rules that are implemented (see [RULES.md](RULES.md)). Statements about kubectl are marked:
+
+- **✓ checked**: observed on a real cluster (kind, or the maintainer's own, as said in the text), or recorded in RULES.md or SPEC.md. Always written the same way, `(✓ checked)`, directly after the claim.
+- **(to verify)**: believed correct, not yet observed. Check before relying on it or publishing it.
+
+`--dry-run` below means `--dry-run=server`, the form that matters; `--dry-run=client` is covered where it differs. Checked with kubectl v1.36.1.
+
+## The difference in one table
+
+| | `kubectl drain --dry-run` | draincheck |
+| --- | --- | --- |
+| Question | What is refused on this node now? | What does draining this set of nodes do to the cluster? |
+| Unit of analysis | One node per invocation | The whole plan (`--nodes a,b,c`) as one batch |
+| Looks at | The pods on the node, and what the eviction API says | Pods, PDBs, nodes, taints and owners across the cluster |
+| Cluster writes | Dry-run changes nothing (✓ checked), but `=server` sends a dry-run cordon and dry-run evictions to the API server, so it probably needs write permissions (to verify) | None. List and get only; runs with a read-only role |
+| Verdicts | Prints what it would evict or refuse. `=server` replays the live eviction API; `=client` only lists the pods | `BLOCKED`, `RISK`, `UNKNOWN`. Never `SAFE` |
+| Finishes | `=server` against a PDB at 0 retries every 5 s and never returns, still running after 60 s (✓ checked) | Returns at once, with the answer |
+| Says *how to confirm* | No | A read-only `kubectl` command per finding |
+| Says *what to do next* | No | Actions, safest first |
+| Admits what it cannot know | No | `UNKNOWN` (stale status, operator-managed, unknown policy) |
+| Output | Text | Text and JSON with typed evidence, deterministic order |
+| Exit code for CI gates | Success or failure of the drain | `--fail-on blocked\|risk\|any` |
+
+## Rule by rule
+
+| Situation | `kubectl drain --dry-run` | draincheck rule | What draincheck adds |
+| --- | --- | --- | --- |
+| A PDB allows 0 disruptions | `=server` finds it, the hard way: it prints `Cannot evict pod as it would violate the pod's disruption budget` for each pod every 5 s and never ends, so you have to interrupt it (✓ checked). `=client` does not see it and reports `drained (dry run)` (✓ checked). A real drain waits the same way, until `--timeout`, infinite by default | `PDB_DISRUPTION_BLOCKED` (`BLOCKED`) | The same answer, no better. What differs is the form: one finding per PDB with counts, pods and nodes, a confirm command and actions, for all target nodes in one run, and it returns |
+| PDB controlled by an operator (Longhorn and similar) | `=server` loops on the budget like on any PDB at 0 (✓ checked, pods owned by a custom resource). It does not cordon, so it cannot know the operator removes its budget when the node is cordoned for real (✓ checked on a Longhorn cluster, 2026-10-20) | `PDB_DISRUPTION_BLOCKED` (`UNKNOWN`) | Does not cry wolf: grouped per operator, tells you to check the operator, not to relax `minAvailable` |
+| Pod selected by two PDBs | `=server` fails at once, no retry, exit 1: `This pod has more than one PodDisruptionBudget, which the eviction subresource does not support` (✓ checked) | `PDB_OVERLAPPING_SELECTORS` (`BLOCKED`) | Finds it before the drain, for all nodes at once, with the PDBs named |
+| Batch of nodes evicts more pods of one PDB than it allows at once | Cannot see it. Each node passes a server dry run alone, because a dry-run eviction does not consume the budget: 3 replicas, `minAvailable: 2`, two nodes with one pod each, both exit 0 (✓ checked). A real drain of both together hit `Cannot evict pod` once, retried after 5 s and completed (✓ checked) | `PDB_BATCH_EXCEEDS_BUDGET` (`RISK`) | **Sums the pods of several nodes against one budget.** Each node passes alone; together the drain is slow |
+| PDB status stale or the disruption controller failed | Not detected, it acts on the number in the status. With the controller stopped and the spec edited to allow a disruption, `=server` still loops (✓ checked). The same for a PDB the controller cannot compute, a custom-resource owner without a scale subresource (✓ checked) | `PDB_STALE_STATUS`, `PDB_SYNC_FAILED` (`UNKNOWN`) | Refuses to trust the numbers, and says what to check. In the failed-PDB check draincheck reported `PDB_STALE_STATUS`, not `PDB_SYNC_FAILED` (see the maintainer notes) |
+| Not-Ready pods and `unhealthyPodEvictionPolicy` | Only the eviction API's answer at run time: an unhealthy pod goes past a healthy budget (`IfHealthyBudget`) and past any budget with `AlwaysAllow`, and is refused when the budget itself is unhealthy (✓ checked) | `PDB_DISRUPTION_BLOCKED`, `PDB_BATCH_EXCEEDS_BUDGET` | Models the policy, so unhealthy pods that would be let through are not reported as blockers |
+| Remaining nodes are cordoned or not Ready | Does not look at other nodes; completes (✓ checked) | `NODE_NOT_SCHEDULABLE` (`RISK`) | Shows the real room left for moved pods |
+| No node left to take the pods | Completes; pods go `Pending` (✓ checked) | `NO_REMAINING_NODES` (`RISK`) | Counts cordons, readiness and taints for the whole batch |
+| A workload cannot land anywhere because of taints | Does not look at where pods can go: the drain completes, the stranded workload's pods go `Pending` and the one that tolerates the taint runs on the tainted node (✓ checked) | `WORKLOAD_UNTOLERATED_TAINTS` (`RISK`) | Per workload; separates "some pods stranded" from "everything stranded" |
+| Single-replica Deployment or StatefulSet | Evicts it without a warning about downtime (✓ checked) | `SINGLE_REPLICA_WORKLOAD` (`RISK`) | Names the workload and says there is no budget or second replica |
+| Pod with no controller | Refused without `--force` (✓ checked) | `POD_OWNERSHIP` (`RISK`) | Said up front for all nodes; tells you the pod is lost, not recreated |
+| DaemonSet pods | Refused without `--ignore-daemonsets` (✓ checked) | `POD_OWNERSHIP` (`RISK`) | One finding per DaemonSet, not per pod, with the flag named |
+| Static pods | Skipped, not evicted (✓ checked) | `POD_OWNERSHIP` (`RISK`) | Reminds you they go down with the node |
+| Containers with no CPU or memory request | Evicts regardless (✓ checked) | `MISSING_RESOURCE_REQUESTS` (`RISK`) | Per workload; flags that rescheduled pods may not fit where they land |
+
+## Where draincheck is not better
+
+Listed on purpose. A comparison that only lists wins is marketing.
+
+| Case | Position |
+| --- | --- |
+| Pods with local storage (`emptyDir`) | `kubectl drain` refuses them without `--delete-emptydir-data`, also in dry-run (✓ checked). draincheck has **no rule** for this and says nothing about it (✓ checked). A clean draincheck report does not cover it |
+| Exact answer from the live API | `--dry-run=server` asks the real eviction API, so for the node it is draining it is exact where draincheck models from a snapshot. Its weakness is the hang, the single node and the missing explanation, not accuracy |
+| Capacity, affinity, node selectors, topology spread | Not evaluated. `NODE_NOT_SCHEDULABLE`, `NO_REMAINING_NODES` and `WORKLOAD_UNTOLERATED_TAINTS` count cordons, readiness and taints only, and say they are estimates |
+| Orphaned DaemonSet pods (DaemonSet deleted) | Reported as ordinary DaemonSet pods; kubectl treats them differently (see `POD_OWNERSHIP`, planned fix) |
+| Exactness | kubectl's refusals come from the live eviction API. draincheck models them from a snapshot, which can drift (every report says so) |
+| Operator internals | Not evaluated. An operator-managed PDB is `UNKNOWN`, not a verdict |
+| Mutating | draincheck never cordons or evicts. It is a preflight, not a replacement for the drain |
+
+## Which one when
+
+- **One node:** both, they answer different questions. For "would the API server accept these evictions now", `--dry-run=server` is exact and draincheck cannot beat it. It shows a PDB at 0, but by retrying until you interrupt it. draincheck adds what happens after the evictions: room and taints, single replicas, stale or operator-managed budgets, static and DaemonSet pods, missing requests. Most of these do not depend on the node count.
+- **Several nodes in one window** (upgrade, node pool rotation): the batch rules (`PDB_BATCH_EXCEEDS_BUDGET`, and `NO_REMAINING_NODES` over the whole set) add what kubectl cannot see, because it runs one node at a time.
+- **CI or change gate:** draincheck with `--fail-on`, JSON output and a deterministic order.
+- **Alongside kubectl, not instead of it:** draincheck for the plan, `--dry-run=server` for the exact answer per node, including what draincheck does not model (local storage, the live eviction API). One caveat in the other direction: a server dry run does not cordon, so it can show a stall that a real drain would not hit when an operator removes its budget on cordon (seen with Longhorn; draincheck reports those budgets as `UNKNOWN`).
