@@ -108,6 +108,8 @@ What a server dry run cannot show, and draincheck reports:
 
 draincheck reads a snapshot, so it cannot be more exact than the API server on a single eviction, and it does not predict whether evicted pods will fit elsewhere yet (*planned*).
 
+The rule-by-rule comparison, including the cases where `kubectl drain` is ahead (for example pods with `emptyDir` volumes), is in [docs/COMPARISON.md](docs/COMPARISON.md).
+
 ## Build
 
 ```sh
@@ -119,7 +121,7 @@ Requires Go 1.26+.
 
 ## Docs
 
-[Specification](docs/SPEC.md) · [Rules and noise budget](docs/RULES.md) · [CI](docs/CI.md) · [Release and verification](docs/RELEASE.md)
+[Specification](docs/SPEC.md) · [Rules and noise budget](docs/RULES.md) · [Comparison with `kubectl drain --dry-run`](docs/COMPARISON.md) · [CI](docs/CI.md) · [Release and verification](docs/RELEASE.md)
 
 ## About this project
 
