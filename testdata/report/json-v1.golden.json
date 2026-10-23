@@ -70,6 +70,20 @@
         "pdbs": [
           "a-pdb",
           "b-pdb"
+        ],
+        "budgets": [
+          {
+            "name": "a-pdb",
+            "current_healthy": 2,
+            "desired_healthy": 1,
+            "disruptions_allowed": 1
+          },
+          {
+            "name": "b-pdb",
+            "current_healthy": 0,
+            "desired_healthy": 1,
+            "disruptions_allowed": 0
+          }
         ]
       },
       "description": "Pod is selected by 2 PodDisruptionBudgets.",
