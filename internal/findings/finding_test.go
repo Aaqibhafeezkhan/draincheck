@@ -241,6 +241,28 @@ func TestFindingJSONNoRemainingNodesTaintedEvidence(t *testing.T) {
 	}
 }
 
+func TestFindingJSONWorkloadUntoleratedTaintsEvidence(t *testing.T) {
+	f := Finding{
+		RuleID:   "WORKLOAD_UNTOLERATED_TAINTS",
+		Severity: Risk,
+		Resource: ResourceRef{Kind: "StatefulSet", Namespace: "shop", Name: "db"},
+		Evidence: WorkloadUntoleratedTaintsEvidence{
+			OwnerKind: "StatefulSet", OwnerName: "db",
+			Pods:           []StrandedPod{{Name: "db-0", Node: "worker"}},
+			RemainingNodes: 1,
+			TaintedNodes:   []TaintedNode{{Name: "cp", Taints: []NodeTaint{{Key: "node-role.kubernetes.io/control-plane", Effect: "NoSchedule"}}}},
+		},
+	}
+	b, err := json.Marshal(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"rule_id":"WORKLOAD_UNTOLERATED_TAINTS","severity":"RISK","resource":"StatefulSet/shop/db","evidence":{"owner_kind":"StatefulSet","owner_name":"db","pods":[{"name":"db-0","node":"worker"}],"remaining_nodes":1,"tainted_nodes":[{"name":"cp","taints":[{"key":"node-role.kubernetes.io/control-plane","effect":"NoSchedule"}]}]},"description":"","remediation":""}`
+	if string(b) != want {
+		t.Errorf("json mismatch\n got: %s\nwant: %s", b, want)
+	}
+}
+
 func TestFindingJSONNoRemainingNodesEvidence(t *testing.T) {
 	f := Finding{
 		RuleID:   "NO_REMAINING_NODES",
