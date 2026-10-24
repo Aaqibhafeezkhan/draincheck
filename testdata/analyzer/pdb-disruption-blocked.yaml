@@ -6,8 +6,9 @@
 # api-job-0 (already Succeeded), api-logger-x1 (DaemonSet pod) and
 # api-static-worker-01 (static pod); kubectl drain never evicts those.
 # shop/web-pdb allows 1 disruption. shop/cache-0 is selected by two budgets
-# that both allow 0 (cache-pdb-a, cache-pdb-b): one finding each, and the pod
-# is listed under both.
+# that both allow 0 (cache-pdb-a, cache-pdb-b): no finding for either, because
+# the numbers of overlapping budgets are not read (see overlappedPDBs);
+# PDB_OVERLAPPING_SELECTORS reports the pod.
 # shop/broken-pdb has an invalid selector and shop/no-selector-pdb has none:
 # neither selects anything.
 # staging/api-0 carries the same labels as billing/api-0 but PDBs are

@@ -110,10 +110,17 @@ func sampleFindings() []findings.Finding {
 			Remediation: "Set CPU and memory requests.",
 		},
 		{
-			RuleID:      "PDB_OVERLAPPING_SELECTORS",
-			Severity:    findings.Blocked,
-			Resource:    findings.ResourceRef{Kind: "Pod", Namespace: "billing", Name: "payments-api-1"},
-			Evidence:    findings.OverlappingPDBsEvidence{Namespace: "billing", PDBs: []string{"a-pdb", "b-pdb"}},
+			RuleID:   "PDB_OVERLAPPING_SELECTORS",
+			Severity: findings.Blocked,
+			Resource: findings.ResourceRef{Kind: "Pod", Namespace: "billing", Name: "payments-api-1"},
+			Evidence: findings.OverlappingPDBsEvidence{
+				Namespace: "billing",
+				PDBs:      []string{"a-pdb", "b-pdb"},
+				Budgets: []findings.OverlappingPDB{
+					{Name: "a-pdb", CurrentHealthy: 2, DesiredHealthy: 1, DisruptionsAllowed: 1},
+					{Name: "b-pdb", CurrentHealthy: 0, DesiredHealthy: 1, DisruptionsAllowed: 0},
+				},
+			},
 			Description: "Pod is selected by 2 PodDisruptionBudgets.",
 			Remediation: "Narrow the selectors.",
 		},

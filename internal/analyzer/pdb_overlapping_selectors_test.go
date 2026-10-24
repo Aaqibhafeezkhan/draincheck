@@ -10,9 +10,17 @@ import (
 
 func TestPDBOverlappingSelectors(t *testing.T) {
 	s := snapshotFromFixture(t, "pdb-overlapping-selectors.yaml")
-	web := findings.OverlappingPDBsEvidence{Namespace: "shop", PDBs: []string{"web-app", "web-tier"}}
-	db := findings.OverlappingPDBsEvidence{Namespace: "shop", PDBs: []string{"db-a", "db-b", "db-c"}}
-	etl := findings.OverlappingPDBsEvidence{Namespace: "batch", PDBs: []string{"etl", "everything"}}
+	// Every budget of the fixture allows 1 disruption and has no other number.
+	allowing := func(names ...string) []findings.OverlappingPDB {
+		var out []findings.OverlappingPDB
+		for _, n := range names {
+			out = append(out, findings.OverlappingPDB{Name: n, DisruptionsAllowed: 1})
+		}
+		return out
+	}
+	web := findings.OverlappingPDBsEvidence{Namespace: "shop", PDBs: []string{"web-app", "web-tier"}, Budgets: allowing("web-app", "web-tier")}
+	db := findings.OverlappingPDBsEvidence{Namespace: "shop", PDBs: []string{"db-a", "db-b", "db-c"}, Budgets: allowing("db-a", "db-b", "db-c")}
+	etl := findings.OverlappingPDBsEvidence{Namespace: "batch", PDBs: []string{"etl", "everything"}, Budgets: allowing("etl", "everything")}
 
 	tests := []struct {
 		name    string
@@ -87,5 +95,44 @@ func TestPDBOverlappingSelectorsNilSnapshot(t *testing.T) {
 func TestPDBOverlappingSelectorsID(t *testing.T) {
 	if got := (PDBOverlappingSelectors{}).ID(); got != "PDB_OVERLAPPING_SELECTORS" {
 		t.Errorf("ID() = %q", got)
+	}
+}
+
+// The numbers the overlapping budgets report are kept in the evidence, so the
+// operator sees them next to the statement that they cannot be trusted (#139).
+func TestPDBOverlappingSelectorsKeepsBudgetNumbers(t *testing.T) {
+	s := snapshotFromFixture(t, "pdb-overlapping-numbers.yaml")
+
+	got := PDBOverlappingSelectors{}.Evaluate(Input{Snapshot: s, Targets: []string{"worker-01"}})
+
+	var web *findings.Finding
+	for i := range got {
+		if got[i].Resource.Name == "web-0" {
+			web = &got[i]
+		}
+	}
+	if web == nil {
+		t.Fatalf("no finding for web-0 in %+v", got)
+	}
+	want := findings.OverlappingPDBsEvidence{
+		Namespace: "shop",
+		PDBs:      []string{"dup-a", "dup-b"},
+		Budgets: []findings.OverlappingPDB{
+			{Name: "dup-a", CurrentHealthy: 2, DesiredHealthy: 1, DisruptionsAllowed: 1},
+			{Name: "dup-b", CurrentHealthy: 0, DesiredHealthy: 1, DisruptionsAllowed: 0},
+		},
+	}
+	if !reflect.DeepEqual(web.Evidence, want) {
+		t.Errorf("evidence mismatch\n got: %+v\nwant: %+v", web.Evidence, want)
+	}
+	for _, phrase := range []string{
+		"The disruption controller chooses one of them arbitrarily when a pod changes",
+		"their numbers can be out of date",
+		"dup-a 2 healthy, 1 desired, 1 allowed",
+		"dup-b 0 healthy, 1 desired, 0 allowed",
+	} {
+		if !strings.Contains(web.Description, phrase) {
+			t.Errorf("description should contain %q: %s", phrase, web.Description)
+		}
 	}
 }

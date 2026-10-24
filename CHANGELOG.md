@@ -166,6 +166,16 @@ entries under `[Unreleased]` in the same pull request as the change (see
   PodDisruptionBudget can refuse their eviction; a budget that selects only
   such pods was a false `BLOCKED`. They are still reported by `POD_OWNERSHIP`
   (#71).
+- `PDB_DISRUPTION_BLOCKED` and `PDB_BATCH_EXCEEDS_BUDGET` no longer report a
+  budget that selects a pod on a target node together with another budget.
+  When several budgets select a pod, the disruption controller chooses one of
+  them arbitrarily each time the pod changes, and a budget it did not choose
+  was seen to keep an older number (`0` healthy pods while every pod was
+  Ready), so the false `BLOCKED` sat next to the overlap that stops the drain
+  anyway. `PDB_OVERLAPPING_SELECTORS` reports the pod, and its `evidence` now
+  has `budgets`: each budget's `name`, `current_healthy`, `desired_healthy`
+  and `disruptions_allowed` as reported, and the description says they can be
+  out of date. `pdbs` is unchanged (#139).
 - `NODE_NOT_SCHEDULABLE`, `NO_REMAINING_NODES` and `MISSING_RESOURCE_REQUESTS`
   no longer count pods that are already terminating. Their controller has
   already created the replacement, so the drain does not take them down; they

@@ -10,6 +10,7 @@ import (
 	policyv1 "k8s.io/api/policy/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 // pdbSelection is a PodDisruptionBudget with the pods on the target nodes that
@@ -40,6 +41,11 @@ type pdbSelection struct {
 	// pods are controlled by Deployments, StatefulSets, Jobs and the like, or by
 	// nothing.
 	operators []findings.ManagedBy
+	// overlapped is true when another budget selects one of the same evicted
+	// pods (see overlappedPDBs). The numbers of such a budget are not
+	// trustworthy, so the rules that judge a budget by its numbers skip it;
+	// PDBOverlappingSelectors reports it.
+	overlapped bool
 }
 
 // resource is the object a finding about the budget points at.
@@ -97,6 +103,7 @@ func selectedPDBs(in Input) []pdbSelection {
 		}
 	}
 
+	overlapped := overlappedPDBs(in)
 	var out []pdbSelection
 	for _, pdb := range in.Snapshot.PodDisruptionBudgets() {
 		sel, err := metav1.LabelSelectorAsSelector(pdb.Spec.Selector)
@@ -148,7 +155,13 @@ func selectedPDBs(in Input) []pdbSelection {
 		slices.Sort(nodes)
 		nodes = slices.Compact(nodes)
 
-		out = append(out, pdbSelection{pdb: pdb, pods: pods, evictable: evictable, unready: unready, policyKnown: known, nodes: nodes, operators: operators})
+		out = append(out, pdbSelection{pdb: pdb, pods: pods, evictable: evictable, unready: unready, policyKnown: known, nodes: nodes, operators: operators, overlapped: isOverlapped(overlapped, pdb)})
 	}
 	return out
+}
+
+// isOverlapped reports whether pdb is in the set returned by overlappedPDBs.
+func isOverlapped(set map[types.NamespacedName]struct{}, pdb policyv1.PodDisruptionBudget) bool {
+	_, ok := set[types.NamespacedName{Namespace: pdb.Namespace, Name: pdb.Name}]
+	return ok
 }

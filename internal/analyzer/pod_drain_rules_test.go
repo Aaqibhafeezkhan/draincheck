@@ -20,10 +20,11 @@ import (
 // table, not from what the rules print.
 //
 // Every state gets its own cluster so that a finding can only come from that
-// pod: one target node, two budgets that both allow 0 disruptions (so the pod
-// is blocked and overlapped when a budget is consulted for it), and a
-// Deployment with one replica when a ReplicaSet controls the pod. A pod
-// requests no resources.
+// pod: one target node, budgets that allow 0 disruptions, and a Deployment
+// with one replica when a ReplicaSet controls the pod. A pod requests no
+// resources. Each state runs twice: with one budget (the pod is blocked when a
+// budget is consulted for it) and with two (the pod is overlapped; the numbers
+// of the budgets are not read then, see overlappedPDBs).
 type podState struct {
 	name string
 	pod  drainPodSpec
@@ -83,8 +84,8 @@ func podStates() []podState {
 }
 
 // stateCluster builds the cluster for one pod state. spare adds a second node
-// that is cordoned.
-func stateCluster(spec drainPodSpec, spare bool) *inventory.Snapshot {
+// that is cordoned; budgets is the number of budgets that select the pod.
+func stateCluster(spec drainPodSpec, spare bool, budgets int) *inventory.Snapshot {
 	controller := true
 	pod := spec.pod()
 	pod.Namespace = "shop"
@@ -132,8 +133,9 @@ func stateCluster(spec drainPodSpec, spare bool) *inventory.Snapshot {
 			Status:     corev1.NodeStatus{Conditions: []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionTrue}}},
 		})
 	}
+	pdbs := []policyv1.PodDisruptionBudget{pdb("pdb-a"), pdb("pdb-b")}[:budgets]
 	return inventory.NewSnapshot(nodes, []corev1.Pod{pod}, replicaSets,
-		[]policyv1.PodDisruptionBudget{pdb("pdb-a"), pdb("pdb-b")}, time.Time{},
+		pdbs, time.Time{},
 		inventory.WithWorkloads(inventory.Workloads{Deployments: deployments}))
 }
 
@@ -149,27 +151,38 @@ func firedRules(s *inventory.Snapshot) []string {
 }
 
 func TestRulesTreatEachPodState(t *testing.T) {
+	variants := []struct {
+		name    string
+		budgets int
+		// silent is the PDB rule that does not apply to the variant.
+		silent string
+	}{
+		{"one budget", 1, PDBOverlappingSelectorsID},
+		{"two budgets", 2, PDBDisruptionBlockedID},
+	}
 	for _, st := range podStates() {
-		t.Run(st.name+" with a cordoned spare node", func(t *testing.T) {
-			want := slices.Clone(st.fires)
-			if st.moves {
-				want = append(want, NodeNotSchedulableID, NoRemainingNodesID)
-			}
-			slices.Sort(want)
-			if got := firedRules(stateCluster(st.pod, true)); !slices.Equal(got, want) {
-				t.Errorf("rules that fire = %v, want %v", got, want)
-			}
-		})
-		t.Run(st.name+" with no node left", func(t *testing.T) {
-			want := slices.Clone(st.fires)
-			if st.moves {
-				want = append(want, NoRemainingNodesID)
-			}
-			slices.Sort(want)
-			if got := firedRules(stateCluster(st.pod, false)); !slices.Equal(got, want) {
-				t.Errorf("rules that fire = %v, want %v", got, want)
-			}
-		})
+		for _, v := range variants {
+			t.Run(st.name+" with "+v.name+" and a cordoned spare node", func(t *testing.T) {
+				want := slices.DeleteFunc(slices.Clone(st.fires), func(id string) bool { return id == v.silent })
+				if st.moves {
+					want = append(want, NodeNotSchedulableID, NoRemainingNodesID)
+				}
+				slices.Sort(want)
+				if got := firedRules(stateCluster(st.pod, true, v.budgets)); !slices.Equal(got, want) {
+					t.Errorf("rules that fire = %v, want %v", got, want)
+				}
+			})
+			t.Run(st.name+" with "+v.name+" and no node left", func(t *testing.T) {
+				want := slices.DeleteFunc(slices.Clone(st.fires), func(id string) bool { return id == v.silent })
+				if st.moves {
+					want = append(want, NoRemainingNodesID)
+				}
+				slices.Sort(want)
+				if got := firedRules(stateCluster(st.pod, false, v.budgets)); !slices.Equal(got, want) {
+					t.Errorf("rules that fire = %v, want %v", got, want)
+				}
+			})
+		}
 	}
 }
 

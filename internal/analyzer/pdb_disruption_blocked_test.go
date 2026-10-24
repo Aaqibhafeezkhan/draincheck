@@ -46,13 +46,11 @@ func TestPDBDisruptionBlocked(t *testing.T) {
 		want    []findings.Finding
 	}{
 		{
-			name:    "one finding per budget; finished, DaemonSet and static pods, allowed budgets and unusable selectors are not reported",
+			name:    "one finding per budget; finished, DaemonSet and static pods, allowed budgets, overlapping budgets and unusable selectors are not reported",
 			targets: []string{"worker-01"},
 			want: []findings.Finding{
 				pdbFinding("batch", "all-pods", 1, 1, []string{"worker-01"}, pdbPod("batch", "job-0", "worker-01")),
 				pdbFinding("billing", "api-pdb", 3, 3, []string{"worker-01"}, pdbPod("billing", "api-0", "worker-01")),
-				pdbFinding("shop", "cache-pdb-a", 1, 1, []string{"worker-01"}, pdbPod("shop", "cache-0", "worker-01")),
-				pdbFinding("shop", "cache-pdb-b", 1, 1, []string{"worker-01"}, pdbPod("shop", "cache-0", "worker-01")),
 			},
 		},
 		{
@@ -71,8 +69,6 @@ func TestPDBDisruptionBlocked(t *testing.T) {
 					pdbPod("billing", "api-0", "worker-01"),
 					pdbPod("billing", "api-1", "worker-02"),
 					pdbPod("billing", "api-2", "worker-03")),
-				pdbFinding("shop", "cache-pdb-a", 1, 1, []string{"worker-01"}, pdbPod("shop", "cache-0", "worker-01")),
-				pdbFinding("shop", "cache-pdb-b", 1, 1, []string{"worker-01"}, pdbPod("shop", "cache-0", "worker-01")),
 			},
 		},
 		{
@@ -271,6 +267,49 @@ func TestPDBDisruptionBlockedDescribesUnhealthyPods(t *testing.T) {
 			}
 			if got.Description != tt.want {
 				t.Errorf("description\n got: %s\nwant: %s", got.Description, tt.want)
+			}
+		})
+	}
+}
+
+// Budgets that select the same evicted pod keep the numbers of whichever sync
+// last picked them (#139), so a 0 or a spare disruption on one of them says
+// nothing about the drain. PDB_OVERLAPPING_SELECTORS reports the pod; this rule
+// does not also report the budget. A budget that is not overlapped is
+// unaffected.
+func TestPDBDisruptionBlockedSkipsOverlappingPDBs(t *testing.T) {
+	s := snapshotFromFixture(t, "pdb-overlapping-numbers.yaml")
+
+	tests := []struct {
+		name    string
+		targets []string
+		want    []findings.Finding
+	}{
+		{
+			name:    "dup-b is at 0 but overlaps dup-a; cart-pdb is at 0 alone and is reported",
+			targets: []string{"worker-01", "worker-02"},
+			want: []findings.Finding{
+				pdbFinding("shop", "cart-pdb", 2, 2, []string{"worker-01", "worker-02"},
+					pdbPod("shop", "cart-0", "worker-01"), pdbPod("shop", "cart-1", "worker-02")),
+			},
+		},
+		{
+			name:    "side-a is at 0; it overlaps side-b only for a pod off the target, so it is reported",
+			targets: []string{"worker-02"},
+			want: []findings.Finding{
+				pdbFinding("shop", "cart-pdb", 2, 2, []string{"worker-02"}, pdbPod("shop", "cart-1", "worker-02")),
+				pdbFinding("shop", "side-a", 2, 1, []string{"worker-02"}, pdbPod("shop", "side-1", "worker-02")),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := Run(nil, Input{Snapshot: s, Targets: tt.targets}, PDBDisruptionBlocked{})
+			for i := range got {
+				got[i].Description, got[i].Remediation = "", ""
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("findings mismatch\n got: %+v\nwant: %+v", got, tt.want)
 			}
 		})
 	}

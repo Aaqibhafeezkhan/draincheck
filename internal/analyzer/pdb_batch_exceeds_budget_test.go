@@ -167,3 +167,24 @@ func TestPDBBatchExceedsBudgetIgnoresUnhealthyEvictions(t *testing.T) {
 		t.Errorf("findings mismatch\n got: %+v\nwant: %+v", got, []findings.Finding{want})
 	}
 }
+
+// dup-a allows 1 and two pods are evicted, which would be a finding, but dup-a
+// overlaps dup-b and its numbers are whichever sync last picked it (#139), so
+// PDB_OVERLAPPING_SELECTORS reports the pods and this rule does not report the
+// budget. api-pdb is not overlapped and is reported.
+func TestPDBBatchExceedsBudgetSkipsOverlappingPDBs(t *testing.T) {
+	s := snapshotFromFixture(t, "pdb-overlapping-numbers.yaml")
+
+	got := Run(nil, Input{Snapshot: s, Targets: []string{"worker-01", "worker-02"}}, PDBBatchExceedsBudget{})
+
+	for i := range got {
+		got[i].Description, got[i].Remediation = "", ""
+	}
+	want := []findings.Finding{
+		batchFinding("shop", "api-pdb", 2, 1, 1, []string{"worker-01", "worker-02"},
+			pdbPod("shop", "api-0", "worker-01"), pdbPod("shop", "api-1", "worker-02")),
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("findings mismatch\n got: %+v\nwant: %+v", got, want)
+	}
+}
