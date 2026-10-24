@@ -212,6 +212,7 @@ Raised for a PodDisruptionBudget whose `status.observedGeneration` differs from 
 - **Evidence:** the same fields as `PDB_DISRUPTION_BLOCKED` (the numbers as last reported, `nodes` and `pods`) plus `observed_generation` and `generation`.
 - A stale PDB is reported whatever its status allows, since an out-of-date number that allows a disruption cannot be trusted either.
 - The pods counted are the same as for `PDB_DISRUPTION_BLOCKED`: only pods on a target node, without finished, DaemonSet-managed and static pods. A stale PDB that selects only such pods gives no finding.
+- A PDB with the `SyncFailed` condition is not reported here; `PDB_SYNC_FAILED` reports it.
 - A PDB whose status is only briefly behind (right after its spec was edited) clears up once the disruption controller catches up; run draincheck again. One that stays stale points to an unhealthy kube-controller-manager.
 - Reporting a PDB whose selector matches no pod at all (probably a typo) is *planned*.
 
@@ -225,7 +226,7 @@ Raised for a PodDisruptionBudget whose `DisruptionAllowed` condition has the rea
 - **Description:** names the error the controller recorded, and how many pods on how many target nodes are affected.
 - **Evidence:** the same fields as `PDB_DISRUPTION_BLOCKED` (the numbers as last reported, `nodes` and `pods`) plus `reason` (`SyncFailed`) and `message` (the condition message, empty when the controller gave none).
 - A failed PDB is reported whatever its status allows, since the numbers cannot be trusted either way.
-- A PDB that is stale as well is reported only by `PDB_STALE_STATUS`, so one budget is one finding.
+- A PDB that is stale as well is reported here and not by `PDB_STALE_STATUS`, so one budget is one finding and it names the cause. The disruption controller does not set `status.observedGeneration` for a budget it fails on, so a failed budget looks stale; waiting would not help it.
 - A budget at 0 with the reason `InsufficientPods` is a plain budget at 0 (`PDB_DISRUPTION_BLOCKED`), not a failure.
 - The pods counted are the same as for `PDB_DISRUPTION_BLOCKED`: only pods on a target node, without finished, DaemonSet-managed and static pods.
 

@@ -17,6 +17,10 @@ const PDBStaleStatusID = "PDB_STALE_STATUS"
 // draincheck cannot say whether the drain will be refused. A false BLOCKED
 // costs more trust than a missed one, so the answer is UNKNOWN.
 //
+// A budget the disruption controller failed on is left to PDBSyncFailed: it
+// never gets an observedGeneration, so it always looks stale, and waiting
+// would not help it (#145).
+//
 // This finding replaces the one PDB_DISRUPTION_BLOCKED would have given for the
 // same budget. It is reported whatever the stale status allows: a stale number
 // that allows a disruption cannot be trusted either. One UNKNOWN finding is
@@ -33,7 +37,7 @@ func (PDBStaleStatus) Evaluate(in Input) []findings.Finding {
 	var out []findings.Finding
 	for _, sel := range selectedPDBs(in) {
 		pdb := sel.pdb
-		if !pdbStale(pdb) {
+		if _, failed := pdbSyncFailure(pdb); failed || !pdbStale(pdb) {
 			continue
 		}
 		out = append(out, findings.Finding{
