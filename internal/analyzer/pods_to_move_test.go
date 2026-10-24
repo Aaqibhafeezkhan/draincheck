@@ -31,7 +31,7 @@ func TestPodsToMove(t *testing.T) {
 func TestPodsToMoveByPodState(t *testing.T) {
 	for _, st := range podStates() {
 		t.Run(st.name, func(t *testing.T) {
-			s := stateCluster(st.pod, false)
+			s := stateCluster(st.pod, false, 2)
 			want := 0
 			if st.moves {
 				want = 1

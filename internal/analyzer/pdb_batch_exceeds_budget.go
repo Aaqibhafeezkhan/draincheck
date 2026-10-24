@@ -27,7 +27,9 @@ const PDBBatchExceedsBudgetID = "PDB_BATCH_EXCEEDS_BUDGET"
 // rules count (see selectedPDBs). A stale budget (see PDBStaleStatus), one the
 // controller failed to compute (see PDBSyncFailed) and one that selects a pod
 // controlled by an operator (see operatorOwned) are skipped: their numbers say
-// nothing reliable about the drain.
+// nothing reliable about the drain. So is a budget that selects a pod another
+// budget selects too (see overlappedPDBs): the controller chooses one of
+// them arbitrarily, and PDBOverlappingSelectors reports the pod.
 //
 // Only pods that use the budget up are counted: a pod that is not Ready and
 // that the eviction API lets past the budget (see evictedPastBudget) is not,
@@ -45,7 +47,7 @@ func (PDBBatchExceedsBudget) Evaluate(in Input) []findings.Finding {
 	for _, sel := range selectedPDBs(in) {
 		pdb := sel.pdb
 		allowed := pdb.Status.DisruptionsAllowed
-		if allowed <= 0 || len(sel.pods) <= int(allowed) || pdbStale(pdb) || !sel.policyKnown || len(sel.operators) > 0 {
+		if sel.overlapped || allowed <= 0 || len(sel.pods) <= int(allowed) || pdbStale(pdb) || !sel.policyKnown || len(sel.operators) > 0 {
 			continue
 		}
 		if _, failed := pdbSyncFailure(pdb); failed {

@@ -30,6 +30,11 @@ const PDBDisruptionBlockedID = "PDB_DISRUPTION_BLOCKED"
 // no refusable pod gives no finding. A budget whose unhealthyPodEvictionPolicy
 // is a value draincheck does not know is UNKNOWN, not guessed.
 //
+// A budget that selects a pod another budget selects too (see overlappedPDBs) is
+// skipped: the disruption controller chooses one of them arbitrarily, so its
+// numbers are not reliable, and PDBOverlappingSelectors reports the pod, which the
+// eviction API refuses whatever the budgets say.
+//
 // A budget whose status is stale (see PDBStaleStatus) is skipped too: its
 // numbers cannot be trusted, so PDBStaleStatus reports it as UNKNOWN instead.
 // So is a budget whose disruption controller failed to compute it (see
@@ -51,7 +56,7 @@ func (PDBDisruptionBlocked) Evaluate(in Input) []findings.Finding {
 	var operatorManaged []pdbSelection
 	for _, sel := range selectedPDBs(in) {
 		pdb := sel.pdb
-		if pdb.Status.DisruptionsAllowed != 0 || pdbStale(pdb) {
+		if sel.overlapped || pdb.Status.DisruptionsAllowed != 0 || pdbStale(pdb) {
 			continue
 		}
 		if _, failed := pdbSyncFailure(pdb); failed {
