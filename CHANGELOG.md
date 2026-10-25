@@ -161,6 +161,17 @@ entries under `[Unreleased]` in the same pull request as the change (see
   kubeconfig or context shows the cause before `finished`. Tokens, certificates
   and kubeconfig contents are never written (#105).
 
+- A run stopped with `SIGTERM` (a CI runner cancelling a job, a container
+  stop, `timeout(1)`) now ends like one stopped with `SIGINT`: exit `2` with an
+  error message, and the `finished` line with `--debug`. It used to end with
+  `143` and no message (#104).
+
+- A closed stdout or stderr pipe no longer ends the run with `SIGPIPE`, which
+  a shell reports as `141`, a code outside the exit-code contract. Debug lines
+  written to a closed stderr are dropped and the run keeps its exit code; a
+  report that cannot be written to a closed stdout ends with `2`. The
+  *Closed pipes* limit is gone from `docs/USAGE.md` and `docs/SPEC.md` (#106).
+
 #### Analyzer rules
 
 - `PDB_DISRUPTION_BLOCKED`, `PDB_BATCH_EXCEEDS_BUDGET` and

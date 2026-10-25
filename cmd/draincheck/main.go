@@ -7,13 +7,16 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"syscall"
 )
 
 // version is overridden at build time via -ldflags "-X main.version=...".
 var version = "dev"
 
 func main() {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	ignoreClosedPipes()
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	if err := newRootCmd(version, run).ExecuteContext(ctx); err != nil {
