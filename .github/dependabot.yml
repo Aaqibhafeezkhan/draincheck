@@ -21,3 +21,8 @@ updates:
     commit-message:
       prefix: "ci(deps)"
     labels: []
+    groups:
+      # init and analyze run in one job and must be the same version.
+      codeql-action:
+        patterns:
+          - "github/codeql-action/*"
