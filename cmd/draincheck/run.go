@@ -26,7 +26,7 @@ func runWith(ctx context.Context, opts options, stdout, stderr io.Writer) error 
 // analyze connects to the cluster and executes the analysis, logging to logger.
 func analyze(ctx context.Context, opts options, logger *slog.Logger, stdout io.Writer) error {
 	logSettings(logger, opts)
-	client, err := newClientset(opts.Kubeconfig, opts.Context)
+	client, err := newClientset(opts.Kubeconfig, opts.Context, logger)
 	if err != nil {
 		return err
 	}

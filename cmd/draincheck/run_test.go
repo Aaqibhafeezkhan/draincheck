@@ -102,6 +102,8 @@ func TestRunWithDebugWritesDiagnosticsToStderrOnly(t *testing.T) {
 	}
 	wantInOrder(t, stderr.String(),
 		`msg=settings kubeconfig=[`+path+`] context=dev nodes=[worker-1] all_nodes=false output=json verbose=false fail_on=risk`,
+		`msg="load kubeconfig" server=127.0.0.1:`,
+		`msg="build client"`,
 		`msg=list resource=nodes count=1`,
 		`msg=list resource=pods count=1`,
 		`msg="resolve target nodes"`,
@@ -172,7 +174,7 @@ func TestRunWithDebugLogsAMissingKubeconfig(t *testing.T) {
 	if exitCode(err) != exitFailure {
 		t.Fatalf("exit code = %d (err %v), want %d", exitCode(err), err, exitFailure)
 	}
-	wantInOrder(t, stderr.String(), `kubeconfig=[/nonexistent/kubeconfig]`, `msg=finished exit_code=2`)
+	wantInOrder(t, stderr.String(), `kubeconfig=[/nonexistent/kubeconfig]`, `msg="load kubeconfig failed"`, `msg=finished exit_code=2`)
 	if stdout.Len() != 0 {
 		t.Errorf("wrote output on error: %s", stdout.String())
 	}
