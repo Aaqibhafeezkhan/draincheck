@@ -155,6 +155,12 @@ entries under `[Unreleased]` in the same pull request as the change (see
 
 ### Fixed
 
+- `--debug` now writes a line when the kubeconfig is loaded (the server host
+  and port only) and when the client is built, and a `failed` line with the
+  error when either step fails, so the debug log of a run with a bad
+  kubeconfig or context shows the cause before `finished`. Tokens, certificates
+  and kubeconfig contents are never written (#105).
+
 #### Analyzer rules
 
 - `PDB_DISRUPTION_BLOCKED`, `PDB_BATCH_EXCEEDS_BUDGET` and

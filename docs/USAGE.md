@@ -344,6 +344,10 @@ stdout is not touched. The text or JSON report is byte-for-byte the same with an
 | Message | Written | Fields |
 | --- | --- | --- |
 | `settings` | when the run starts | `kubeconfig` (the files that are read), `context`, `nodes`, `all_nodes`, `output`, `verbose`, `fail_on` |
+| `load kubeconfig` | when the kubeconfig and context are loaded | `server` (host and port only) |
+| `load kubeconfig failed` | when the kubeconfig cannot be loaded or the context does not exist | `error` |
+| `build client` | when the API client is built | none |
+| `build client failed` | when the API client cannot be built | `error` |
 | `list` | after each list call to the API server | `resource`, `count`, `duration` |
 | `list failed` | when a list call fails | `resource`, `duration`, `error` |
 | `resolve target nodes` | when the target nodes are accepted | `requested`, `all`, `targets` |
@@ -358,6 +362,8 @@ Example, with the path anonymized and the rule lines shortened:
 ```text
 $ draincheck --nodes worker-1 --debug >report.txt
 time=2026-10-18T17:29:41.507Z level=DEBUG msg=settings kubeconfig=[/home/user/.kube/config] context=dev nodes=[worker-1] all_nodes=false output=text verbose=false fail_on=blocked
+time=2026-10-18T17:29:41.510Z level=DEBUG msg="load kubeconfig" server=10.0.0.1:6443
+time=2026-10-18T17:29:41.511Z level=DEBUG msg="build client"
 time=2026-10-18T17:29:41.514Z level=DEBUG msg=list resource=nodes count=1 duration=4.807574ms
 time=2026-10-18T17:29:41.515Z level=DEBUG msg=list resource=pods count=1 duration=1.629527ms
 time=2026-10-18T17:29:41.516Z level=DEBUG msg=list resource=replicasets count=0 duration=433.921µs
