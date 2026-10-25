@@ -149,7 +149,8 @@ func TestNewClientsetDebugNeverLogsKubeconfigContents(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			var logs bytes.Buffer
 
-			newClientset(writeKubeconfig(t, content), "", newLogger(true, &logs))
+			// Only the log matters here; each case may or may not fail to load.
+			_, _ = newClientset(writeKubeconfig(t, content), "", newLogger(true, &logs))
 
 			if strings.Contains(logs.String(), secret) {
 				t.Errorf("debug log contains kubeconfig contents:\n%s", logs.String())
