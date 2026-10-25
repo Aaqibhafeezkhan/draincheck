@@ -215,3 +215,17 @@ func TestPDBStaleStatusKeepsUnhealthyPods(t *testing.T) {
 		t.Errorf("evictable unhealthy pods = %v, want none", ev.EvictableUnhealthyPods)
 	}
 }
+
+// A budget the controller failed on is reported by PDB_SYNC_FAILED, which names
+// the cause. It always looks stale (the controller does not set
+// observedGeneration when it fails, #145), so PDB_STALE_STATUS leaves it alone;
+// advising to wait and run again would never help.
+func TestPDBStaleStatusLeavesFailedBudgetsToSyncFailed(t *testing.T) {
+	s := snapshotFromFixture(t, "pdb-sync-failed.yaml")
+
+	got := Run(nil, Input{Snapshot: s, Targets: []string{"worker-01", "worker-02", "worker-03"}}, PDBStaleStatus{})
+
+	if len(got) != 0 {
+		t.Errorf("got %d findings, want none: %+v", len(got), got)
+	}
+}

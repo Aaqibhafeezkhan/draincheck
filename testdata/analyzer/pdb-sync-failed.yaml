@@ -14,8 +14,12 @@
 # monitoring/agent-pdb is sync-failed but selects only a DaemonSet pod, which
 # kubectl never evicts, so there is no finding. edge/proxy-pdb is sync-failed
 # but its only pod runs on worker-03; it matters only when worker-03 is a
-# target. legacy/old-pdb is both stale and sync-failed: PDB_STALE_STATUS
-# reports it, PDB_SYNC_FAILED does not, so it is one finding.
+# target. legacy/old-pdb is both stale and sync-failed (generation 2, observed
+# 1): PDB_SYNC_FAILED reports it, PDB_STALE_STATUS does not, so it is one finding
+# and it names the cause. fresh/fresh-pdb is the case seen on a real cluster
+# (kind, Kubernetes v1.37.0, #145): a budget the controller failed on has no
+# observedGeneration at all, even when it was never edited (generation 1), so a
+# failed budget always looks stale. It is reported by PDB_SYNC_FAILED as well.
 apiVersion: v1
 kind: Node
 metadata:
@@ -127,6 +131,19 @@ spec:
   containers:
     - name: proxy
       image: example/proxy:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: fresh-0
+  namespace: fresh
+  labels:
+    app: fresh
+spec:
+  nodeName: worker-01
+  containers:
+    - name: fresh
+      image: example/fresh:1
 ---
 apiVersion: v1
 kind: Pod
@@ -276,3 +293,24 @@ status:
       status: "False"
       reason: SyncFailed
       message: "scale subresource not found"
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: fresh-pdb
+  namespace: fresh
+  generation: 1
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: fresh
+status:
+  currentHealthy: 0
+  desiredHealthy: 0
+  disruptionsAllowed: 0
+  conditions:
+    - type: DisruptionAllowed
+      status: "False"
+      reason: SyncFailed
+      message: "widgets.example.com does not implement the scale subresource"

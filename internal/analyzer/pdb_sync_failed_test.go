@@ -42,6 +42,10 @@ func TestPDBSyncFailed(t *testing.T) {
 		return syncFailedFinding("billing", "api-pdb", 2, 2, 0, "found no controllers for pod api-0", nodes, pods...)
 	}
 	webPDB := syncFailedFinding("shop", "web-pdb", 2, 1, 1, "scale subresource not found", []string{"worker-01"}, pdbPod("shop", "web-0", "worker-01"))
+	// Budgets that are stale as well (the controller does not set
+	// observedGeneration for a budget it fails on) are still failed budgets.
+	freshPDB := syncFailedFinding("fresh", "fresh-pdb", 0, 0, 0, "widgets.example.com does not implement the scale subresource", []string{"worker-01"}, pdbPod("fresh", "fresh-0", "worker-01"))
+	oldPDB := syncFailedFinding("legacy", "old-pdb", 1, 1, 0, "scale subresource not found", []string{"worker-01"}, pdbPod("legacy", "old-0", "worker-01"))
 
 	tests := []struct {
 		name    string
@@ -49,10 +53,12 @@ func TestPDBSyncFailed(t *testing.T) {
 		want    []findings.Finding
 	}{
 		{
-			name:    "failed budgets are reported whatever they allow; settled, stale, DaemonSet-only and off-target budgets are not",
+			name:    "failed budgets are reported whatever they allow and whether they are stale; settled, DaemonSet-only and off-target budgets are not",
 			targets: []string{"worker-01", "worker-02"},
 			want: []findings.Finding{
 				apiPDB([]string{"worker-01", "worker-02"}, pdbPod("billing", "api-0", "worker-01"), pdbPod("billing", "api-1", "worker-02")),
+				freshPDB,
+				oldPDB,
 				webPDB,
 			},
 		},
@@ -91,9 +97,10 @@ func TestPDBSyncFailed(t *testing.T) {
 	}
 }
 
-// A budget the controller failed on must show up once, as UNKNOWN:
-// PDB_DISRUPTION_BLOCKED steps aside for it, a budget that is stale as well is
-// left to PDB_STALE_STATUS, and a settled budget that allows nothing stays
+// A budget the controller failed on must show up once, as UNKNOWN, and name the
+// cause: PDB_DISRUPTION_BLOCKED steps aside for it, a budget that is stale as
+// well stays with PDB_SYNC_FAILED (the controller never sets observedGeneration
+// for a budget it fails on, #145), and a settled budget that allows nothing stays
 // BLOCKED. The rules share the pod selection, so no budget falls between them.
 func TestPDBSyncFailedReplacesBlocked(t *testing.T) {
 	s := snapshotFromFixture(t, "pdb-sync-failed.yaml")
@@ -107,7 +114,8 @@ func TestPDBSyncFailedReplacesBlocked(t *testing.T) {
 	want := []string{
 		"BLOCKED PDB_DISRUPTION_BLOCKED PodDisruptionBudget/batch/job-pdb",
 		"UNKNOWN PDB_SYNC_FAILED PodDisruptionBudget/billing/api-pdb",
-		"UNKNOWN PDB_STALE_STATUS PodDisruptionBudget/legacy/old-pdb",
+		"UNKNOWN PDB_SYNC_FAILED PodDisruptionBudget/fresh/fresh-pdb",
+		"UNKNOWN PDB_SYNC_FAILED PodDisruptionBudget/legacy/old-pdb",
 		"UNKNOWN PDB_SYNC_FAILED PodDisruptionBudget/shop/web-pdb",
 	}
 	if !slices.Equal(summary, want) {

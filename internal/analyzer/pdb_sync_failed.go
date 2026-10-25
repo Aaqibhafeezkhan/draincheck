@@ -20,9 +20,11 @@ const PDBSyncFailedID = "PDB_SYNC_FAILED"
 // costs more trust than a missed one, so the answer is UNKNOWN.
 //
 // This finding replaces the one PDB_DISRUPTION_BLOCKED would have given for the
-// same budget. It is reported whatever number the failed status holds. A budget
-// that is stale as well (see PDBStaleStatus) is left to that rule, so one
-// budget is one finding. One UNKNOWN finding is emitted per budget, pointing at
+// same budget. It is reported whatever number the failed status holds, and
+// whether the budget is stale as well: the controller does not set
+// status.observedGeneration for a budget it fails on (seen on kind, Kubernetes
+// v1.37.0, #145), so a failed budget always looks stale, and PDBStaleStatus
+// leaves it to this rule, which names the cause. One budget is one finding. One UNKNOWN finding is emitted per budget, pointing at
 // the budget, with the pods and nodes it selects, the numbers as last reported
 // and the condition in typed evidence. The pods counted are the same ones
 // PDB_DISRUPTION_BLOCKED counts (see selectedPDBs).
@@ -37,7 +39,7 @@ func (PDBSyncFailed) Evaluate(in Input) []findings.Finding {
 	for _, sel := range selectedPDBs(in) {
 		pdb := sel.pdb
 		cond, failed := pdbSyncFailure(pdb)
-		if !failed || pdbStale(pdb) {
+		if !failed {
 			continue
 		}
 		cause := ""

@@ -176,6 +176,13 @@ entries under `[Unreleased]` in the same pull request as the change (see
   has `budgets`: each budget's `name`, `current_healthy`, `desired_healthy`
   and `disruptions_allowed` as reported, and the description says they can be
   out of date. `pdbs` is unchanged (#139).
+- `PDB_SYNC_FAILED` now reports a budget the disruption controller failed on
+  even when it looks stale. The controller never sets `status.observedGeneration`
+  for such a budget, so it was always reported as `PDB_STALE_STATUS` ("wait and
+  run again"), which never helps, and the cause was lost. It is now one
+  `PDB_SYNC_FAILED` finding with the controller's error, for example a pod
+  owner without a scale subresource, and `PDB_STALE_STATUS` leaves it alone.
+  Severity (`UNKNOWN`) and evidence are unchanged (#145).
 - `NODE_NOT_SCHEDULABLE`, `NO_REMAINING_NODES` and `MISSING_RESOURCE_REQUESTS`
   no longer count pods that are already terminating. Their controller has
   already created the replacement, so the drain does not take them down; they
