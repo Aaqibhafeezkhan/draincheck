@@ -312,8 +312,7 @@ func TestPodOwnershipHonoursPodSelector(t *testing.T) {
 
 // ownershipCase is one pod of the flag matrix. Every pod runs on worker-01.
 type ownershipCase struct {
-	name string
-	pod  drainPodSpec
+	pod drainPodSpec
 	// label is set on the pod, to try --pod-selector.
 	label string
 }
