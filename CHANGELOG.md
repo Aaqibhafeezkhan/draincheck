@@ -13,6 +13,14 @@ entries under `[Unreleased]` in the same pull request as the change (see
 
 ### Added
 
+- The `kubectl drain` flags `--ignore-daemonsets`, `--delete-emptydir-data`,
+  `--force`, `--pod-selector` and `--disable-eviction`, with kubectl's names,
+  defaults and meaning. `--pod-selector` is in effect: a pod the selector does
+  not match is not touched by the drain, so no rule reports it, and a selector
+  that does not parse ends the run with exit `2`. The other four are accepted
+  and shown in the `--debug` settings line, but change no finding yet; the rules
+  that use them are planned (#108, #29, #109). The pod filters of kubectl 1.36.0
+  and 1.37.1 are modelled in the analyzer for those rules (#107).
 - `--debug` flag. It writes one line to stderr for each action draincheck
   takes: the settings, every list call to the API server with its object count
   and duration, how the target nodes were resolved, each rule with its number

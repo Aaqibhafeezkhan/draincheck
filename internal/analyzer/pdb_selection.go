@@ -98,7 +98,7 @@ func selectedPDBs(in Input) []pdbSelection {
 	owners := inventory.NewOwnerResolver(in.Snapshot)
 	var evicted []corev1.Pod // pods on the target nodes that kubectl drain would evict
 	for _, pod := range in.Snapshot.Pods() {
-		if slices.Contains(in.Targets, pod.Spec.NodeName) && classifyPod(pod, owners).consultsBudget() {
+		if slices.Contains(in.Targets, pod.Spec.NodeName) && classifyPod(pod, owners, in.Drain).consultsBudget() {
 			evicted = append(evicted, pod)
 		}
 	}

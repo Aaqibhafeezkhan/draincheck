@@ -33,7 +33,18 @@ func execute(ctx context.Context, opts options, logger *slog.Logger, c inventory
 	}
 	logger.Debug("resolve target nodes", "requested", opts.Nodes, "all", opts.AllNodes, "targets", targets)
 
-	fs := analyzer.Run(logger, analyzer.Input{Snapshot: snap, Targets: targets}, analyzer.DefaultRules()...)
+	drain, err := opts.drainOptions()
+	if err != nil {
+		logger.Debug("drain options failed", "error", err)
+		return err
+	}
+	in := analyzer.Input{Snapshot: snap, Targets: targets, Drain: drain}
+	if opts.PodSelector != "" {
+		selected, leftOut := analyzer.CountSelectedPods(in)
+		logger.Debug("pod selector", "selector", opts.PodSelector, "selected", selected, "left_out", leftOut)
+	}
+
+	fs := analyzer.Run(logger, in, analyzer.DefaultRules()...)
 	logSummary(logger, fs, opts.FailOn)
 
 	logger.Debug("write report", "format", opts.Output, "verbose", opts.Verbose, "findings", len(fs))

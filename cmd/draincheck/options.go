@@ -31,6 +31,14 @@ type options struct {
 	FailOn string
 	// Debug writes diagnostic lines to stderr.
 	Debug bool
+	// The kubectl drain flags the operator will pass; the analysis judges the
+	// pods as kubectl drain with the same flags would.
+	IgnoreDaemonSets   bool
+	DeleteEmptyDirData bool
+	Force              bool
+	DisableEviction    bool
+	// PodSelector is a label selector; "" selects every pod.
+	PodSelector string
 }
 
 // validate checks the options and normalizes the "*" wildcard into AllNodes.
@@ -54,6 +62,9 @@ func (o *options) validate() error {
 	}
 	if !slices.Contains([]string{outputText, outputJSON}, o.Output) {
 		return fmt.Errorf("invalid --output %q: must be %q or %q", o.Output, outputText, outputJSON)
+	}
+	if _, err := o.drainOptions(); err != nil {
+		return err
 	}
 	return validFailOn(o.FailOn)
 }

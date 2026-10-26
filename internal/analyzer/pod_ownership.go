@@ -61,7 +61,11 @@ func (PodOwnership) Evaluate(in Input) []findings.Finding {
 		var ref findings.ResourceRef
 		var category findings.OwnershipCategory
 		owner := owners.Resolve(pod)
-		switch classifyPod(pod, owners).class {
+		drain := classifyPod(pod, owners, in.Drain)
+		if !drain.selected {
+			continue
+		}
+		switch drain.class {
 		case classStatic:
 			category = findings.OwnershipStaticPod
 			ref = findings.ResourceRef{Kind: "Node", Name: pod.Spec.NodeName}

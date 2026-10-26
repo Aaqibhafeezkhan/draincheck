@@ -76,6 +76,92 @@ func TestRootFlags(t *testing.T) {
 			wantErr: "--fail-on",
 		},
 		{
+			name: "drain flags",
+			args: []string{"--nodes", "a", "--ignore-daemonsets", "--delete-emptydir-data", "--force", "--disable-eviction", "--pod-selector", "app=web"},
+			want: options{Nodes: []string{"a"}, Output: "text", FailOn: "blocked",
+				IgnoreDaemonSets: true, DeleteEmptyDirData: true, Force: true, DisableEviction: true, PodSelector: "app=web"},
+		},
+		{
+			name: "set-based pod selector",
+			args: []string{"--nodes", "a", "--pod-selector", "tier in (front,back),app!=db"},
+			want: options{Nodes: []string{"a"}, Output: "text", FailOn: "blocked", PodSelector: "tier in (front,back),app!=db"},
+		},
+		{
+			name: "explicit false and an empty selector are the defaults",
+			args: []string{"--nodes", "a", "--force=false", "--ignore-daemonsets=false", "--pod-selector", ""},
+			want: options{Nodes: []string{"a"}, Output: "text", FailOn: "blocked"},
+		},
+		{
+			name: "the last --pod-selector wins",
+			args: []string{"--nodes", "a", "--pod-selector", "app=web", "--pod-selector", "app=db"},
+			want: options{Nodes: []string{"a"}, Output: "text", FailOn: "blocked", PodSelector: "app=db"},
+		},
+		{
+			name: "a blank selector is accepted and selects every pod, as in kubectl",
+			args: []string{"--nodes", "a", "--pod-selector", "   "},
+			want: options{Nodes: []string{"a"}, Output: "text", FailOn: "blocked", PodSelector: "   "},
+		},
+		{
+			name: "a selector with a prefixed key and a contradiction is valid",
+			args: []string{"--nodes", "a", "--pod-selector", "example.com/team=x,app=web,app=db"},
+			want: options{Nodes: []string{"a"}, Output: "text", FailOn: "blocked", PodSelector: "example.com/team=x,app=web,app=db"},
+		},
+		{
+			name: "drain flags work with the wildcard",
+			args: []string{"--nodes", "*", "--ignore-daemonsets", "--pod-selector", "app=web"},
+			want: options{AllNodes: true, Output: "text", FailOn: "blocked", IgnoreDaemonSets: true, PodSelector: "app=web"},
+		},
+		{
+			name:    "a trailing comma is not a selector",
+			args:    []string{"--nodes", "a", "--pod-selector", "app=web,"},
+			wantErr: "--pod-selector",
+		},
+		{
+			name:    "an empty requirement between commas",
+			args:    []string{"--nodes", "a", "--pod-selector", "app=web,,tier=db"},
+			wantErr: "--pod-selector",
+		},
+		{
+			name:    "a lone operator",
+			args:    []string{"--nodes", "a", "--pod-selector", "="},
+			wantErr: "--pod-selector",
+		},
+		{
+			name:    "a value with a space",
+			args:    []string{"--nodes", "a", "--pod-selector", "app=a b"},
+			wantErr: "--pod-selector",
+		},
+		{
+			name:    "a value that is not a valid label",
+			args:    []string{"--nodes", "a", "--pod-selector", "app=web;tier=db"},
+			wantErr: "--pod-selector",
+		},
+		{
+			name:    "an unfinished notin",
+			args:    []string{"--nodes", "a", "--pod-selector", "app notin"},
+			wantErr: "--pod-selector",
+		},
+		{
+			name:    "the error names the selector that was given",
+			args:    []string{"--nodes", "a", "--pod-selector", "app in (web"},
+			wantErr: `"app in (web"`,
+		},
+		{
+			name:    "a missing --nodes is reported before the selector",
+			args:    []string{"--pod-selector", "app in (web"},
+			wantErr: "--nodes",
+		},
+		{
+			name:    "invalid pod selector",
+			args:    []string{"--nodes", "a", "--pod-selector", "app in (web"},
+			wantErr: "--pod-selector",
+		},
+		{
+			name:    "pod selector with a bad operator",
+			args:    []string{"--nodes", "a", "--pod-selector", "app==="},
+			wantErr: "--pod-selector",
+		},
+		{
 			name:    "invalid output",
 			args:    []string{"--nodes", "a", "--output", "yaml"},
 			wantErr: "--output",

@@ -55,7 +55,7 @@ func (MissingResourceRequests) Evaluate(in Input) []findings.Finding {
 		if !slices.Contains(in.Targets, pod.Spec.NodeName) {
 			continue
 		}
-		if fate := classifyPod(pod, owners).fate(); fate != fateEvictedRescheduled && fate != fateEvictedUnmanaged {
+		if fate := classifyPod(pod, owners, in.Drain).fate(); fate != fateEvictedRescheduled && fate != fateEvictedUnmanaged {
 			continue
 		}
 		owner := owners.Resolve(pod)

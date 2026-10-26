@@ -36,7 +36,7 @@ func overlaps(in Input) []podOverlap {
 	pdbs := in.Snapshot.PodDisruptionBudgets()
 	var out []podOverlap
 	for _, pod := range in.Snapshot.Pods() {
-		if !slices.Contains(in.Targets, pod.Spec.NodeName) || !classifyPod(pod, owners).consultsBudget() {
+		if !slices.Contains(in.Targets, pod.Spec.NodeName) || !classifyPod(pod, owners, in.Drain).consultsBudget() {
 			continue
 		}
 		var matched []policyv1.PodDisruptionBudget

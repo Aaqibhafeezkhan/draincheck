@@ -380,6 +380,59 @@ func TestExecuteLogsPipelineSteps(t *testing.T) {
 	)
 }
 
+func TestExecutePodSelectorLeavesUnselectedPodsOut(t *testing.T) {
+	tests := []struct {
+		name         string
+		selector     string
+		wantFindings bool
+	}{
+		{"no selector reports the bare pod", "", true},
+		{"selector that matches nothing reports nothing", "app=web", false},
+		{"negation selector matches the unlabeled pod", "app!=web", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			opts := options{Nodes: []string{"worker-1"}, Output: outputJSON, FailOn: failOnRisk, PodSelector: tt.selector}
+			var out bytes.Buffer
+			err := execute(context.Background(), opts, nil, inventory.NewClientsetCollector(unmanagedCluster(), nil), &out)
+			if got := exitCodeOf(err) == exitFindings; got != tt.wantFindings {
+				t.Errorf("exit code = %d (err %v), want findings = %v", exitCodeOf(err), err, tt.wantFindings)
+			}
+		})
+	}
+}
+
+func TestExecuteRejectsAnInvalidPodSelector(t *testing.T) {
+	opts := options{Nodes: []string{"worker-1"}, Output: outputJSON, FailOn: failOnRisk, PodSelector: "app in (web"}
+	var out bytes.Buffer
+	err := execute(context.Background(), opts, nil, inventory.NewClientsetCollector(unmanagedCluster(), nil), &out)
+	if err == nil || !strings.Contains(err.Error(), "--pod-selector") || exitCodeOf(err) != exitFailure {
+		t.Fatalf("error = %v (exit %d), want a --pod-selector error with exit %d", err, exitCodeOf(err), exitFailure)
+	}
+	if out.Len() != 0 {
+		t.Errorf("stdout = %q, want nothing", out.String())
+	}
+}
+
+// The selector shapes the result, so the log says how many pods it kept and how
+// many it left out; with no selector there is nothing to say.
+func TestExecuteLogsThePodSelector(t *testing.T) {
+	var out, logs bytes.Buffer
+	opts := options{Nodes: []string{"worker-1"}, Output: outputJSON, FailOn: failOnRisk, PodSelector: "app=web"}
+	_ = execute(context.Background(), opts, debugLog(&logs), inventory.NewClientsetCollector(unmanagedCluster(), nil), &out)
+	wantInOrder(t, logs.String(),
+		`msg="resolve target nodes"`,
+		`msg="pod selector" selector="app=web" selected=0 left_out=1`,
+		`msg="rule done"`)
+
+	logs.Reset()
+	opts.PodSelector = ""
+	_ = execute(context.Background(), opts, debugLog(&logs), inventory.NewClientsetCollector(unmanagedCluster(), nil), &out)
+	if strings.Contains(logs.String(), "pod selector") {
+		t.Errorf("log mentions a pod selector although none was given:\n%s", logs.String())
+	}
+}
+
 func TestExecuteLogsRejectedTargetNodes(t *testing.T) {
 	opts := options{Nodes: []string{"ghost"}, Output: outputJSON, FailOn: failOnBlocked}
 	var out, logs bytes.Buffer
@@ -404,6 +457,25 @@ func TestExecuteDebugDoesNotChangeStdout(t *testing.T) {
 			}
 			if logs.Len() == 0 {
 				t.Errorf("%s verbose=%v: the debug logger received nothing", format, verbose)
+			}
+		}
+	}
+}
+
+// --debug adds lines to stderr and nothing to stdout, also when a selector
+// leaves pods out.
+func TestExecuteDebugDoesNotChangeStdoutWithPodSelector(t *testing.T) {
+	for _, selector := range []string{"app=web", "app!=web", "   "} {
+		for _, format := range []string{outputText, outputJSON} {
+			opts := options{Nodes: []string{"worker-1"}, Output: format, FailOn: failOnRisk, PodSelector: selector}
+			var plain, debug, logs bytes.Buffer
+			errPlain := execute(context.Background(), opts, nil, inventory.NewClientsetCollector(unmanagedCluster(), nil), &plain)
+			errDebug := execute(context.Background(), opts, debugLog(&logs), inventory.NewClientsetCollector(unmanagedCluster(), nil), &debug)
+			if plain.String() != debug.String() || exitCodeOf(errPlain) != exitCodeOf(errDebug) {
+				t.Errorf("selector %q, %s: --debug changed stdout or the exit code", selector, format)
+			}
+			if !strings.Contains(logs.String(), `msg="pod selector"`) {
+				t.Errorf("selector %q: no pod selector line in the log:\n%s", selector, logs.String())
 			}
 		}
 	}

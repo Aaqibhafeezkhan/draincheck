@@ -86,7 +86,7 @@ Each row is the advice of one rule; `<...>` are the placeholders described above
 
 ## Pods a drain acts on
 
-One function, `classifyPod` in `internal/analyzer/pod_drain.go`, says what a drain does with a pod on a target node. Every rule asks it; no rule reads the phase, the deletion timestamp or the mirror annotation on its own (a test fails if one does). The same pod is therefore in every finding it belongs to, or in none.
+One function, `classifyPod` in `internal/analyzer/pod_drain.go`, says what a drain with the given flags does with a pod on a target node. Every rule asks it; no rule reads the phase, the deletion timestamp or the mirror annotation on its own (a test fails if one does). The same pod is therefore in every finding it belongs to, or in none.
 
 | State of the pod | Fate | Counted as a pod to move (`NODE_NOT_SCHEDULABLE`, `NO_REMAINING_NODES`) | Budget consulted (PDB rules) | Other rules |
 | --- | --- | --- | --- | --- |
@@ -97,8 +97,9 @@ One function, `classifyPod` in `internal/analyzer/pod_drain.go`, says what a dra
 | Static (mirror annotation), even with a DaemonSet or Node owner reference | left alone by `kubectl drain` | no | no | `POD_OWNERSHIP` |
 | Succeeded or Failed (any owner, also DaemonSet and static) | finished | no | no | none |
 | Already terminating (deletion timestamp set, not finished) | already leaving | no | no | `POD_OWNERSHIP` only |
+| Not matched by `--pod-selector`, in any of the states above | not selected: `kubectl drain` does not list it | no | no | none (checked with kubectl v1.36.1: only the matching pods are named, and a selector that matches nothing drains cleanly) |
 
-Order of precedence: finished, then already terminating, then left alone, then evicted. For `POD_OWNERSHIP` the class decides, not the fate: a terminating DaemonSet, static or controller-less pod is still reported, because `kubectl drain` applies its DaemonSet, static and unreplicated checks to it as well. For every other rule a terminating pod is skipped: its controller has already created the replacement, so the drain does not take anything down.
+Order of precedence: not selected, then finished, then already terminating, then left alone, then evicted. For `POD_OWNERSHIP` the class decides, not the fate: a terminating DaemonSet, static or controller-less pod is still reported, because `kubectl drain` applies its DaemonSet, static and unreplicated checks to it as well. For every other rule a terminating pod is skipped: its controller has already created the replacement, so the drain does not take anything down.
 
 ## Entries
 

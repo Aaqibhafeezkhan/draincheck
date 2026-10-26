@@ -5,7 +5,7 @@
 ## Synopsis
 
 ```sh
-draincheck --nodes NODE[,NODE...] [--kubeconfig PATH] [--context NAME] [--output text|json] [--verbose] [--fail-on blocked|risk|any] [--debug]
+draincheck --nodes NODE[,NODE...] [--kubeconfig PATH] [--context NAME] [--output text|json] [--verbose] [--fail-on blocked|risk|any] [--ignore-daemonsets] [--delete-emptydir-data] [--force] [--pod-selector SELECTOR] [--disable-eviction] [--debug]
 draincheck --version
 ```
 
@@ -19,10 +19,27 @@ draincheck --version
 | `--output`     | `text`                 | `text` (human-readable) or `json`. |
 | `--verbose`    | off                    | Text output only: print every finding in full instead of the compact layout. JSON always carries every finding. |
 | `--fail-on`    | `blocked`              | Lowest finding level that makes the run exit `1`: `blocked`, `risk` or `any`. |
+| `--ignore-daemonsets` | off             | As in `kubectl drain`: DaemonSet-managed pods are ignored. See [Drain flags](#drain-flags). |
+| `--delete-emptydir-data` | off          | As in `kubectl drain`: pods that use `emptyDir` may be deleted. See [Drain flags](#drain-flags). |
+| `--force`      | off                    | As in `kubectl drain`: pods that declare no controller may be deleted. See [Drain flags](#drain-flags). |
+| `--pod-selector` | none (every pod)     | As in `kubectl drain`: a label selector; the drain acts only on the pods that match. See [Drain flags](#drain-flags). |
+| `--disable-eviction` | off              | As in `kubectl drain`: pods are deleted instead of evicted, so PodDisruptionBudgets are not consulted. See [Drain flags](#drain-flags). |
 | `--debug`      | off                    | Write one line to stderr for each action draincheck takes. The report on stdout does not change. See [Debug output](#debug-output). |
 | `--version`    |                        | Print the version and exit.                                  |
 
 `'*'` cannot be combined with node names. Quote it so the shell does not expand it. Surrounding whitespace in names is trimmed; empty names are error.
+
+### Drain flags
+
+These flags tell draincheck what you will pass to `kubectl drain`, with the same names, defaults and meaning. Without a flag, draincheck assumes kubectl is run without it. They are not passed on to anything: draincheck never drains.
+
+| Flag | What it does today |
+| --- | --- |
+| `--pod-selector` | In effect. A pod the selector does not match is not touched by the drain, so no rule reports it (kubectl lists only the matching pods; checked with kubectl v1.36.1). The selector is a Kubernetes label selector such as `app=web` or `tier in (front,back)`; a selector that does not parse ends the run with exit `2`. The pods it leaves out are not looked at by any rule, so a finding about a workload may describe only part of it. With `--debug`, the `pod selector` line says how many pods on the target nodes were selected and how many left out. |
+| `--ignore-daemonsets`, `--delete-emptydir-data`, `--force` | Accepted and shown in the `settings` debug line. They do not change any finding yet. *Planned*: `POD_OWNERSHIP` will follow kubectl's DaemonSet and unreplicated-pod handling (#108), and a rule for `emptyDir` pods will use `--delete-emptydir-data` (#29). |
+| `--disable-eviction` | Accepted and shown in the `settings` debug line. The PDB rules still report budgets, although kubectl would not consult them with this flag. *Planned* (#109). |
+
+One difference from kubectl is known: when a pod's DaemonSet no longer exists, kubectl refuses the pod (or deletes it with `--force`), and draincheck treats it as DaemonSet-managed, because it does not read DaemonSets. The garbage collector removes such pods within seconds (observed on kind), so this is rare and short-lived.
 
 ## Examples
 
@@ -31,6 +48,7 @@ draincheck --nodes worker-02,worker-04
 draincheck --nodes '*' --context staging --output json
 draincheck --nodes worker-02 --output json --fail-on risk   # also fail CI on RISK
 draincheck --nodes worker-02 --output json
+draincheck --nodes worker-02 --pod-selector 'app in (web,api)'   # only the pods the drain will touch
 ```
 
 ## Findings
@@ -343,7 +361,7 @@ stdout is not touched. The text or JSON report is byte-for-byte the same with an
 
 | Message | Written | Fields |
 | --- | --- | --- |
-| `settings` | when the run starts | `kubeconfig` (the files that are read), `context`, `nodes`, `all_nodes`, `output`, `verbose`, `fail_on` |
+| `settings` | when the run starts | `kubeconfig` (the files that are read), `context`, `nodes`, `all_nodes`, `output`, `verbose`, `fail_on`, `ignore_daemonsets`, `delete_emptydir_data`, `force`, `disable_eviction`, `pod_selector` |
 | `load kubeconfig` | when the kubeconfig and context are loaded | `server` (host and port only) |
 | `load kubeconfig failed` | when the kubeconfig cannot be loaded or the context does not exist | `error` |
 | `build client` | when the API client is built | none |
@@ -352,6 +370,7 @@ stdout is not touched. The text or JSON report is byte-for-byte the same with an
 | `list failed` | when a list call fails | `resource`, `duration`, `error` |
 | `resolve target nodes` | when the target nodes are accepted | `requested`, `all`, `targets` |
 | `resolve target nodes failed` | when a node does not exist or the cluster has no nodes | `requested`, `all`, `error` |
+| `pod selector` | after the target nodes are accepted, only with `--pod-selector` | `selector`, `selected` and `left_out` (pods on the target nodes) |
 | `rule start` and `rule done` | around each rule | `rule`; `findings` on `rule done` |
 | `summary` | when all rules are done | `blocked`, `risk`, `unknown`, `fail_on` |
 | `write report` | just before the report is written | `format`, `verbose`, `findings` |
@@ -361,7 +380,7 @@ Example, with the path anonymized and the rule lines shortened:
 
 ```text
 $ draincheck --nodes worker-1 --debug >report.txt
-time=2026-10-18T17:29:41.507Z level=DEBUG msg=settings kubeconfig=[/home/user/.kube/config] context=dev nodes=[worker-1] all_nodes=false output=text verbose=false fail_on=blocked
+time=2026-10-18T17:29:41.507Z level=DEBUG msg=settings kubeconfig=[/home/user/.kube/config] context=dev nodes=[worker-1] all_nodes=false output=text verbose=false fail_on=blocked ignore_daemonsets=false delete_emptydir_data=false force=false disable_eviction=false pod_selector=""
 time=2026-10-18T17:29:41.510Z level=DEBUG msg="load kubeconfig" server=10.0.0.1:6443
 time=2026-10-18T17:29:41.511Z level=DEBUG msg="build client"
 time=2026-10-18T17:29:41.514Z level=DEBUG msg=list resource=nodes count=1 duration=4.807574ms

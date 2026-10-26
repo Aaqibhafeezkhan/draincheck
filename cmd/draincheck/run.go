@@ -39,5 +39,7 @@ func logSettings(logger *slog.Logger, opts options) {
 	logger.Debug("settings",
 		"kubeconfig", kubeconfigPaths(opts.Kubeconfig), "context", opts.Context,
 		"nodes", opts.Nodes, "all_nodes", opts.AllNodes,
-		"output", opts.Output, "verbose", opts.Verbose, "fail_on", opts.FailOn)
+		"output", opts.Output, "verbose", opts.Verbose, "fail_on", opts.FailOn,
+		"ignore_daemonsets", opts.IgnoreDaemonSets, "delete_emptydir_data", opts.DeleteEmptyDirData,
+		"force", opts.Force, "disable_eviction", opts.DisableEviction, "pod_selector", opts.PodSelector)
 }

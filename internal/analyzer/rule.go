@@ -6,10 +6,12 @@ import (
 )
 
 // Input is everything a rule may read: the immutable cluster snapshot and the
-// sorted names of the nodes planned for maintenance.
+// sorted names of the nodes planned for maintenance, and the kubectl drain
+// flags the operator will pass.
 type Input struct {
 	Snapshot *inventory.Snapshot
 	Targets  []string
+	Drain    DrainOptions
 }
 
 // Rule is a pure, stateless check. Evaluate must not mutate the cluster or

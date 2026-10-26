@@ -38,7 +38,7 @@ func (NodeNotSchedulable) Evaluate(in Input) []findings.Finding {
 		return nil
 	}
 
-	moving := podsToMove(in.Snapshot, in.Targets)
+	moving := podsToMove(in.Snapshot, in.Targets, in.Drain)
 	if moving == 0 {
 		return nil
 	}
