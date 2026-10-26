@@ -5,20 +5,14 @@ package tests
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 )
 
-// buildBinary compiles cmd/draincheck into the test's temp dir.
+// buildBinary returns the binary built by TestMain.
 func buildBinary(t *testing.T) string {
 	t.Helper()
-	bin := filepath.Join(t.TempDir(), "draincheck")
-	out, err := exec.Command("go", "build", "-o", bin, "../cmd/draincheck").CombinedOutput()
-	if err != nil {
-		t.Fatalf("go build: %v\n%s", err, out)
-	}
-	return bin
+	return binPath
 }
 
 // writeKubeconfig writes a kubeconfig without credentials that points at

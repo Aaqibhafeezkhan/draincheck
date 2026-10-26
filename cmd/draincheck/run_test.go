@@ -101,7 +101,8 @@ func TestRunWithDebugWritesDiagnosticsToStderrOnly(t *testing.T) {
 		t.Errorf("stdout is not the JSON report:\n%s", stdout.String())
 	}
 	wantInOrder(t, stderr.String(),
-		`msg=settings kubeconfig=[`+path+`] context=dev nodes=[worker-1] all_nodes=false output=json verbose=false fail_on=risk`,
+		`msg=settings kubeconfig=[`+path+`] context=dev nodes=[worker-1] all_nodes=false output=json verbose=false fail_on=risk`+
+			` ignore_daemonsets=false delete_emptydir_data=false force=false disable_eviction=false pod_selector=""`,
 		`msg="load kubeconfig" server=127.0.0.1:`,
 		`msg="build client"`,
 		`msg=list resource=nodes count=1`,
@@ -121,6 +122,19 @@ func TestRunWithDebugWritesDiagnosticsToStderrOnly(t *testing.T) {
 			t.Errorf("%s contains the kubeconfig token:\n%s", name, out)
 		}
 	}
+}
+
+// The settings line carries the drain flags, so a debug log shows what the run
+// assumed kubectl drain would be told.
+func TestSettingsLineCarriesTheDrainFlags(t *testing.T) {
+	opts := options{
+		Nodes: []string{"worker-1"}, Output: outputText, FailOn: failOnBlocked,
+		IgnoreDaemonSets: true, DeleteEmptyDirData: true, Force: true, DisableEviction: true, PodSelector: "app=web,tier!=db",
+	}
+	var logs bytes.Buffer
+	logSettings(debugLog(&logs), opts)
+	wantInOrder(t, logs.String(),
+		`ignore_daemonsets=true delete_emptydir_data=true force=true disable_eviction=true pod_selector="app=web,tier!=db"`)
 }
 
 func TestRunWithoutDebugWritesNothingToStderr(t *testing.T) {

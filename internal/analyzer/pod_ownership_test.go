@@ -5,9 +5,11 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Veinar/draincheck/internal/findings"
 	"github.com/Veinar/draincheck/internal/inventory"
+	corev1 "k8s.io/api/core/v1"
 )
 
 func ownershipPod(ns, name, node string) findings.OwnershipPod {
@@ -248,5 +250,60 @@ func TestPodOwnershipNilSnapshot(t *testing.T) {
 func TestPodOwnershipID(t *testing.T) {
 	if got := (PodOwnership{}).ID(); got != "POD_OWNERSHIP" {
 		t.Errorf("ID() = %q", got)
+	}
+}
+
+// With --pod-selector, a pod the selector does not match is not reported, and
+// the evidence of a finding lists only the pods the drain acts on.
+func TestPodOwnershipHonoursPodSelector(t *testing.T) {
+	mk := func(name string, spec drainPodSpec, labels map[string]string) corev1.Pod {
+		pod := spec.pod()
+		pod.Namespace, pod.Name, pod.Labels = "shop", name, labels
+		pod.Spec.NodeName = "worker-01"
+		if spec.controllerKind == "DaemonSet" {
+			pod.OwnerReferences[0].APIVersion = "apps/v1"
+			pod.OwnerReferences[0].Name = "agent"
+		}
+		return pod
+	}
+	web, db := map[string]string{"app": "web"}, map[string]string{"app": "db"}
+	running := corev1.PodRunning
+	pods := []corev1.Pod{
+		mk("bare-web", drainPodSpec{phase: running}, web),
+		mk("bare-db", drainPodSpec{phase: running}, db),
+		mk("agent-web", drainPodSpec{controllerKind: "DaemonSet", phase: running}, web),
+		mk("agent-db", drainPodSpec{controllerKind: "DaemonSet", phase: running}, db),
+		mk("static-db", drainPodSpec{mirror: true, nodeOwner: true, phase: running}, db),
+	}
+	s := inventory.NewSnapshot(nil, pods, nil, nil, time.Time{})
+	run := func(selector string) []findings.Finding {
+		drain := DrainOptions{}
+		if selector != "" {
+			drain.PodSelector = mustSelector(t, selector)
+		}
+		return PodOwnership{}.Evaluate(Input{Snapshot: s, Targets: []string{"worker-01"}, Drain: drain})
+	}
+	podNames := func(fs []findings.Finding) []string {
+		var names []string
+		for _, f := range fs {
+			for _, p := range f.Evidence.(findings.OwnershipEvidence).Pods {
+				names = append(names, p.Name)
+			}
+		}
+		slices.Sort(names)
+		return names
+	}
+
+	if got, want := podNames(run("")), []string{"agent-db", "agent-web", "bare-db", "bare-web", "static-db"}; !slices.Equal(got, want) {
+		t.Errorf("no selector: pods = %v, want %v", got, want)
+	}
+	if got, want := podNames(run("app=web")), []string{"agent-web", "bare-web"}; !slices.Equal(got, want) {
+		t.Errorf("app=web: pods = %v, want %v", got, want)
+	}
+	if got, want := podNames(run("app=db")), []string{"agent-db", "bare-db", "static-db"}; !slices.Equal(got, want) {
+		t.Errorf("app=db: pods = %v, want %v", got, want)
+	}
+	if got := run("app=none"); len(got) != 0 {
+		t.Errorf("a selector that matches nothing: findings = %v, want none", got)
 	}
 }

@@ -140,9 +140,13 @@ func stateCluster(spec drainPodSpec, spare bool, budgets int) *inventory.Snapsho
 }
 
 func firedRules(s *inventory.Snapshot) []string {
+	return firedRulesWith(s, DrainOptions{})
+}
+
+func firedRulesWith(s *inventory.Snapshot, drain DrainOptions) []string {
 	var ids []string
 	for _, r := range DefaultRules() {
-		if len(r.Evaluate(Input{Snapshot: s, Targets: []string{"worker-01"}})) > 0 {
+		if len(r.Evaluate(Input{Snapshot: s, Targets: []string{"worker-01"}, Drain: drain})) > 0 {
 			ids = append(ids, r.ID())
 		}
 	}
@@ -180,6 +184,27 @@ func TestRulesTreatEachPodState(t *testing.T) {
 				slices.Sort(want)
 				if got := firedRules(stateCluster(st.pod, false, v.budgets)); !slices.Equal(got, want) {
 					t.Errorf("rules that fire = %v, want %v", got, want)
+				}
+			})
+		}
+	}
+}
+
+// --pod-selector: a pod it does not match is not touched by the drain, so no
+// rule reports it, in any state. A selector that matches changes nothing.
+func TestPodSelectorSilencesEveryRuleForUnselectedPods(t *testing.T) {
+	for _, st := range podStates() {
+		for _, budgets := range []int{1, 2} {
+			s := stateCluster(st.pod, true, budgets) // the pod carries the label app=app
+			t.Run(st.name+" not selected, "+fmt.Sprint(budgets)+" budgets", func(t *testing.T) {
+				if got := firedRulesWith(s, DrainOptions{PodSelector: mustSelector(t, "app=other")}); len(got) != 0 {
+					t.Errorf("rules that fire = %v, want none", got)
+				}
+			})
+			t.Run(st.name+" selected, "+fmt.Sprint(budgets)+" budgets", func(t *testing.T) {
+				want := firedRules(s)
+				if got := firedRulesWith(s, DrainOptions{PodSelector: mustSelector(t, "app=app")}); !slices.Equal(got, want) {
+					t.Errorf("rules that fire = %v, want %v (as without a selector)", got, want)
 				}
 			})
 		}

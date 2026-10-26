@@ -41,7 +41,7 @@ func (WorkloadUntoleratedTaints) Evaluate(in Input) []findings.Finding {
 	if in.Snapshot == nil {
 		return nil
 	}
-	moving := podsToMoveList(in.Snapshot, in.Targets)
+	moving := podsToMoveList(in.Snapshot, in.Targets, in.Drain)
 	nodes := remainingNodes(in.Snapshot, in.Targets)
 	if len(moving) == 0 || len(nodes) == 0 {
 		return nil

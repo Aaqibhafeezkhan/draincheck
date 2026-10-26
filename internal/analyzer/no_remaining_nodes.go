@@ -39,7 +39,7 @@ func (NoRemainingNodes) Evaluate(in Input) []findings.Finding {
 		return nil
 	}
 
-	moving := podsToMoveList(in.Snapshot, in.Targets)
+	moving := podsToMoveList(in.Snapshot, in.Targets, in.Drain)
 	if len(moving) == 0 {
 		return nil
 	}

@@ -133,7 +133,7 @@ func TestClassifyPod(t *testing.T) {
 	owners := drainOwners()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d := classifyPod(tt.pod.pod(), owners)
+			d := classifyPod(tt.pod.pod(), owners, DrainOptions{})
 			if got := d.fate(); got != tt.fate {
 				t.Errorf("fate = %v, want %v", got, tt.fate)
 			}
@@ -150,10 +150,10 @@ func TestClassifyPod(t *testing.T) {
 	}
 }
 
-// Every fate has a reason an operator can read in a debug line, and the five
+// Every fate has a reason an operator can read in a debug line, and the
 // reasons differ.
 func TestDrainFateString(t *testing.T) {
-	fates := []drainFate{fateFinished, fateLeaving, fateLeftAlone, fateEvictedUnmanaged, fateEvictedRescheduled}
+	fates := []drainFate{fateNotSelected, fateFinished, fateLeaving, fateLeftAlone, fateEvictedUnmanaged, fateEvictedRescheduled}
 	seen := map[string]drainFate{}
 	for _, f := range fates {
 		s := f.String()
@@ -170,11 +170,63 @@ func TestDrainFateString(t *testing.T) {
 	}
 }
 
+// A pod that --pod-selector does not match is not listed by kubectl drain, so
+// it has no fate of its own whatever it is: not evicted, not counted, not
+// checked. Its class stays what it is.
+func TestClassifyPodWithSelector(t *testing.T) {
+	selector := DrainOptions{PodSelector: mustSelector(t, "app=web")}
+	tests := []struct {
+		name     string
+		pod      drainPodSpec
+		labels   map[string]string
+		selected bool
+		fate     drainFate
+		consults bool
+	}{
+		{"matching pod is judged as without a selector",
+			drainPodSpec{controllerKind: "ReplicaSet", phase: corev1.PodRunning}, map[string]string{"app": "web"}, true, fateEvictedRescheduled, true},
+		{"unmatched running pod is not selected",
+			drainPodSpec{controllerKind: "ReplicaSet", phase: corev1.PodRunning}, map[string]string{"app": "db"}, false, fateNotSelected, false},
+		{"unlabeled pod is not selected",
+			drainPodSpec{controllerKind: "ReplicaSet", phase: corev1.PodRunning}, nil, false, fateNotSelected, false},
+		{"unmatched pod with no controller is not selected",
+			drainPodSpec{phase: corev1.PodRunning}, nil, false, fateNotSelected, false},
+		{"unmatched DaemonSet pod is not selected, not left alone",
+			drainPodSpec{controllerKind: "DaemonSet", phase: corev1.PodRunning}, nil, false, fateNotSelected, false},
+		{"unmatched finished pod is not selected",
+			drainPodSpec{controllerKind: "Job", phase: corev1.PodSucceeded}, nil, false, fateNotSelected, false},
+		{"unmatched terminating pod is not selected",
+			drainPodSpec{controllerKind: "ReplicaSet", phase: corev1.PodRunning, terminating: true}, nil, false, fateNotSelected, false},
+		{"matching terminating pod is still leaving",
+			drainPodSpec{controllerKind: "ReplicaSet", phase: corev1.PodRunning, terminating: true}, map[string]string{"app": "web"}, true, fateLeaving, false},
+	}
+	owners := drainOwners()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pod := tt.pod.pod()
+			pod.Labels = tt.labels
+			d := classifyPod(pod, owners, selector)
+			if d.selected != tt.selected {
+				t.Errorf("selected = %v, want %v", d.selected, tt.selected)
+			}
+			if got := d.fate(); got != tt.fate {
+				t.Errorf("fate = %v, want %v", got, tt.fate)
+			}
+			if got := d.consultsBudget(); got != tt.consults {
+				t.Errorf("consultsBudget = %v, want %v", got, tt.consults)
+			}
+			if without := classifyPod(pod, owners, DrainOptions{}); d.class != without.class {
+				t.Errorf("class = %v, want %v (the selector must not change what the pod is)", d.class, without.class)
+			}
+		})
+	}
+}
+
 // The classification reads the pod and the snapshot only; it never changes the pod.
 func TestClassifyPodDoesNotMutate(t *testing.T) {
 	pod := drainPodSpec{controllerKind: "ReplicaSet", phase: corev1.PodRunning, terminating: true}.pod()
 	before := pod.DeepCopy()
-	classifyPod(pod, drainOwners())
+	classifyPod(pod, drainOwners(), DrainOptions{})
 	if pod.Name != before.Name || pod.DeletionTimestamp == nil || len(pod.OwnerReferences) != len(before.OwnerReferences) {
 		t.Error("classifyPod changed the pod")
 	}

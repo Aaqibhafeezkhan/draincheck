@@ -33,9 +33,12 @@ const (
 type drainFate int
 
 const (
+	// fateNotSelected: --pod-selector does not match the pod, so kubectl drain
+	// does not list it and leaves it as it is.
+	fateNotSelected drainFate = iota
 	// fateFinished: the pod has run to completion. Drain removes it without
 	// further checks and nothing needs a new home.
-	fateFinished drainFate = iota
+	fateFinished
 	// fateLeaving: the pod is already being deleted. Its controller has already
 	// created the replacement, so the drain does not take anything down.
 	fateLeaving
@@ -52,6 +55,8 @@ const (
 // String gives the reason, for a debug line.
 func (f drainFate) String() string {
 	switch f {
+	case fateNotSelected:
+		return "not selected by --pod-selector"
 	case fateFinished:
 		return "finished (Succeeded or Failed)"
 	case fateLeaving:
@@ -69,24 +74,28 @@ func (f drainFate) String() string {
 
 // podDrain is the classification of one pod.
 type podDrain struct {
+	// selected is false for a pod that --pod-selector does not match.
+	selected    bool
 	class       podClass
 	terminating bool
 	pending     bool
 }
 
-// classifyPod decides what a drain does with pod. A finished pod is finished
+// classifyPod decides what a drain with the given flags does with pod. A pod
+// that --pod-selector does not match is not part of the drain. A finished pod is finished
 // whatever else is true of it; a static pod is static even when it carries a
 // DaemonSet or Node owner reference.
-func classifyPod(pod corev1.Pod, owners *inventory.OwnerResolver) podDrain {
+func classifyPod(pod corev1.Pod, owners *inventory.OwnerResolver, drain DrainOptions) podDrain {
 	d := podDrain{
+		selected:    drain.selects(pod),
 		terminating: pod.DeletionTimestamp != nil,
 		pending:     pod.Status.Phase == corev1.PodPending,
 	}
 	owner := owners.Resolve(pod)
 	switch {
-	case pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed:
+	case isFinished(pod):
 		d.class = classFinished
-	case hasAnnotation(pod.Annotations, mirrorPodAnnotation):
+	case isMirrorPod(pod):
 		d.class = classStatic
 	case owner.Kind == "DaemonSet":
 		d.class = classDaemonSet
@@ -98,10 +107,23 @@ func classifyPod(pod corev1.Pod, owners *inventory.OwnerResolver) podDrain {
 	return d
 }
 
-// fate is what the drain does with the pod. Order matters: finished, then
-// already leaving, then left alone, then evicted.
+// isFinished reports whether the pod is in a terminal phase (Succeeded,
+// Failed), which kubectl drain removes without further checks.
+func isFinished(pod corev1.Pod) bool {
+	return pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed
+}
+
+// isMirrorPod reports whether the pod is the API object of a static pod.
+func isMirrorPod(pod corev1.Pod) bool {
+	return hasAnnotation(pod.Annotations, mirrorPodAnnotation)
+}
+
+// fate is what the drain does with the pod. Order matters: not selected, then
+// finished, then already leaving, then left alone, then evicted.
 func (d podDrain) fate() drainFate {
 	switch {
+	case !d.selected:
+		return fateNotSelected
 	case d.class == classFinished:
 		return fateFinished
 	case d.terminating:
@@ -128,5 +150,5 @@ func (d podDrain) bypassesBudget() bool {
 // consultsBudget reports whether a budget is consulted for the pod: drain
 // evicts it and the eviction API does not let it past.
 func (d podDrain) consultsBudget() bool {
-	return !d.bypassesBudget() && d.class != classStatic && d.class != classDaemonSet
+	return d.selected && !d.bypassesBudget() && d.class != classStatic && d.class != classDaemonSet
 }

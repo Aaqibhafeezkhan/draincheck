@@ -18,7 +18,7 @@ func TestPodsToMove(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := podsToMove(s, tt.targets); got != tt.want {
+			if got := podsToMove(s, tt.targets, DrainOptions{}); got != tt.want {
 				t.Errorf("podsToMove(%v) = %d, want %d", tt.targets, got, tt.want)
 			}
 		})
@@ -36,10 +36,10 @@ func TestPodsToMoveByPodState(t *testing.T) {
 			if st.moves {
 				want = 1
 			}
-			if got := podsToMove(s, []string{"worker-01"}); got != want {
+			if got := podsToMove(s, []string{"worker-01"}, DrainOptions{}); got != want {
 				t.Errorf("podsToMove = %d, want %d", got, want)
 			}
-			if got := podsToMove(s, []string{"elsewhere"}); got != 0 {
+			if got := podsToMove(s, []string{"elsewhere"}, DrainOptions{}); got != 0 {
 				t.Errorf("podsToMove on another node = %d, want 0", got)
 			}
 		})
