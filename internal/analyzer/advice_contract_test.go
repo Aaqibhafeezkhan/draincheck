@@ -23,27 +23,31 @@ type adviceCase struct {
 	rule    string
 	fixture string
 	targets []string
+	// drain holds the kubectl drain flags of the run; the zero value is no flags.
+	drain DrainOptions
 }
 
 var workers123 = []string{"worker-01", "worker-02", "worker-03"}
 
 var adviceCases = []adviceCase{
-	{"PDB_DISRUPTION_BLOCKED", "pdb-disruption-blocked.yaml", workers123},
+	{"PDB_DISRUPTION_BLOCKED", "pdb-disruption-blocked.yaml", workers123, DrainOptions{}},
 	// A budget policy draincheck does not know gives the UNKNOWN finding.
-	{"PDB_DISRUPTION_BLOCKED", "pdb-unhealthy-pods.yaml", workers123},
+	{"PDB_DISRUPTION_BLOCKED", "pdb-unhealthy-pods.yaml", workers123, DrainOptions{}},
 	// Operator-managed budgets give the UNKNOWN finding per operator.
-	{"PDB_DISRUPTION_BLOCKED", "pdb-operator-managed.yaml", []string{"worker-01", "worker-02", "worker-03", "worker-04", "worker-05"}},
-	{"PDB_OVERLAPPING_SELECTORS", "pdb-overlapping-selectors.yaml", []string{"worker-01", "worker-02"}},
-	{"PDB_BATCH_EXCEEDS_BUDGET", "pdb-batch-exceeds-budget.yaml", []string{"worker-01", "worker-02"}},
-	{"PDB_STALE_STATUS", "pdb-stale-status.yaml", []string{"worker-01", "worker-02"}},
-	{"PDB_SYNC_FAILED", "pdb-sync-failed.yaml", []string{"worker-01", "worker-02"}},
-	{"NODE_NOT_SCHEDULABLE", "node-not-schedulable.yaml", []string{"worker-01"}},
-	{"NO_REMAINING_NODES", "node-not-schedulable.yaml", allNodes},
-	{"WORKLOAD_UNTOLERATED_TAINTS", "workload-untolerated-taints.yaml", []string{"worker", "soft"}},
-	{"SINGLE_REPLICA_WORKLOAD", "single-replica-workload.yaml", []string{"worker-01", "worker-02"}},
-	// DaemonSet, static and controller-less pods each have their own advice.
-	{"POD_OWNERSHIP", "pod-ownership.yaml", workers123},
-	{"MISSING_RESOURCE_REQUESTS", "missing-resource-requests.yaml", []string{"worker-01", "worker-02"}},
+	{"PDB_DISRUPTION_BLOCKED", "pdb-operator-managed.yaml", []string{"worker-01", "worker-02", "worker-03", "worker-04", "worker-05"}, DrainOptions{}},
+	{"PDB_OVERLAPPING_SELECTORS", "pdb-overlapping-selectors.yaml", []string{"worker-01", "worker-02"}, DrainOptions{}},
+	{"PDB_BATCH_EXCEEDS_BUDGET", "pdb-batch-exceeds-budget.yaml", []string{"worker-01", "worker-02"}, DrainOptions{}},
+	{"PDB_STALE_STATUS", "pdb-stale-status.yaml", []string{"worker-01", "worker-02"}, DrainOptions{}},
+	{"PDB_SYNC_FAILED", "pdb-sync-failed.yaml", []string{"worker-01", "worker-02"}, DrainOptions{}},
+	{"NODE_NOT_SCHEDULABLE", "node-not-schedulable.yaml", []string{"worker-01"}, DrainOptions{}},
+	{"NO_REMAINING_NODES", "node-not-schedulable.yaml", allNodes, DrainOptions{}},
+	{"WORKLOAD_UNTOLERATED_TAINTS", "workload-untolerated-taints.yaml", []string{"worker", "soft"}, DrainOptions{}},
+	{"SINGLE_REPLICA_WORKLOAD", "single-replica-workload.yaml", []string{"worker-01", "worker-02"}, DrainOptions{}},
+	// DaemonSet, static and controller-less pods each have their own advice, and a
+	// controller-less pod has another once --force is set.
+	{"POD_OWNERSHIP", "pod-ownership.yaml", workers123, DrainOptions{}},
+	{"POD_OWNERSHIP", "pod-ownership.yaml", workers123, DrainOptions{Force: true}},
+	{"MISSING_RESOURCE_REQUESTS", "missing-resource-requests.yaml", []string{"worker-01", "worker-02"}, DrainOptions{}},
 }
 
 // verifyPrefixes are the only commands a remediation may suggest: they read.
@@ -145,8 +149,9 @@ var adviceVariants = []string{
 	"NO_REMAINING_NODES/RISK/findings.NoRemainingNodesEvidence",
 	"WORKLOAD_UNTOLERATED_TAINTS/RISK/findings.WorkloadUntoleratedTaintsEvidence",
 	"SINGLE_REPLICA_WORKLOAD/RISK/findings.SingleReplicaEvidence",
-	"POD_OWNERSHIP/RISK/DaemonSet",
+	"POD_OWNERSHIP/BLOCKED/DaemonSet",
 	"POD_OWNERSHIP/RISK/StaticPod",
+	"POD_OWNERSHIP/BLOCKED/Unmanaged",
 	"POD_OWNERSHIP/RISK/Unmanaged",
 	"MISSING_RESOURCE_REQUESTS/RISK/findings.MissingRequestsEvidence",
 }
@@ -176,7 +181,7 @@ func TestAdviceContract(t *testing.T) {
 			continue
 		}
 		t.Run(c.rule+"/"+c.fixture, func(t *testing.T) {
-			got := Run(nil, Input{Snapshot: snapshotFromFixture(t, c.fixture), Targets: c.targets}, rule)
+			got := Run(nil, Input{Snapshot: snapshotFromFixture(t, c.fixture), Targets: c.targets, Drain: c.drain}, rule)
 			if len(got) == 0 {
 				t.Fatal("the fixture gives no finding, so the contract is not tested")
 			}

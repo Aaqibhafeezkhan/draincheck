@@ -109,7 +109,7 @@ func TestRunWithDebugWritesDiagnosticsToStderrOnly(t *testing.T) {
 		`msg=list resource=pods count=1`,
 		`msg="resolve target nodes"`,
 		`msg="rule done" rule=POD_OWNERSHIP findings=1`,
-		`msg=summary blocked=0 risk=1 unknown=0 fail_on=risk`,
+		`msg=summary blocked=1 risk=0 unknown=0 fail_on=risk`,
 		`msg="write report"`,
 		`msg=finished exit_code=1`,
 	)
@@ -139,7 +139,7 @@ func TestSettingsLineCarriesTheDrainFlags(t *testing.T) {
 
 func TestRunWithoutDebugWritesNothingToStderr(t *testing.T) {
 	api := newFakeAPI(t)
-	opts := options{Nodes: []string{"worker-1"}, Kubeconfig: api.kubeconfig(t), Output: outputJSON, FailOn: failOnBlocked}
+	opts := options{Nodes: []string{"worker-1"}, Kubeconfig: api.kubeconfig(t), Output: outputJSON, FailOn: failOnBlocked, Force: true}
 	var stdout, stderr bytes.Buffer
 
 	if err := runWith(context.Background(), opts, &stdout, &stderr); err != nil {
@@ -166,7 +166,7 @@ func TestRunWithDebugLogsTheExitCode(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			opts := options{Nodes: tt.nodes, Kubeconfig: api.kubeconfig(t), Output: outputJSON, FailOn: failOnBlocked, Debug: true}
+			opts := options{Nodes: tt.nodes, Kubeconfig: api.kubeconfig(t), Output: outputJSON, FailOn: failOnBlocked, Force: true, Debug: true}
 			var stdout, stderr bytes.Buffer
 
 			err := runWith(context.Background(), opts, &stdout, &stderr)

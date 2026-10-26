@@ -84,7 +84,8 @@ draincheck --nodes worker-02,worker-04 [--kubeconfig PATH] [--context NAME] [--o
 | `--output`     | Output format: `text` or `json`                | `text`                 |
 | `--verbose`    | Text output only: print every finding in full  | off                    |
 | `--fail-on`    | Lowest finding level that exits `1`: `blocked`, `risk` or `any` | `blocked` |
-| `--ignore-daemonsets`, `--delete-emptydir-data`, `--force`, `--disable-eviction` | Same as in `kubectl drain`. Accepted now; they change no finding yet (planned) | off |
+| `--ignore-daemonsets`, `--force` | Same as in `kubectl drain`. Without them, DaemonSet pods and pods with no controller on a target node are `BLOCKED` (kubectl refuses them), so such a cluster exits `1`. Pass the flags you will pass to `kubectl drain` | off |
+| `--delete-emptydir-data`, `--disable-eviction` | Same as in `kubectl drain`. Accepted now; they change no finding yet (planned) | off |
 | `--pod-selector` | Same as in `kubectl drain`: a label selector; pods that do not match are left out of the analysis | none |
 | `--debug`      | Write one line to stderr for each action; the report on stdout does not change | off |
 

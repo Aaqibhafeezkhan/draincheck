@@ -7,7 +7,7 @@ Scope: only rules that are implemented (see [RULES.md](RULES.md)). Statements ab
 - **✓ checked**: observed on a real cluster (kind, or the maintainer's own, as said in the text), or recorded in RULES.md or SPEC.md. Always written the same way, `(✓ checked)`, directly after the claim.
 - **(to verify)**: believed correct, not yet observed. Check before relying on it or publishing it.
 
-`--dry-run` below means `--dry-run=server`, the form that matters; `--dry-run=client` is covered where it differs. Checked with kubectl v1.36.1.
+`--dry-run` below means `--dry-run=server`, the form that matters; `--dry-run=client` is covered where it differs. Checked with kubectl v1.36.1 against a kind cluster running Kubernetes v1.37.0, unless a row says otherwise.
 
 ## The difference in one table
 
@@ -39,8 +39,8 @@ Scope: only rules that are implemented (see [RULES.md](RULES.md)). Statements ab
 | No node left to take the pods | Completes; pods go `Pending` (✓ checked) | `NO_REMAINING_NODES` (`RISK`) | Counts cordons, readiness and taints for the whole batch |
 | A workload cannot land anywhere because of taints | Does not look at where pods can go: the drain completes, the stranded workload's pods go `Pending` and the one that tolerates the taint runs on the tainted node (✓ checked) | `WORKLOAD_UNTOLERATED_TAINTS` (`RISK`) | Per workload; separates "some pods stranded" from "everything stranded" |
 | Single-replica Deployment or StatefulSet | Evicts it without a warning about downtime (✓ checked) | `SINGLE_REPLICA_WORKLOAD` (`RISK`) | Names the workload and says there is no budget or second replica |
-| Pod with no controller | Refused without `--force` (✓ checked) | `POD_OWNERSHIP` (`RISK`) | Said up front for all nodes; tells you the pod is lost, not recreated |
-| DaemonSet pods | Refused without `--ignore-daemonsets` (✓ checked) | `POD_OWNERSHIP` (`RISK`) | One finding per DaemonSet, not per pod, with the flag named |
+| Pod with no controller | Refused without `--force` (✓ checked); with `--force` it warns `deleting Pods that declare no controller`, evicts the pod and nothing recreates it (✓ checked) | `POD_OWNERSHIP` (`BLOCKED` without `--force`, `RISK` with it) | Said up front for all nodes, with the exit code of the refusal; with the flag it tells you the pod is lost, not recreated |
+| DaemonSet pods | Refused without `--ignore-daemonsets` (✓ checked); with it they are skipped: `Warning: ignoring DaemonSet-managed Pods`; `--force` alone does not help (✓ checked) | `POD_OWNERSHIP` (`BLOCKED` without the flag, nothing with it) | One finding per DaemonSet, not per pod, with the flag named, for all nodes at once |
 | Static pods | Skipped, not evicted (✓ checked) | `POD_OWNERSHIP` (`RISK`) | Reminds you they go down with the node |
 | Containers with no CPU or memory request | Evicts regardless (✓ checked) | `MISSING_RESOURCE_REQUESTS` (`RISK`) | Per workload; flags that rescheduled pods may not fit where they land |
 

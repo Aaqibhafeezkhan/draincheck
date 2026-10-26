@@ -17,18 +17,26 @@ const PodOwnershipID = "POD_OWNERSHIP"
 // drain behaviour: DaemonSet-managed pods, static (mirror) pods and naked pods
 // with no controller.
 //
-// One RISK finding is emitted per cause, not per pod:
+// One finding is emitted per cause, not per pod:
 //   - per DaemonSet, covering all of its pods on the target nodes;
 //   - per node, covering the static pods that stop when that node goes down;
 //   - per pod, for a pod with no controller, because each one is lost on drain.
 //
-// Every pod and node stays in the typed evidence. They are not BLOCKED because
-// whether a drain stops depends on kubectl flags the analyzer cannot observe,
-// and none of them is a violated constraint on its own. Pods managed by any
-// other controller are not reported. Pods in a terminal phase (Succeeded,
-// Failed) are skipped because kubectl drain removes them without further
-// checks. A pod that is already terminating is still reported: kubectl drain
-// applies these checks to it as well.
+// Every pod and node stays in the typed evidence. The severity follows what
+// kubectl drain does with the pod under the flags the operator passes
+// (Input.Drain):
+//   - a DaemonSet pod is BLOCKED without --ignore-daemonsets, because kubectl
+//     drain refuses it; with the flag kubectl skips it and nothing is reported;
+//   - a pod with no controller is BLOCKED without --force, for the same reason;
+//     with the flag kubectl deletes it and nothing recreates it, so RISK;
+//   - a static pod is skipped whatever the flags are: RISK, to plan for the
+//     outage of the node.
+//
+// Pods managed by any other controller are not reported. Pods in a terminal
+// phase (Succeeded, Failed) are skipped because kubectl drain removes them
+// without further checks. A pod that is already terminating is still reported:
+// kubectl drain applies these checks to it as well. Only the ownership filters
+// are asked; the emptyDir filter belongs to a rule of its own (#29).
 type PodOwnership struct{}
 
 // ID implements Rule.
@@ -38,6 +46,7 @@ func (PodOwnership) ID() string { return PodOwnershipID }
 type ownershipGroup struct {
 	resource findings.ResourceRef
 	category findings.OwnershipCategory
+	severity findings.Severity
 	pods     []findings.OwnershipPod
 }
 
@@ -60,6 +69,7 @@ func (PodOwnership) Evaluate(in Input) []findings.Finding {
 		// terminating too.
 		var ref findings.ResourceRef
 		var category findings.OwnershipCategory
+		var severity findings.Severity
 		owner := owners.Resolve(pod)
 		drain := classifyPod(pod, owners, in.Drain)
 		if !drain.selected {
@@ -67,21 +77,26 @@ func (PodOwnership) Evaluate(in Input) []findings.Finding {
 		}
 		switch drain.class {
 		case classStatic:
-			category = findings.OwnershipStaticPod
+			category, severity = findings.OwnershipStaticPod, findings.Risk
 			ref = findings.ResourceRef{Kind: "Node", Name: pod.Spec.NodeName}
 		case classUnmanaged:
 			category = findings.OwnershipUnmanaged
 			ref = findings.ResourceRef{Kind: "Pod", Namespace: pod.Namespace, Name: pod.Name}
+			severity = unmanagedSeverity(unreplicatedFilter(pod, in.Drain))
 		case classDaemonSet:
 			category = findings.OwnershipDaemonSet
+			severity = daemonSetSeverity(daemonSetFilter(pod, in.Drain))
 			ref = findings.ResourceRef{Kind: owner.Kind, Namespace: owner.Namespace, Name: owner.Name}
 		default:
 			continue
 		}
+		if severity == "" {
+			continue // kubectl drain lets the pod pass or skips it: nothing to report
+		}
 
 		g := byResource[ref]
 		if g == nil {
-			g = &ownershipGroup{resource: ref, category: category}
+			g = &ownershipGroup{resource: ref, category: category, severity: severity}
 			byResource[ref] = g
 			groups = append(groups, g)
 		}
@@ -107,7 +122,7 @@ func (PodOwnership) Evaluate(in Input) []findings.Finding {
 		description, remediation := describeOwnership(g, len(nodes))
 		out = append(out, findings.Finding{
 			RuleID:      PodOwnershipID,
-			Severity:    findings.Risk,
+			Severity:    g.severity,
 			Resource:    g.resource,
 			Evidence:    ev,
 			Description: description,
@@ -117,10 +132,34 @@ func (PodOwnership) Evaluate(in Input) []findings.Finding {
 	return out
 }
 
+// daemonSetSeverity maps the answer of kubectl's DaemonSet filter to a
+// severity: BLOCKED when it refuses the pod, none when it skips the pod or does
+// not see a DaemonSet pod (a controller of kind DaemonSet outside apps/v1).
+func daemonSetSeverity(v drainVerdict) findings.Severity {
+	if v.action == drainRefuse {
+		return findings.Blocked
+	}
+	return ""
+}
+
+// unmanagedSeverity maps the answer of kubectl's unreplicated filter to a
+// severity: BLOCKED when it refuses the pod, RISK when --force lets kubectl
+// delete a pod that nothing recreates.
+func unmanagedSeverity(v drainVerdict) findings.Severity {
+	switch v.action {
+	case drainRefuse:
+		return findings.Blocked
+	case drainDelete:
+		return findings.Risk
+	}
+	return ""
+}
+
 // describeOwnership returns the description and remediation for g, which
 // covers pods on nodeCount distinct nodes. The pods themselves are in the
 // evidence; static pods are also named here because they are the whole point
-// of their finding.
+// of their finding. The text says what kubectl does under the flags in force:
+// a refusal for BLOCKED, a deletion for the RISK of a pod with no controller.
 func describeOwnership(g *ownershipGroup, nodeCount int) (description, remediation string) {
 	switch g.category {
 	case findings.OwnershipStaticPod:
@@ -139,6 +178,12 @@ func describeOwnership(g *ownershipGroup, nodeCount int) (description, remediati
 			"Confirm with `kubectl get daemonset -n <namespace> <name>` and `kubectl get pods -A --field-selector spec.nodeName=<node> -o wide`. Then drain with --ignore-daemonsets; DaemonSet pods stay until the node itself goes down. If the DaemonSet is not found, its pods are orphans, which kubectl drain treats differently."
 	default:
 		pod := g.pods[0]
+		if g.severity == findings.Risk {
+			return fmt.Sprintf(
+					"Pod %s/%s on node %s has no controller. With --force kubectl drain deletes it and it will not be recreated.",
+					pod.Namespace, pod.Name, pod.Node),
+				"Confirm with `kubectl get pod -n <namespace> <name> -o jsonpath='{.metadata.ownerReferences}'` (empty: no controller). Then, safest first: put the workload under a controller (Deployment, StatefulSet or Job) so it is recreated; or accept its loss."
+		}
 		return fmt.Sprintf(
 				"Pod %s/%s on node %s has no controller; kubectl drain refuses it without --force and it will not be recreated.",
 				pod.Namespace, pod.Name, pod.Node),
