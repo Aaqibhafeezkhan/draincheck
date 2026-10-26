@@ -529,3 +529,57 @@ func TestExecuteDrainFlagsDecideTheExitCode(t *testing.T) {
 		})
 	}
 }
+
+// emptyDirCluster has one StatefulSet pod with an emptyDir volume on worker-1.
+func emptyDirCluster() *fake.Clientset {
+	controller := true
+	return fake.NewClientset(
+		&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "worker-1"}},
+		&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Namespace: "shop", Name: "db-0", Labels: map[string]string{"app": "db"}, OwnerReferences: []metav1.OwnerReference{
+				{APIVersion: "apps/v1", Kind: "StatefulSet", Name: "db", Controller: &controller}}},
+			Spec: corev1.PodSpec{
+				NodeName: "worker-1",
+				Volumes:  []corev1.Volume{{Name: "scratch", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}}},
+			},
+		},
+	)
+}
+
+// --delete-emptydir-data reaches POD_LOCAL_STORAGE: the same cluster ends the
+// run with exit 1 without the flag and 0 with it, where the finding is a RISK.
+func TestExecuteDeleteEmptyDirDataDecidesTheExitCode(t *testing.T) {
+	tests := []struct {
+		name     string
+		opts     options
+		wantCode int
+		wantRule bool
+	}{
+		{"no flag: kubectl refuses the pod", options{}, exitFindings, true},
+		{"--delete-emptydir-data: a RISK is left, which passes at the blocked threshold", options{DeleteEmptyDirData: true}, 0, true},
+		{"--delete-emptydir-data with --fail-on risk fails again", options{DeleteEmptyDirData: true, FailOn: failOnRisk}, exitFindings, true},
+		{"the other flags do not lift the refusal", options{IgnoreDaemonSets: true, Force: true, DisableEviction: true}, exitFindings, true},
+		{"--pod-selector that matches nothing: nothing is refused", options{PodSelector: "app=none"}, 0, false},
+		{"--pod-selector that matches the pod", options{PodSelector: "app=db"}, exitFindings, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.opts.Nodes, tt.opts.Output = []string{"worker-1"}, outputJSON
+			if tt.opts.FailOn == "" {
+				tt.opts.FailOn = failOnBlocked
+			}
+			var out bytes.Buffer
+			err := execute(context.Background(), tt.opts, nil, inventory.NewClientsetCollector(emptyDirCluster(), nil), &out)
+			got := 0
+			if err != nil {
+				got = exitCodeOf(err)
+			}
+			if got != tt.wantCode {
+				t.Errorf("exit code = %d (err %v), want %d\n%s", got, err, tt.wantCode, out.String())
+			}
+			if has := slices.Contains(ruleIDs(t, out.Bytes()), "POD_LOCAL_STORAGE"); has != tt.wantRule {
+				t.Errorf("POD_LOCAL_STORAGE reported = %v, want %v\n%s", has, tt.wantRule, out.String())
+			}
+		})
+	}
+}

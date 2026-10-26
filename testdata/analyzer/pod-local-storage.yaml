@@ -1,0 +1,325 @@
+# Cluster for POD_LOCAL_STORAGE.
+#
+# Expected findings without --delete-emptydir-data (BLOCKED), with it (RISK);
+# the pods reported are the same.
+#
+# worker-01:
+#   shop/web-a1, shop/web-a2   Deployment web, emptyDir "cache"      -> Deployment shop/web
+#   shop/mem-1                 Deployment mem, emptyDir Memory       -> Deployment shop/mem
+#   shop/plain-1               configMap, hostPath and claim only    -> not reported
+#   shop/job-1                 Job pod, emptyDir, Succeeded          -> skipped
+#   monitoring/agent-x1        DaemonSet, emptyDir                   -> not reported
+#   kube-system/etcd-worker-01 static pod, emptyDir                  -> not reported
+#   tools/debug                no controller, emptyDir "scratch"     -> Pod tools/debug
+# worker-02:
+#   shop/web-b1                Deployment web, emptyDir "cache"      -> Deployment shop/web
+#   shop/db-0                  StatefulSet db, emptyDir "a", "z"     -> StatefulSet shop/db
+# worker-03 (not a target):
+#   shop/web-c1                Deployment web, emptyDir              -> not reported
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-01
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-02
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-03
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: web-7d4f
+  namespace: shop
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: web
+      uid: 11111111-1111-1111-1111-111111111111
+      controller: true
+spec:
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: web
+          image: example/web:1
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: mem-5c9b
+  namespace: shop
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: mem
+      uid: 22222222-2222-2222-2222-222222222222
+      controller: true
+spec:
+  selector:
+    matchLabels:
+      app: mem
+  template:
+    metadata:
+      labels:
+        app: mem
+    spec:
+      containers:
+        - name: mem
+          image: example/mem:1
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: plain-6b8d
+  namespace: shop
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: plain
+      uid: 33333333-3333-3333-3333-333333333333
+      controller: true
+spec:
+  selector:
+    matchLabels:
+      app: plain
+  template:
+    metadata:
+      labels:
+        app: plain
+    spec:
+      containers:
+        - name: plain
+          image: example/plain:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-a1
+  namespace: shop
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: web-7d4f
+      uid: 99999999-9999-9999-9999-999999999999
+      controller: true
+spec:
+  nodeName: worker-01
+  containers:
+    - name: c
+      image: example/c:1
+  volumes:
+    - name: cache
+      emptyDir: {}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-a2
+  namespace: shop
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: web-7d4f
+      uid: 99999999-9999-9999-9999-999999999999
+      controller: true
+spec:
+  nodeName: worker-01
+  containers:
+    - name: c
+      image: example/c:1
+  volumes:
+    - name: cache
+      emptyDir: {}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mem-1
+  namespace: shop
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: mem-5c9b
+      uid: 99999999-9999-9999-9999-999999999999
+      controller: true
+spec:
+  nodeName: worker-01
+  containers:
+    - name: c
+      image: example/c:1
+  volumes:
+    - name: tmp
+      emptyDir: {medium: Memory, sizeLimit: 16Mi}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: plain-1
+  namespace: shop
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: plain-6b8d
+      uid: 99999999-9999-9999-9999-999999999999
+      controller: true
+spec:
+  nodeName: worker-01
+  containers:
+    - name: c
+      image: example/c:1
+  volumes:
+    - name: cfg
+      configMap:
+        name: cfg
+    - name: logs
+      hostPath:
+        path: /var/log
+    - name: data
+      persistentVolumeClaim:
+        claimName: data
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: job-1
+  namespace: shop
+  ownerReferences:
+    - apiVersion: batch/v1
+      kind: Job
+      name: batch-job
+      uid: 99999999-9999-9999-9999-999999999999
+      controller: true
+spec:
+  nodeName: worker-01
+  containers:
+    - name: c
+      image: example/c:1
+  volumes:
+    - name: scratch
+      emptyDir: {}
+status:
+  phase: Succeeded
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: agent-x1
+  namespace: monitoring
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: DaemonSet
+      name: agent
+      uid: 99999999-9999-9999-9999-999999999999
+      controller: true
+spec:
+  nodeName: worker-01
+  containers:
+    - name: c
+      image: example/c:1
+  volumes:
+    - name: scratch
+      emptyDir: {}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: etcd-worker-01
+  namespace: kube-system
+  annotations:
+    kubernetes.io/config.mirror: abc
+spec:
+  nodeName: worker-01
+  containers:
+    - name: c
+      image: example/c:1
+  volumes:
+    - name: scratch
+      emptyDir: {}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: debug
+  namespace: tools
+spec:
+  nodeName: worker-01
+  containers:
+    - name: c
+      image: example/c:1
+  volumes:
+    - name: scratch
+      emptyDir: {}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-b1
+  namespace: shop
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: web-7d4f
+      uid: 99999999-9999-9999-9999-999999999999
+      controller: true
+spec:
+  nodeName: worker-02
+  containers:
+    - name: c
+      image: example/c:1
+  volumes:
+    - name: cache
+      emptyDir: {}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: db-0
+  namespace: shop
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: StatefulSet
+      name: db
+      uid: 99999999-9999-9999-9999-999999999999
+      controller: true
+spec:
+  nodeName: worker-02
+  containers:
+    - name: c
+      image: example/c:1
+  volumes:
+    - name: z
+      emptyDir: {}
+    - name: a
+      emptyDir: {}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-c1
+  namespace: shop
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: ReplicaSet
+      name: web-7d4f
+      uid: 99999999-9999-9999-9999-999999999999
+      controller: true
+spec:
+  nodeName: worker-03
+  containers:
+    - name: c
+      image: example/c:1
+  volumes:
+    - name: cache
+      emptyDir: {}

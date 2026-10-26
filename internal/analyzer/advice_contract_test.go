@@ -47,6 +47,10 @@ var adviceCases = []adviceCase{
 	// controller-less pod has another once --force is set.
 	{"POD_OWNERSHIP", "pod-ownership.yaml", workers123, DrainOptions{}},
 	{"POD_OWNERSHIP", "pod-ownership.yaml", workers123, DrainOptions{Force: true}},
+	// emptyDir pods are BLOCKED without --delete-emptydir-data and RISK with it,
+	// each with its own advice; the workload and the single pod have one text.
+	{"POD_LOCAL_STORAGE", "pod-local-storage.yaml", []string{"worker-01", "worker-02"}, DrainOptions{}},
+	{"POD_LOCAL_STORAGE", "pod-local-storage.yaml", []string{"worker-01", "worker-02"}, DrainOptions{DeleteEmptyDirData: true}},
 	{"MISSING_RESOURCE_REQUESTS", "missing-resource-requests.yaml", []string{"worker-01", "worker-02"}, DrainOptions{}},
 }
 
@@ -153,6 +157,8 @@ var adviceVariants = []string{
 	"POD_OWNERSHIP/RISK/StaticPod",
 	"POD_OWNERSHIP/BLOCKED/Unmanaged",
 	"POD_OWNERSHIP/RISK/Unmanaged",
+	"POD_LOCAL_STORAGE/BLOCKED/findings.LocalStorageEvidence",
+	"POD_LOCAL_STORAGE/RISK/findings.LocalStorageEvidence",
 	"MISSING_RESOURCE_REQUESTS/RISK/findings.MissingRequestsEvidence",
 }
 

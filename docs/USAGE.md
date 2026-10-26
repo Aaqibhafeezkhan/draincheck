@@ -38,7 +38,7 @@ These flags tell draincheck what you will pass to `kubectl drain`, with the same
 | `--pod-selector` | In effect. A pod the selector does not match is not touched by the drain, so no rule reports it (kubectl lists only the matching pods; checked with kubectl v1.36.1). The selector is a Kubernetes label selector such as `app=web` or `tier in (front,back)`; a selector that does not parse ends the run with exit `2`. The pods it leaves out are not looked at by any rule, so a finding about a workload may describe only part of it. With `--debug`, the `pod selector` line says how many pods on the target nodes were selected and how many left out. |
 | `--ignore-daemonsets` | In effect for `POD_OWNERSHIP`. Without it, a DaemonSet pod on a target node is `BLOCKED`, because kubectl refuses it. With it, kubectl skips the pod and `POD_OWNERSHIP` reports nothing for that DaemonSet. |
 | `--force` | In effect for `POD_OWNERSHIP`. Without it, a pod with no controller is `BLOCKED`, because kubectl refuses it. With it, kubectl deletes the pod and nothing recreates it, so the finding is a `RISK`. `--force` does not cover DaemonSet pods, as in kubectl. |
-| `--delete-emptydir-data` | Accepted and shown in the `settings` debug line. It does not change any finding yet. *Planned*: a rule for `emptyDir` pods will use it (#29). |
+| `--delete-emptydir-data` | In effect for `POD_LOCAL_STORAGE`. Without it, a pod with an `emptyDir` volume on a target node is `BLOCKED`, because kubectl refuses it. With it, kubectl deletes the pod and the data in the volume is lost, so the finding is a `RISK`. |
 | `--disable-eviction` | Accepted and shown in the `settings` debug line. The PDB rules still report budgets, although kubectl would not consult them with this flag. *Planned* (#109). |
 
 One difference from kubectl is known: when a pod's DaemonSet no longer exists, kubectl refuses the pod (or deletes it with `--force`), and draincheck treats it as DaemonSet-managed, because it does not read DaemonSets. The garbage collector removes such pods within seconds (observed on kind), so this is rare and short-lived.
@@ -84,6 +84,7 @@ A finding covers one cause, not one pod. A cause that reaches many pods, such as
 | `WORKLOAD_UNTOLERATED_TAINTS` | owning workload | the workload |
 | `SINGLE_REPLICA_WORKLOAD` | Deployment or StatefulSet | the workload |
 | `POD_OWNERSHIP` | DaemonSet, node (for its static pods) or pod without a controller | the DaemonSet, node or pod |
+| `POD_LOCAL_STORAGE` | owning workload; a pod without a controller is its own | the workload or the pod |
 | `MISSING_RESOURCE_REQUESTS` | owning workload | the workload; a pod without a controller is its own workload |
 
 An operator that keeps a PodDisruptionBudget for every node is grouped by the operator and the namespace. The operator is the API group and kind of the custom resource that controls the pods. The budgets of one operator in one namespace are one finding, however many nodes they cover, and each budget stays visible in `evidence.pdbs` with its numbers, nodes and pods. The same operator in another namespace, or another operator in the same namespace, is a finding of its own.
@@ -324,11 +325,25 @@ Raised for pods on a target node whose ownership gives them special `kubectl dra
 - **Evidence:** `category`, `nodes` (the nodes the covered pods run on, sorted) and `pods`, each with its `namespace`, `name` and `node`, sorted by namespace and name. A DaemonSet finding also has `owner_kind` and `owner_name`. Every covered pod is listed, so grouping hides nothing.
 - Static pods get one finding per node rather than one for the whole drain, because the node is what you choose with `--nodes`. The description names the static pods; the point is to plan around the node outage, since kubectl skips them.
 - The severity follows what `kubectl drain` does under the flags you pass to draincheck: `BLOCKED` when it would refuse the pod, nothing when it skips it, `RISK` when `--force` makes it delete a pod that nothing recreates. Run draincheck with the flags you will give `kubectl drain`; without them, a cluster with DaemonSets exits `1` at the default `--fail-on blocked`.
-- Only the ownership checks are made here. A pod with no controller that also has an `emptyDir` volume is reported for its missing controller; the `emptyDir` refusal is *planned* (#29).
+- Only the ownership checks are made here. A pod with no controller that also has an `emptyDir` volume is reported here for its missing controller, and by `POD_LOCAL_STORAGE` for the volume.
 - A pod with a controller of kind `DaemonSet` outside the `apps/v1` API group is not a DaemonSet to kubectl, so it is not reported.- Only pods scheduled on a target node count. Pods in phase `Succeeded` or `Failed` are skipped, since `kubectl drain` removes them without further checks. A pod that is already terminating is still reported, unlike in the other rules, because `kubectl drain` applies its DaemonSet, static and unreplicated checks to it too.
 - Pods managed by any other controller (Deployment, StatefulSet, Job, ...) are not reported. A pod whose ReplicaSet is missing from the snapshot is treated as managed.
 - A pod with a mirror annotation is always `StaticPod`, even though it also has a `Node` owner reference.
 - A pod controlled by a DaemonSet that no longer exists is still reported as a DaemonSet pod, since draincheck does not list DaemonSets. `kubectl drain` handles such an orphan differently: it fails with a not-found error, and only `--force` deletes the pod. Handling this case is *planned*.
+
+### `POD_LOCAL_STORAGE`
+
+Severity: `BLOCKED` or `RISK`, from `--delete-emptydir-data` (see [Drain flags](#drain-flags)).
+
+Raised for a pod on a target node with at least one `emptyDir` volume. `kubectl drain` refuses such a pod unless `--delete-emptydir-data` is given, and with the flag it deletes the pod and the data in the volume goes with it. Without the flag the drain stops before it evicts anything, and waiting does not change that, so it is `BLOCKED`; with it the drain completes and the data is lost, so it is `RISK`.
+
+- **Resource:** the owning workload (`Deployment/<namespace>/<name>`, `StatefulSet/...`), or `Pod/<namespace>/<name>` for a pod with no controller. One finding per workload, however many pods and nodes.
+- **Evidence:** `owner_kind` and `owner_name` (absent for a pod with no controller), `delete_emptydir_data` (whether the flag was given), `nodes` and `pods`, each with `namespace`, `name`, `node` and `volumes` (the names of its `emptyDir` volumes, sorted).
+- Any `emptyDir` counts, whatever its `medium` or `sizeLimit`. Volumes of other kinds (`configMap`, `secret`, `hostPath`, claims) do not.
+- Pods that kubectl decides before it looks at volumes are not reported: DaemonSet pods and static pods. Finished pods (`Succeeded`, `Failed`) are not reported either; kubectl removes them without checks. A pod `--pod-selector` does not match is not touched by the drain.
+- A pod that is already terminating is `BLOCKED` without the flag, because kubectl refuses it too, and not reported with it, because the drain is not what removes it. A `Pending` pod is the same: it has no data yet.
+- A pod with no controller is judged as if `--force` were given, because that refusal is `POD_OWNERSHIP`'s: with `--delete-emptydir-data` alone it is `RISK` here and `BLOCKED` in `POD_OWNERSHIP`.
+- Run draincheck with the flags you will give `kubectl drain`; without `--delete-emptydir-data`, a cluster with `emptyDir` pods on a target node exits `1` at the default `--fail-on blocked`.
 
 ### `MISSING_RESOURCE_REQUESTS`
 

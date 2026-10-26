@@ -85,7 +85,8 @@ draincheck --nodes worker-02,worker-04 [--kubeconfig PATH] [--context NAME] [--o
 | `--verbose`    | Text output only: print every finding in full  | off                    |
 | `--fail-on`    | Lowest finding level that exits `1`: `blocked`, `risk` or `any` | `blocked` |
 | `--ignore-daemonsets`, `--force` | Same as in `kubectl drain`. Without them, DaemonSet pods and pods with no controller on a target node are `BLOCKED` (kubectl refuses them), so such a cluster exits `1`. Pass the flags you will pass to `kubectl drain` | off |
-| `--delete-emptydir-data`, `--disable-eviction` | Same as in `kubectl drain`. Accepted now; they change no finding yet (planned) | off |
+| `--delete-emptydir-data` | Same as in `kubectl drain`. Without it, a pod with an `emptyDir` volume on a target node is `BLOCKED` (kubectl refuses it); with it, `RISK` (the data is lost) | off |
+| `--disable-eviction` | Same as in `kubectl drain`. Accepted now; it changes no finding yet (planned) | off |
 | `--pod-selector` | Same as in `kubectl drain`: a label selector; pods that do not match are left out of the analysis | none |
 | `--debug`      | Write one line to stderr for each action; the report on stdout does not change | off |
 
@@ -111,7 +112,7 @@ What a server dry run cannot show, and draincheck reports:
 
 draincheck reads a snapshot, so it cannot be more exact than the API server on a single eviction, and it does not predict whether evicted pods will fit elsewhere yet (*planned*).
 
-The rule-by-rule comparison, including the cases where `kubectl drain` is ahead (for example pods with `emptyDir` volumes), is in [docs/COMPARISON.md](docs/COMPARISON.md).
+The rule-by-rule comparison, including the cases where `kubectl drain` is ahead, is in [docs/COMPARISON.md](docs/COMPARISON.md).
 
 ## Build
 

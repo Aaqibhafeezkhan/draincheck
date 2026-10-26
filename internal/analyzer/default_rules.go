@@ -13,6 +13,7 @@ func DefaultRules() []Rule {
 		WorkloadUntoleratedTaints{},
 		SingleReplicaWorkload{},
 		PodOwnership{},
+		PodLocalStorage{},
 		MissingResourceRequests{},
 	}
 }

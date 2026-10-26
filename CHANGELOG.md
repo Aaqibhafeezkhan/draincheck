@@ -19,9 +19,9 @@ entries under `[Unreleased]` in the same pull request as the change (see
   not match is not touched by the drain, so no rule reports it, and a selector
   that does not parse ends the run with exit `2`. The other four are accepted
   and shown in the `--debug` settings line; `--ignore-daemonsets` and `--force`
-  now change `POD_OWNERSHIP` (below), while `--delete-emptydir-data` and
-  `--disable-eviction` change no finding yet, as the rules that use them are
-  planned (#29, #109). The pod filters of kubectl 1.36.0 and 1.37.1 are
+  now change `POD_OWNERSHIP` (below) and `--delete-emptydir-data` changes
+  `POD_LOCAL_STORAGE` (below), while `--disable-eviction` changes no finding
+  yet, as the rule that uses it is planned (#109). The pod filters of kubectl 1.36.0 and 1.37.1 are
   modelled in the analyzer for those rules (#107).
 - `--debug` flag. It writes one line to stderr for each action draincheck
   takes: the settings, every list call to the API server with its object count
@@ -32,6 +32,15 @@ entries under `[Unreleased]` in the same pull request as the change (see
 
 #### Analyzer rules
 
+- `POD_LOCAL_STORAGE`: a pod on a target node with an `emptyDir` volume is
+  `BLOCKED` without `--delete-emptydir-data`, because `kubectl drain` refuses it
+  and stops before it evicts anything, and `RISK` with the flag, because the
+  drain completes and the data in the volume is lost. One finding per owning
+  workload (a pod with no controller is its own), with every pod and volume
+  name in the JSON `evidence`: `owner_kind`, `owner_name`,
+  `delete_emptydir_data`, `nodes` and `pods` (each with `namespace`, `name`,
+  `node` and `volumes`). DaemonSet, static and finished pods are not reported,
+  as `kubectl drain` decides them first (#29).
 - `NO_REMAINING_NODES`: when the drain moves pods and no node is left that
   takes them, because every node is a target or the ones left are cordoned,
   not `Ready` or tainted `NoSchedule` or `NoExecute` where none of the moving

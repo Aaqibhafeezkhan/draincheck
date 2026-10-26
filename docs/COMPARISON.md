@@ -5,7 +5,7 @@
 Scope: only rules that are implemented (see [RULES.md](RULES.md)). Statements about kubectl are marked:
 
 - **✓ checked**: observed on a real cluster (kind, or the maintainer's own, as said in the text), or recorded in RULES.md or SPEC.md. Always written the same way, `(✓ checked)`, directly after the claim.
-- **(to verify)**: believed correct, not yet observed. Check before relying on it or publishing it.
+- **(to verify)**: not yet observed on a cluster, so its correctness is not guaranteed. Check it on yours before you rely on it.
 
 `--dry-run` below means `--dry-run=server`, the form that matters; `--dry-run=client` is covered where it differs. Checked with kubectl v1.36.1 against a kind cluster running Kubernetes v1.37.0, unless a row says otherwise.
 
@@ -42,6 +42,7 @@ Scope: only rules that are implemented (see [RULES.md](RULES.md)). Statements ab
 | Pod with no controller | Refused without `--force` (✓ checked); with `--force` it warns `deleting Pods that declare no controller`, evicts the pod and nothing recreates it (✓ checked) | `POD_OWNERSHIP` (`BLOCKED` without `--force`, `RISK` with it) | Said up front for all nodes, with the exit code of the refusal; with the flag it tells you the pod is lost, not recreated |
 | DaemonSet pods | Refused without `--ignore-daemonsets` (✓ checked); with it they are skipped: `Warning: ignoring DaemonSet-managed Pods`; `--force` alone does not help (✓ checked) | `POD_OWNERSHIP` (`BLOCKED` without the flag, nothing with it) | One finding per DaemonSet, not per pod, with the flag named, for all nodes at once |
 | Static pods | Skipped, not evicted (✓ checked) | `POD_OWNERSHIP` (`RISK`) | Reminds you they go down with the node |
+| Pods with local storage (`emptyDir`) | Refused without `--delete-emptydir-data`, also in dry-run: `cannot delete Pods with local storage (use --delete-emptydir-data to override): <namespace>/<pod>`, before any eviction, exit 1 (✓ checked). With the flag it evicts the pod, and the replacement on another node starts with an empty volume (✓ checked). `medium: Memory` is refused like any other `emptyDir` (✓ checked). Each pod is judged by the first filter that stops it: a DaemonSet pod with an `emptyDir` is named under the DaemonSet message only (✓ checked) | `POD_LOCAL_STORAGE` (`BLOCKED` without the flag, `RISK` with it) | Said up front for all nodes, one finding per workload with the pods and volume names; with the flag it tells you the data is lost |
 | Containers with no CPU or memory request | Evicts regardless (✓ checked) | `MISSING_RESOURCE_REQUESTS` (`RISK`) | Per workload; flags that rescheduled pods may not fit where they land |
 
 ## Where draincheck is not better
@@ -50,7 +51,6 @@ Listed on purpose. A comparison that only lists wins is marketing.
 
 | Case | Position |
 | --- | --- |
-| Pods with local storage (`emptyDir`) | `kubectl drain` refuses them without `--delete-emptydir-data`, also in dry-run (✓ checked). draincheck has **no rule** for this and says nothing about it (✓ checked). A clean draincheck report does not cover it |
 | Exact answer from the live API | `--dry-run=server` asks the real eviction API, so for the node it is draining it is exact where draincheck models from a snapshot. Its weakness is the hang, the single node and the missing explanation, not accuracy |
 | Capacity, affinity, node selectors, topology spread | Not evaluated. `NODE_NOT_SCHEDULABLE`, `NO_REMAINING_NODES` and `WORKLOAD_UNTOLERATED_TAINTS` count cordons, readiness and taints only, and say they are estimates |
 | Orphaned DaemonSet pods (DaemonSet deleted) | Reported as ordinary DaemonSet pods; kubectl treats them differently (see `POD_OWNERSHIP`, planned fix) |
