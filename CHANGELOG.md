@@ -18,9 +18,11 @@ entries under `[Unreleased]` in the same pull request as the change (see
   defaults and meaning. `--pod-selector` is in effect: a pod the selector does
   not match is not touched by the drain, so no rule reports it, and a selector
   that does not parse ends the run with exit `2`. The other four are accepted
-  and shown in the `--debug` settings line, but change no finding yet; the rules
-  that use them are planned (#108, #29, #109). The pod filters of kubectl 1.36.0
-  and 1.37.1 are modelled in the analyzer for those rules (#107).
+  and shown in the `--debug` settings line; `--ignore-daemonsets` and `--force`
+  now change `POD_OWNERSHIP` (below), while `--delete-emptydir-data` and
+  `--disable-eviction` change no finding yet, as the rules that use them are
+  planned (#29, #109). The pod filters of kubectl 1.36.0 and 1.37.1 are
+  modelled in the analyzer for those rules (#107).
 - `--debug` flag. It writes one line to stderr for each action draincheck
   takes: the settings, every list call to the API server with its object count
   and duration, how the target nodes were resolved, each rule with its number
@@ -86,6 +88,11 @@ entries under `[Unreleased]` in the same pull request as the change (see
 
 ### Changed
 
+- **Exit code on clusters with DaemonSets.** A DaemonSet pod or a pod with no
+  controller on a target node now ends the run with exit `1` at the default
+  `--fail-on blocked`, as `kubectl drain` refuses such pods. Pass
+  `--ignore-daemonsets` and `--force` as you will to `kubectl drain` to get
+  the answer for that drain (#108).
 - draincheck now also lists Deployments, StatefulSets, Jobs and CronJobs (all
   namespaces), so planned workload rules can see them. No rule uses them yet and
   the report does not change. The account that runs draincheck needs `list` on
@@ -104,6 +111,14 @@ entries under `[Unreleased]` in the same pull request as the change (see
 
 #### Analyzer rules
 
+- `POD_OWNERSHIP` now follows what `kubectl drain` does with the pod under
+  the flags you pass. A DaemonSet pod is `BLOCKED` without
+  `--ignore-daemonsets` and not reported with it. A pod with no controller is
+  `BLOCKED` without `--force` and a `RISK` with it, because kubectl then deletes
+  it and nothing recreates it. A static pod stays a `RISK`. Before, every
+  finding was a `RISK`. The finding's evidence and grouping do not change, only
+  the severity and the wording for a pod with no controller under `--force`
+  (#108).
 - `unhealthyPodEvictionPolicy` is honoured by the PodDisruptionBudget rules.
   A pod that is not Ready is evicted past its budget with `AlwaysAllow`, and
   with `IfHealthyBudget` (the default) while the budget is healthy. Such a pod

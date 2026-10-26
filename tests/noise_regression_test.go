@@ -116,9 +116,9 @@ func TestNoiseRegression(t *testing.T) {
 		{"POD_OWNERSHIP", findings.Risk, "Node", "", "worker-02", 2},
 		{"POD_OWNERSHIP", findings.Risk, "Node", "", "worker-03", 2},
 		{"MISSING_RESOURCE_REQUESTS", findings.Risk, "Pod", "default", "debug-shell", 1},
-		{"POD_OWNERSHIP", findings.Risk, "Pod", "default", "debug-shell", 1},
-		{"POD_OWNERSHIP", findings.Risk, "DaemonSet", "kube-system", "kube-proxy", 6},
-		{"POD_OWNERSHIP", findings.Risk, "DaemonSet", "monitoring", "node-exporter", 6},
+		{"POD_OWNERSHIP", findings.Blocked, "Pod", "default", "debug-shell", 1},
+		{"POD_OWNERSHIP", findings.Blocked, "DaemonSet", "kube-system", "kube-proxy", 6},
+		{"POD_OWNERSHIP", findings.Blocked, "DaemonSet", "monitoring", "node-exporter", 6},
 		{"MISSING_RESOURCE_REQUESTS", findings.Risk, "Deployment", "shop", "api", 10},
 		{"MISSING_RESOURCE_REQUESTS", findings.Risk, "Deployment", "shop", "web", 12},
 		{"MISSING_RESOURCE_REQUESTS", findings.Risk, "Deployment", "shop", "worker", 8},
@@ -161,7 +161,7 @@ func TestNoiseRegressionSeverities(t *testing.T) {
 	for _, f := range runFixture(t, "noise.yaml") {
 		counts[f.Severity]++
 	}
-	want := map[findings.Severity]int{findings.Blocked: 2, findings.Risk: 13, findings.Unknown: 2}
+	want := map[findings.Severity]int{findings.Blocked: 5, findings.Risk: 10, findings.Unknown: 2}
 	for sev, n := range want {
 		if counts[sev] != n {
 			t.Errorf("%s findings = %d, want %d", sev, counts[sev], n)

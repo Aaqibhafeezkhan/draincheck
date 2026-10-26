@@ -23,7 +23,8 @@ import (
 	"github.com/Veinar/draincheck/internal/inventory"
 )
 
-// unmanagedCluster has one bare pod on worker-1: a POD_OWNERSHIP RISK, no BLOCKED.
+// unmanagedCluster has one bare pod on worker-1: a POD_OWNERSHIP finding, RISK
+// with --force and BLOCKED without it.
 func unmanagedCluster() *fake.Clientset {
 	return fake.NewClientset(
 		&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "worker-1"}},
@@ -42,10 +43,11 @@ func TestExecute(t *testing.T) {
 		wantCode int
 		wantRule bool
 	}{
-		{"risk passes at blocked threshold", options{Nodes: []string{"worker-1"}, Output: outputJSON, FailOn: failOnBlocked}, 0, true},
-		{"risk fails at risk threshold", options{Nodes: []string{"worker-1"}, Output: outputJSON, FailOn: failOnRisk}, exitFindings, true},
-		{"no pods on target, clean", options{Nodes: []string{"worker-2"}, Output: outputJSON, FailOn: failOnAny}, 0, false},
-		{"wildcard targets every node", options{AllNodes: true, Output: outputJSON, FailOn: failOnRisk}, exitFindings, true},
+		{"risk passes at blocked threshold", options{Nodes: []string{"worker-1"}, Force: true, Output: outputJSON, FailOn: failOnBlocked}, 0, true},
+		{"risk fails at risk threshold", options{Nodes: []string{"worker-1"}, Force: true, Output: outputJSON, FailOn: failOnRisk}, exitFindings, true},
+		{"the pod with no controller is BLOCKED without --force", options{Nodes: []string{"worker-1"}, Output: outputJSON, FailOn: failOnBlocked}, exitFindings, true},
+		{"no pods on target, clean", options{Nodes: []string{"worker-2"}, Force: true, Output: outputJSON, FailOn: failOnAny}, 0, false},
+		{"wildcard targets every node", options{AllNodes: true, Force: true, Output: outputJSON, FailOn: failOnRisk}, exitFindings, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -149,7 +151,7 @@ func TestExecuteVerboseSelectsFullTextLayout(t *testing.T) {
 		{false, "[POD_OWNERSHIP] 1 finding"},
 		{true, "[POD_OWNERSHIP] Pod/default/bare"},
 	} {
-		opts := options{Nodes: []string{"worker-1"}, Output: outputText, FailOn: failOnBlocked, Verbose: tc.verbose}
+		opts := options{Nodes: []string{"worker-1"}, Output: outputText, FailOn: failOnBlocked, Force: true, Verbose: tc.verbose}
 		var out bytes.Buffer
 		_ = execute(context.Background(), opts, nil, inventory.NewClientsetCollector(unmanagedCluster(), nil), &out)
 		if !strings.Contains(out.String(), tc.want) {
@@ -327,7 +329,7 @@ func TestExecuteIsDeterministic(t *testing.T) {
 			})
 		}
 	}
-	opts := options{Nodes: []string{"worker-1"}, Output: outputJSON, FailOn: failOnBlocked}
+	opts := options{Nodes: []string{"worker-1"}, Output: outputJSON, FailOn: failOnBlocked, Force: true}
 
 	var first bytes.Buffer
 	if err := execute(context.Background(), opts, nil, inventory.NewClientsetCollector(fake.NewClientset(objs...), nil), &first); err != nil {
@@ -367,7 +369,7 @@ func wantInOrder(t *testing.T, got string, wants ...string) {
 }
 
 func TestExecuteLogsPipelineSteps(t *testing.T) {
-	opts := options{Nodes: []string{"worker-1"}, Output: outputJSON, FailOn: failOnRisk}
+	opts := options{Nodes: []string{"worker-1"}, Output: outputJSON, FailOn: failOnRisk, Force: true}
 	var out, logs bytes.Buffer
 
 	_ = execute(context.Background(), opts, debugLog(&logs), inventory.NewClientsetCollector(unmanagedCluster(), nil), &out)
@@ -478,5 +480,52 @@ func TestExecuteDebugDoesNotChangeStdoutWithPodSelector(t *testing.T) {
 				t.Errorf("selector %q: no pod selector line in the log:\n%s", selector, logs.String())
 			}
 		}
+	}
+}
+
+// daemonSetCluster has one DaemonSet pod and one bare pod on worker-1.
+func daemonSetCluster() *fake.Clientset {
+	controller := true
+	return fake.NewClientset(
+		&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "worker-1"}},
+		&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Namespace: "kube-system", Name: "agent-x1", OwnerReferences: []metav1.OwnerReference{
+				{APIVersion: "apps/v1", Kind: "DaemonSet", Name: "agent", Controller: &controller}}},
+			Spec: corev1.PodSpec{NodeName: "worker-1"},
+		},
+		&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "bare"},
+			Spec:       corev1.PodSpec{NodeName: "worker-1"},
+		},
+	)
+}
+
+// The drain flags reach the rule: the same cluster ends the run with exit 1 or
+// 0 depending on whether kubectl drain would refuse its pods.
+func TestExecuteDrainFlagsDecideTheExitCode(t *testing.T) {
+	tests := []struct {
+		name     string
+		opts     options
+		wantCode int
+	}{
+		{"no flags: both pods are refused", options{}, exitFindings},
+		{"--ignore-daemonsets alone leaves the bare pod BLOCKED", options{IgnoreDaemonSets: true}, exitFindings},
+		{"--force alone leaves the DaemonSet BLOCKED", options{Force: true}, exitFindings},
+		{"both flags: only a RISK is left, which passes at the blocked threshold", options{IgnoreDaemonSets: true, Force: true}, 0},
+		{"--pod-selector that matches nothing: nothing is refused", options{PodSelector: "app=none"}, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.opts.Nodes, tt.opts.Output, tt.opts.FailOn = []string{"worker-1"}, outputJSON, failOnBlocked
+			var out bytes.Buffer
+			err := execute(context.Background(), tt.opts, nil, inventory.NewClientsetCollector(daemonSetCluster(), nil), &out)
+			got := 0
+			if err != nil {
+				got = exitCodeOf(err)
+			}
+			if got != tt.wantCode {
+				t.Errorf("exit code = %d (err %v), want %d\n%s", got, err, tt.wantCode, out.String())
+			}
+		})
 	}
 }
