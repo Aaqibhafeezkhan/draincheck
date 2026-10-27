@@ -59,16 +59,6 @@ signs:
       - ${artifact}
     output: true
 
-changelog:
-  use: github
-  sort: asc
-  filters:
-    exclude:
-      - "^docs:"
-      - "^test:"
-      - "^chore:"
-      - "^ci:"
-
 release:
   prerelease: auto
   # Created as a draft: the workflow attaches the SLSA provenance and then

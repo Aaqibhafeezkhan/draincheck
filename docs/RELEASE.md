@@ -65,13 +65,13 @@ Download the archive, `checksums.txt`, `checksums.txt.sigstore.json` and `drainc
 
 ## Cut a release
 
-1. Merge to `develop`, then tag a signed tag: `git tag -s vX.Y.Z -m "vX.Y.Z" && git push origin vX.Y.Z`.
+1. Move the `[Unreleased]` entries of `CHANGELOG.md` under `## [X.Y.Z] - <date>` and merge to `develop`, then tag a signed tag: `git tag -s vX.Y.Z -m "vX.Y.Z" && git push origin vX.Y.Z`.
 2. Watch the `Release` workflow. All three jobs must pass.
 3. Run the verification steps above against the published assets.
 
 The workflow creates the release as a draft, attaches the SLSA provenance to it and only then publishes it. This is required when release immutability is enabled for the repository: assets cannot be added to a published release, and the tag name of a published release cannot be reused. If the run fails before the last job, the release stays a draft. Delete it (`gh release delete vX.Y.Z --yes`), delete the tag, fix the cause and tag again. Nothing has been published.
 
-A tag with a suffix (`v0.2.0-rc.1`) is published as a pre-release.
+The release notes are the `## [X.Y.Z]` section of `CHANGELOG.md` for the tag (`.github/scripts/release-notes.sh`). If the section is missing or empty, the workflow fails before it builds anything. Only `vX.Y.Z` tags trigger the workflow; there are no release candidates or other suffixes.
 
 ## Test on a fork
 
