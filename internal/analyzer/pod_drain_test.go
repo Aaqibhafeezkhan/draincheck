@@ -11,6 +11,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 )
 
 // drainOwners resolves the owners the cases below use: a Deployment "web"
@@ -147,6 +148,62 @@ func TestClassifyPod(t *testing.T) {
 				t.Errorf("class = %v, want %v", d.class, tt.class)
 			}
 		})
+	}
+}
+
+// --disable-eviction makes kubectl delete the pods instead of evicting them, so
+// no budget is consulted for any pod. Nothing else about the pod changes: the
+// drain still acts on it, and the other rules judge it as before.
+func TestClassifyPodWithDisabledEviction(t *testing.T) {
+	tests := []struct {
+		name string
+		pod  drainPodSpec
+	}{
+		{"running Deployment pod", drainPodSpec{controllerKind: "ReplicaSet", phase: corev1.PodRunning}},
+		{"pod with no phase", drainPodSpec{controllerKind: "ReplicaSet"}},
+		{"pod with no controller", drainPodSpec{phase: corev1.PodRunning}},
+		{"Pending pod", drainPodSpec{controllerKind: "ReplicaSet", phase: corev1.PodPending}},
+		{"terminating pod", drainPodSpec{controllerKind: "ReplicaSet", phase: corev1.PodRunning, terminating: true}},
+		{"finished pod", drainPodSpec{controllerKind: "Job", phase: corev1.PodSucceeded}},
+		{"DaemonSet pod", drainPodSpec{controllerKind: "DaemonSet", phase: corev1.PodRunning}},
+		{"static pod", drainPodSpec{mirror: true, phase: corev1.PodRunning}},
+	}
+	owners := drainOwners()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pod := tt.pod.pod()
+			with := classifyPod(pod, owners, DrainOptions{DisableEviction: true})
+			without := classifyPod(pod, owners, DrainOptions{})
+
+			if with.consultsBudget() {
+				t.Error("consultsBudget = true with --disable-eviction, want false")
+			}
+			if with.fate() != without.fate() || with.class != without.class || with.bypassesBudget() != without.bypassesBudget() {
+				t.Errorf("fate/class/bypassesBudget = %v/%v/%v, want %v/%v/%v as without the flag",
+					with.fate(), with.class, with.bypassesBudget(), without.fate(), without.class, without.bypassesBudget())
+			}
+		})
+	}
+}
+
+// With the flag, a pod that --pod-selector leaves out stays out, and a pod it
+// keeps still consults no budget.
+func TestClassifyPodWithDisabledEvictionAndSelector(t *testing.T) {
+	sel, err := labels.Parse("app=web")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pod := drainPodSpec{controllerKind: "ReplicaSet", phase: corev1.PodRunning}.pod()
+	pod.Labels = map[string]string{"app": "web"}
+	other := pod.DeepCopy()
+	other.Labels = map[string]string{"app": "db"}
+
+	drain := DrainOptions{DisableEviction: true, PodSelector: sel}
+	if d := classifyPod(pod, drainOwners(), drain); !d.selected || d.consultsBudget() || d.fate() != fateEvictedRescheduled {
+		t.Errorf("matching pod: selected=%v consultsBudget=%v fate=%v", d.selected, d.consultsBudget(), d.fate())
+	}
+	if d := classifyPod(*other, drainOwners(), drain); d.selected || d.fate() != fateNotSelected {
+		t.Errorf("non-matching pod: selected=%v fate=%v", d.selected, d.fate())
 	}
 }
 

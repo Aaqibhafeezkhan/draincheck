@@ -39,7 +39,7 @@ These flags tell draincheck what you will pass to `kubectl drain`, with the same
 | `--ignore-daemonsets` | In effect for `POD_OWNERSHIP`. Without it, a DaemonSet pod on a target node is `BLOCKED`, because kubectl refuses it. With it, kubectl skips the pod and `POD_OWNERSHIP` reports nothing for that DaemonSet. |
 | `--force` | In effect for `POD_OWNERSHIP`. Without it, a pod with no controller is `BLOCKED`, because kubectl refuses it. With it, kubectl deletes the pod and nothing recreates it, so the finding is a `RISK`. `--force` does not cover DaemonSet pods, as in kubectl. |
 | `--delete-emptydir-data` | In effect for `POD_LOCAL_STORAGE`. Without it, a pod with an `emptyDir` volume on a target node is `BLOCKED`, because kubectl refuses it. With it, kubectl deletes the pod and the data in the volume is lost, so the finding is a `RISK`. |
-| `--disable-eviction` | Accepted and shown in the `settings` debug line. The PDB rules still report budgets, although kubectl would not consult them with this flag. *Planned* (#109). |
+| `--disable-eviction` | In effect for the `PDB_*` rules. `kubectl drain` then deletes the pods instead of evicting them, so no PodDisruptionBudget is consulted and those rules report nothing, however the budgets stand. Rules that do not read budgets (`SINGLE_REPLICA_WORKLOAD`, `POD_OWNERSHIP`, `POD_LOCAL_STORAGE`, and the node and taint rules) are unchanged. A deleted pod is gone without the graceful, budget-checked handover an eviction gives, so the silence is not safety; the finding that remains is the one you should read. With `--debug`, the `eviction disabled` line says how many budgets were not consulted. |
 
 One difference from kubectl is known: when a pod's DaemonSet no longer exists, kubectl refuses the pod (or deletes it with `--force`), and draincheck treats it as DaemonSet-managed, because it does not read DaemonSets. The garbage collector removes such pods within seconds (observed on kind), so this is rare and short-lived.
 
@@ -393,6 +393,7 @@ stdout is not touched. The text or JSON report is byte-for-byte the same with an
 | `resolve target nodes` | when the target nodes are accepted | `requested`, `all`, `targets` |
 | `resolve target nodes failed` | when a node does not exist or the cluster has no nodes | `requested`, `all`, `error` |
 | `pod selector` | after the target nodes are accepted, only with `--pod-selector` | `selector`, `selected` and `left_out` (pods on the target nodes) |
+| `eviction disabled` | after the target nodes are accepted, only with `--disable-eviction` | `budgets_not_consulted` (PodDisruptionBudgets in the cluster; the `PDB_*` rules report nothing) |
 | `rule start` and `rule done` | around each rule | `rule`; `findings` on `rule done` |
 | `summary` | when all rules are done | `blocked`, `risk`, `unknown`, `fail_on` |
 | `write report` | just before the report is written | `format`, `verbose`, `findings` |

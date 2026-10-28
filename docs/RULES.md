@@ -99,6 +99,7 @@ One function, `classifyPod` in `internal/analyzer/pod_drain.go`, says what a dra
 | Succeeded or Failed (any owner, also DaemonSet and static) | finished | no | no | none |
 | Already terminating (deletion timestamp set, not finished) | already leaving | no | no | `POD_OWNERSHIP`; `POD_LOCAL_STORAGE` (`BLOCKED` only, with an `emptyDir`) |
 | Not matched by `--pod-selector`, in any of the states above | not selected: `kubectl drain` does not list it | no | no | none (checked with kubectl v1.36.1: only the matching pods are named, and a selector that matches nothing drains cleanly) |
+| Any of the states above, with `--disable-eviction` | unchanged: the fate and the class are the same | unchanged | no, for every state (`kubectl drain` deletes the pods, so the eviction API and its budgets are not called) | unchanged |
 
 Order of precedence: not selected, then finished, then already terminating, then left alone, then evicted. For `POD_OWNERSHIP` the class decides, not the fate: a terminating DaemonSet, static or controller-less pod is still reported, because `kubectl drain` applies its DaemonSet, static and unreplicated checks to it as well. `POD_LOCAL_STORAGE` is the same for the refusal, because kubectl refuses a terminating pod with an `emptyDir` too, and skips the `RISK`, because the drain is not what removes the pod. For every other rule a terminating pod is skipped: its controller has already created the replacement, so the drain does not take anything down.
 

@@ -225,6 +225,87 @@ func TestExecuteBlockedFailsByDefault(t *testing.T) {
 	}
 }
 
+// pdbCluster has one pod with no controller on worker-1 behind a budget that
+// allows no disruption. Tests that read the exit code pass Force, so
+// POD_OWNERSHIP is a RISK and the budget decides.
+func pdbCluster() *fake.Clientset {
+	labels := map[string]string{"app": "payments"}
+	return fake.NewClientset(
+		&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "worker-1"}},
+		&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Namespace: "billing", Name: "payments-0", Labels: labels},
+			Spec:       corev1.PodSpec{NodeName: "worker-1"},
+		},
+		&policyv1.PodDisruptionBudget{
+			ObjectMeta: metav1.ObjectMeta{Namespace: "billing", Name: "payments-pdb"},
+			Spec:       policyv1.PodDisruptionBudgetSpec{Selector: &metav1.LabelSelector{MatchLabels: labels}},
+			Status:     policyv1.PodDisruptionBudgetStatus{DisruptionsAllowed: 0},
+		},
+	)
+}
+
+// kubectl drain --disable-eviction deletes the pods, so the budget that would
+// refuse an eviction is not consulted and is not reported.
+func TestExecuteDisableEvictionSilencesTheBudgetRules(t *testing.T) {
+	for _, disable := range []bool{false, true} {
+		var out bytes.Buffer
+		opts := options{Nodes: []string{"worker-1"}, Output: outputJSON, FailOn: failOnBlocked, Force: true, DisableEviction: disable}
+
+		err := execute(context.Background(), opts, nil, inventory.NewClientsetCollector(pdbCluster(), nil), &out)
+
+		blocked := slices.Contains(ruleIDs(t, out.Bytes()), "PDB_DISRUPTION_BLOCKED")
+		if blocked == disable {
+			t.Errorf("disable-eviction=%v: PDB_DISRUPTION_BLOCKED reported = %v", disable, blocked)
+		}
+		if want := map[bool]int{false: exitFindings, true: 0}[disable]; exitCode(err) != want {
+			t.Errorf("disable-eviction=%v: exit code = %d, want %d", disable, exitCode(err), want)
+		}
+	}
+}
+
+// The flag shapes the result, so the log says so and how many budgets it set
+// aside; without the flag there is nothing to say.
+func TestExecuteLogsDisabledEviction(t *testing.T) {
+	var out, logs bytes.Buffer
+	opts := options{Nodes: []string{"worker-1"}, Output: outputJSON, FailOn: failOnBlocked, DisableEviction: true}
+	_ = execute(context.Background(), opts, debugLog(&logs), inventory.NewClientsetCollector(pdbCluster(), nil), &out)
+	wantInOrder(t, logs.String(),
+		`msg="resolve target nodes"`,
+		`msg="eviction disabled" budgets_not_consulted=1`,
+		`msg="rule start" rule=PDB_DISRUPTION_BLOCKED`)
+
+	logs.Reset()
+	opts.DisableEviction = false
+	_ = execute(context.Background(), opts, debugLog(&logs), inventory.NewClientsetCollector(pdbCluster(), nil), &out)
+	if strings.Contains(logs.String(), "eviction disabled") {
+		t.Errorf("log mentions disabled eviction although the flag is off:\n%s", logs.String())
+	}
+}
+
+// The line is logged also when the cluster has no budgets: the flag was given.
+func TestExecuteLogsDisabledEvictionWithoutBudgets(t *testing.T) {
+	var out, logs bytes.Buffer
+	opts := options{Nodes: []string{"worker-1"}, Output: outputJSON, FailOn: failOnBlocked, DisableEviction: true}
+	_ = execute(context.Background(), opts, debugLog(&logs), inventory.NewClientsetCollector(unmanagedCluster(), nil), &out)
+	if !strings.Contains(logs.String(), `msg="eviction disabled" budgets_not_consulted=0`) {
+		t.Errorf("no eviction disabled line with 0 budgets:\n%s", logs.String())
+	}
+}
+
+// --debug adds lines to stderr and nothing to stdout, also with the flag.
+func TestExecuteDebugDoesNotChangeStdoutWithDisableEviction(t *testing.T) {
+	for _, format := range []string{outputText, outputJSON} {
+		opts := options{Nodes: []string{"worker-1"}, Output: format, FailOn: failOnRisk, DisableEviction: true}
+		c := atFixedTime{inventory.NewClientsetCollector(pdbCluster(), nil)}
+		var plain, debug, logs bytes.Buffer
+		errPlain := execute(context.Background(), opts, nil, c, &plain)
+		errDebug := execute(context.Background(), opts, debugLog(&logs), c, &debug)
+		if plain.String() != debug.String() || exitCodeOf(errPlain) != exitCodeOf(errDebug) {
+			t.Errorf("%s: --debug changed stdout or the exit code", format)
+		}
+	}
+}
+
 func TestExecuteDuplicateNodesAreAnalyzedOnce(t *testing.T) {
 	var once, twice bytes.Buffer
 	c := atFixedTime{inventory.NewClientsetCollector(unmanagedCluster(), nil)}

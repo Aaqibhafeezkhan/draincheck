@@ -44,6 +44,10 @@ func execute(ctx context.Context, opts options, logger *slog.Logger, c inventory
 		logger.Debug("pod selector", "selector", opts.PodSelector, "selected", selected, "left_out", leftOut)
 	}
 
+	if opts.DisableEviction {
+		logger.Debug("eviction disabled", "budgets_not_consulted", len(snap.PodDisruptionBudgets()))
+	}
+
 	fs := analyzer.Run(logger, in, analyzer.DefaultRules()...)
 	logSummary(logger, fs, opts.FailOn)
 

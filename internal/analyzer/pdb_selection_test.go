@@ -1,7 +1,9 @@
 package analyzer
 
 import (
+	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/Veinar/draincheck/internal/findings"
@@ -101,5 +103,93 @@ func TestSelectedPDBsNothingToSelect(t *testing.T) {
 	}
 	if got := selectedPDBs(Input{Targets: []string{"worker-01"}}); got != nil {
 		t.Errorf("nil snapshot: got %+v, want nil", got)
+	}
+}
+
+// --disable-eviction: kubectl deletes the pods, so no budget is consulted and
+// every PDB rule is silent, whatever the budgets say. Each case first shows
+// that the rule reports something without the flag, so the silence is the
+// flag's doing and not an empty fixture.
+func TestPDBRulesAreSilentWithDisabledEviction(t *testing.T) {
+	tests := []struct {
+		rule    Rule
+		fixture string
+		targets []string
+	}{
+		{PDBDisruptionBlocked{}, "pdb-disruption-blocked.yaml", []string{"worker-01"}},
+		{PDBOverlappingSelectors{}, "pdb-overlapping-selectors.yaml", []string{"worker-01"}},
+		{PDBBatchExceedsBudget{}, "pdb-batch-exceeds-budget.yaml", []string{"worker-01", "worker-02"}},
+		{PDBStaleStatus{}, "pdb-stale-status.yaml", []string{"worker-01", "worker-02"}},
+		{PDBSyncFailed{}, "pdb-sync-failed.yaml", []string{"worker-01", "worker-02"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.rule.ID(), func(t *testing.T) {
+			s := snapshotFromFixture(t, tt.fixture)
+
+			if got := Run(nil, Input{Snapshot: s, Targets: tt.targets}, tt.rule); len(got) == 0 {
+				t.Fatal("the rule reports nothing without the flag; the case proves nothing")
+			}
+			got := Run(nil, Input{Snapshot: s, Targets: tt.targets, Drain: DrainOptions{DisableEviction: true}}, tt.rule)
+			if len(got) != 0 {
+				t.Errorf("findings with --disable-eviction = %+v, want none", got)
+			}
+		})
+	}
+}
+
+// The shared selection is where the flag acts, so a rule added later that
+// builds on it is silent too.
+func TestSelectedPDBsAndOverlapsWithDisabledEviction(t *testing.T) {
+	s := snapshotFromFixture(t, "pdb-overlapping-selectors.yaml")
+	in := Input{Snapshot: s, Targets: []string{"worker-01", "worker-02"}}
+	if len(selectedPDBs(in)) == 0 || len(overlaps(in)) == 0 {
+		t.Fatal("the fixture selects nothing without the flag; the case proves nothing")
+	}
+
+	in.Drain.DisableEviction = true
+	if got := selectedPDBs(in); len(got) != 0 {
+		t.Errorf("selectedPDBs = %d budgets, want none", len(got))
+	}
+	if got := overlaps(in); len(got) != 0 {
+		t.Errorf("overlaps = %d pods, want none", len(got))
+	}
+	if got := overlappedPDBs(in); len(got) != 0 {
+		t.Errorf("overlappedPDBs = %v, want none", got)
+	}
+}
+
+func TestSelectedPDBsWithDisabledEvictionNilSnapshot(t *testing.T) {
+	in := Input{Targets: []string{"worker-01"}, Drain: DrainOptions{DisableEviction: true}}
+	if got := selectedPDBs(in); got != nil {
+		t.Errorf("selectedPDBs = %v, want nil", got)
+	}
+}
+
+// The flag silences the budget rules and nothing else: the rest of the report
+// is the same with and without it.
+func TestDisabledEvictionLeavesOtherRulesAlone(t *testing.T) {
+	s := snapshotFromFixture(t, "pdb-disruption-blocked.yaml")
+	targets := []string{"worker-01", "worker-02"}
+	notPDB := func(fs []findings.Finding) []findings.Finding {
+		var out []findings.Finding
+		for _, f := range fs {
+			if !strings.HasPrefix(f.RuleID, "PDB_") {
+				out = append(out, f)
+			}
+		}
+		return out
+	}
+
+	without := Run(nil, Input{Snapshot: s, Targets: targets}, DefaultRules()...)
+	with := Run(nil, Input{Snapshot: s, Targets: targets, Drain: DrainOptions{DisableEviction: true}}, DefaultRules()...)
+
+	if len(notPDB(without)) == len(without) {
+		t.Fatal("no PDB finding without the flag; the case proves nothing")
+	}
+	if len(notPDB(with)) != len(with) {
+		t.Errorf("PDB findings with --disable-eviction: %+v", with)
+	}
+	if !reflect.DeepEqual(notPDB(without), notPDB(with)) {
+		t.Errorf("other rules changed with --disable-eviction\nwithout: %+v\nwith:    %+v", notPDB(without), notPDB(with))
 	}
 }
