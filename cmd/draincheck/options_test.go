@@ -191,3 +191,28 @@ func TestRootFlags(t *testing.T) {
 		})
 	}
 }
+
+// FuzzOptionsValidate feeds validate the --nodes, --output and --fail-on values
+// an operator can type. It must never panic, and a value it accepts must leave
+// the options in the shape the pipeline relies on.
+func FuzzOptionsValidate(f *testing.F) {
+	f.Add("worker-01,worker-02", "text", "blocked")
+	f.Add("*", "json", "risk")
+	f.Add("*,worker-01", "text", "blocked")
+	f.Add(" worker-01 ,", "text", "blocked")
+	f.Add("", "yaml", "safe")
+	f.Fuzz(func(t *testing.T, nodes, output, failOn string) {
+		o := options{Nodes: strings.Split(nodes, ","), Output: output, FailOn: failOn}
+		if err := o.validate(); err != nil {
+			return
+		}
+		if o.AllNodes != (o.Nodes == nil) {
+			t.Fatalf("AllNodes = %v with Nodes = %q", o.AllNodes, o.Nodes)
+		}
+		for _, n := range o.Nodes {
+			if n == "" || n != strings.TrimSpace(n) || n == wildcard {
+				t.Fatalf("accepted node name %q", n)
+			}
+		}
+	})
+}

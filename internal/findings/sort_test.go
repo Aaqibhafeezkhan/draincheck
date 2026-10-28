@@ -83,3 +83,24 @@ func TestSortEmpty(t *testing.T) {
 	Sort(nil)
 	Sort([]Finding{})
 }
+
+// FuzzSortIgnoresInputOrder checks the hard rule "deterministic output": the same
+// findings in any input order sort to the same sequence.
+func FuzzSortIgnoresInputOrder(f *testing.F) {
+	f.Add("ns", "Pod", "a", "RULE_A", "ns", "Pod", "b", "RULE_B", "", "Node", "n", "RULE_A")
+	f.Add("x", "x", "x", "x", "x", "x", "x", "x", "x", "x", "x", "x")
+	f.Fuzz(func(t *testing.T, ns1, k1, n1, r1, ns2, k2, n2, r2, ns3, k3, n3, r3 string) {
+		mk := func(ns, k, n, r string) Finding {
+			return Finding{RuleID: r, Resource: ResourceRef{Namespace: ns, Kind: k, Name: n}}
+		}
+		a := []Finding{mk(ns1, k1, n1, r1), mk(ns2, k2, n2, r2), mk(ns3, k3, n3, r3)}
+		b := []Finding{a[2], a[0], a[1]}
+		Sort(a)
+		Sort(b)
+		for i := range a {
+			if a[i] != b[i] {
+				t.Fatalf("order differs at %d: %+v vs %+v", i, a, b)
+			}
+		}
+	})
+}

@@ -1,4 +1,4 @@
-.PHONY: build test vet fmt
+.PHONY: build test vet fmt fuzz
 
 VERSION ?= dev
 BIN     := bin/draincheck
@@ -14,3 +14,10 @@ vet:
 
 fmt:
 	gofmt -w .
+
+# Each Fuzz target runs for FUZZTIME. `go test` alone only replays the seeds.
+FUZZTIME ?= 30s
+fuzz:
+	go test ./cmd/draincheck -run '^$$' -fuzz '^FuzzOptionsValidate$$' -fuzztime $(FUZZTIME)
+	go test ./cmd/draincheck -run '^$$' -fuzz '^FuzzDrainOptionsPodSelector$$' -fuzztime $(FUZZTIME)
+	go test ./internal/findings -run '^$$' -fuzz '^FuzzSortIgnoresInputOrder$$' -fuzztime $(FUZZTIME)

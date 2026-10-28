@@ -26,9 +26,23 @@ CodeQL and Scorecard upload to the Security tab, which needs a public repository
 
 | Workflow      | Runs on                     | What                                                                                             |
 | ------------- | --------------------------- | ------------------------------------------------------------------------------------------------ |
-| `release.yml` | push of tag `vX.Y.Z[-*]`    | GoReleaser builds Linux, macOS and Windows (`amd64`/`arm64`), checksums, cosign keyless signature, SLSA provenance (`*.intoto.jsonl`) |
+| `release.yml` | push of tag `vX.Y.Z`    | release notes from `CHANGELOG.md`, GoReleaser builds Linux, macOS and Windows (`amd64`/`arm64`), checksums, cosign keyless signature, SLSA provenance (`*.intoto.jsonl`) |
 
 Top-level `permissions: read-all`; write permissions only on the `release`, `provenance` and `publish` jobs. The release is created as a draft and published by the last job after the provenance is attached (needed for release immutability). Config: `.goreleaser.yaml`. Details and verification: `docs/RELEASE.md`.
+
+## Branch rules
+
+`develop` is the only protected branch. The ruleset "Protected develop" targets the default branch and is active:
+
+| Rule | Setting |
+| ---- | ------- |
+| Restrict deletions | on |
+| Block force pushes | on |
+| Require signed commits | on |
+| Require a pull request before merging | 1 approval; the approval of the most recent reviewable push is required; an additional approval for unattributed Copilot changes; stale approvals are dismissed when new commits are pushed; code owner review and thread resolution are not required; merge methods: merge and squash |
+| Require status checks to pass | `Build, vet and test`, `golangci-lint`, `PR title follows Conventional Commits`, `Commits are signed off and verified` (all from GitHub Actions); the branch must be up to date before merging |
+
+The bypass list holds the repository admin role, for pull requests only: the maintainer works alone and merges their own pull request, but still cannot push to `develop` directly or skip the pull request. The other workflows (CodeQL, govulncheck, dependency review, Scorecard, `actionlint`) run on pull requests but are not required checks. There is no ruleset for tags. If a job in `ci.yml` or `pr-validation.yml` is renamed, update the required check name in the ruleset in the same change, or the pull request waits for a check that never reports.
 
 ## Coverage diff
 
@@ -45,6 +59,7 @@ Top-level `permissions: read-all`; write permissions only on the `release`, `pro
 
 ```sh
 make vet test
+make fuzz FUZZTIME=30s   # the Fuzz* targets; CI and `go test` only replay their seeds
 gofmt -l .
 go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
 go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
