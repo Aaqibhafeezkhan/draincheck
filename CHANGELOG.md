@@ -11,6 +11,70 @@ entries under `[Unreleased]` in the same pull request as the change (see
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-28
+
+First minor release. draincheck reads a snapshot of the cluster and reports what
+a multi-node `kubectl drain` would trip over, before you drain: budgets that
+refuse an eviction or that the batch exceeds, pods `kubectl drain` refuses
+without a flag, workloads that go down or cannot land anywhere, and missing
+requests. It is read-only, it never says a drain is safe, and it takes the same
+drain flags as `kubectl drain`, so you can ask the question for the drain you
+will run. Reports are text or JSON.
+
+**What a server dry run (`kubectl drain --dry-run=server`) does not show, and
+draincheck does**: several nodes against one PodDisruptionBudget, no node left to
+take the evicted pods (cordoned, not `Ready` or tainted), a workload that cannot
+land anywhere because of taints, and a one-replica workload that goes down while
+its pod moves. [docs/COMPARISON.md](docs/COMPARISON.md) compares the two rule
+by rule, including where `kubectl drain` is ahead.
+
+### Upgrading from 0.0.1
+
+- **Exit code on clusters with DaemonSets.** At the default `--fail-on blocked`
+  a cluster with DaemonSets now exits `1` unless you pass
+  `--ignore-daemonsets`, because `kubectl drain` refuses those pods without it.
+  The same holds for a pod with no controller (`--force`) and a pod with an
+  `emptyDir` volume (`--delete-emptydir-data`). Pass the flags you will give
+  `kubectl drain` (#108, #29, #107).
+- **JSON `evidence` changed** for `POD_OWNERSHIP`, `MISSING_RESOURCE_REQUESTS`
+  and `PDB_DISRUPTION_BLOCKED`: findings are now one per cause instead of one
+  per pod, and the per-pod detail moved into lists inside `evidence` (#70,
+  #71, #73). Read the entries below before you parse a 0.0.1 report.
+- **More read permissions.** draincheck now lists Deployments, StatefulSets,
+  Jobs, CronJobs, PersistentVolumeClaims and PersistentVolumes as well. A run
+  without `list` on them stops with exit `2`. `examples/rbac/` has a role with
+  exactly what is needed (#38, #39).
+
+### Stability
+
+Meant to hold from here on: the exit codes (`0`, `1`, `2`), the flag names, the
+severity names `BLOCKED`, `RISK` and `UNKNOWN`, and the top-level fields of the
+JSON report (`schema_version`, `generated_at`, `disclaimer`, `findings`).
+
+Can still change before 1.0, with a changelog entry when it does: rule IDs and
+which rule reports a given situation, the `evidence` fields of each rule, the
+wording of descriptions and remediation, and the layout of the text report.
+
+### Known limits
+
+- An extra positional argument is ignored, not rejected: `draincheck --nodes n1
+  n2` checks `n1` only. Name every node in `--nodes`.
+- There is no request timeout. A server that never answers keeps the run
+  waiting until you stop it with `SIGINT` or `SIGTERM`, which end it with exit
+  `2`.
+- The snapshot is read with sequential list calls at one moment. The cluster
+  can change right after, which is why every report carries its timestamp and a
+  disclaimer.
+- A PodDisruptionBudget managed by an operator is `UNKNOWN`: draincheck does not
+  read operator state, so it cannot tell whether the operator removes the
+  budget when a node is cordoned.
+- Not checked yet: node affinity and selectors, pod anti-affinity, capacity,
+  `hostPort`, `hostPath` and volume placement, and admission webhooks on
+  eviction. A clean report does not cover them.
+- The kubectl behaviour modelled is that of 1.36.0 and 1.37.1, checked on kind
+  with 1.36.1. The rules were run on kind and on one real cluster, so the rate
+  of wrong findings on other clusters is not known. Please report one if occured.
+
 ### Added
 
 - The `kubectl drain` flags `--ignore-daemonsets`, `--delete-emptydir-data`,
@@ -299,5 +363,6 @@ JSON. Output and rules may still change before 0.1.0.
 - Bump Go to 1.26 and refresh indirect dependencies.
 - Bump `k8s.io/apimachinery` and `k8s.io/client-go` from 0.35.9 to 0.37.1.
 
-[Unreleased]: https://github.com/Veinar/draincheck/compare/v0.0.1...develop
+[Unreleased]: https://github.com/Veinar/draincheck/compare/v0.1.0...develop
+[0.1.0]: https://github.com/Veinar/draincheck/compare/v0.0.1...v0.1.0
 [0.0.1]: https://github.com/Veinar/draincheck/releases/tag/v0.0.1

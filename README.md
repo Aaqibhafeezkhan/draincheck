@@ -65,6 +65,10 @@ The exit code is `0` here because no finding reaches the default `--fail-on bloc
 - A read-only Go CLI built on `client-go`. It lists and reads cluster state; it never cordons, evicts or modifies anything.
 - Findings are `BLOCKED`, `RISK` or `UNKNOWN`. There is deliberately no `SAFE`.
 - Not a controller and not a scheduler simulator.
+- What a server dry run (`kubectl drain --dry-run=server`) does not show, and draincheck reports (details in the [FAQ](#why-not-kubectl-drain---dry-run) and [docs/COMPARISON.md](docs/COMPARISON.md)):
+  - several nodes against one PodDisruptionBudget (`PDB_BATCH_EXCEEDS_BUDGET`);
+  - no node left to take the evicted pods, or only cordoned, not `Ready` or tainted ones (`NO_REMAINING_NODES`, `NODE_NOT_SCHEDULABLE`, `WORKLOAD_UNTOLERATED_TAINTS`);
+  - a workload with one replica that goes down while its pod moves (`SINGLE_REPLICA_WORKLOAD`).
 
 ## Install
 
@@ -107,10 +111,12 @@ What a server dry run cannot show, and draincheck reports:
 - **Several nodes against one budget.** A dry-run eviction does not use up the budget, so every node passes, even when a real drain of the same nodes cannot finish (checked with kubectl v1.36.1: three nodes, one pod each, a budget allowing 1; the dry run exits 0, the real drain evicts the first pod, retries the others against the budget until `--timeout` runs out for each node, and exits 1 with those nodes left cordoned). `PDB_BATCH_EXCEEDS_BUDGET` adds up the pods of all target nodes behind one PodDisruptionBudget and reports a batch the budget allows only in steps.
 - **Operators that react to a cordon.** A dry run does not really cordon, so it cannot show what an operator does when the node is cordoned. draincheck marks such budgets `UNKNOWN` instead of guessing. Checking what the operator does is *planned*.
 - **What the drain leaves behind.** Static pods and DaemonSet pods, which kubectl never evicts and which stay until the node goes down.
+- **Where the evicted pods can go.** A drain only evicts; it does not look at the other nodes. When every node is a target, or the nodes left are cordoned, not `Ready` or tainted where the pods do not tolerate it, the drain completes and the pods stay `Pending` (checked with kubectl v1.36.1; see [docs/COMPARISON.md](docs/COMPARISON.md)). `NO_REMAINING_NODES`, `NODE_NOT_SCHEDULABLE` and `WORKLOAD_UNTOLERATED_TAINTS` report it.
+- **Downtime of a single replica.** kubectl evicts the only pod of a one-replica Deployment or StatefulSet without a warning (checked with kubectl v1.36.1). `SINGLE_REPLICA_WORKLOAD` names the workload.
 - **What may not fit when rescheduled.** Evicted pods whose containers have no resource requests, because the scheduler treats a missing request as needing nothing.
 - **All nodes in one run**, with exit codes for CI, and no retry loop.
 
-draincheck reads a snapshot, so it cannot be more exact than the API server on a single eviction, and it does not predict whether evicted pods will fit elsewhere yet (*planned*).
+draincheck reads a snapshot, so it cannot be more exact than the API server on a single eviction, and it does not predict whether evicted pods will fit elsewhere beyond cordons, readiness and taints: node selectors, affinity and capacity are not checked yet (*planned*).
 
 The rule-by-rule comparison, including the cases where `kubectl drain` is ahead, is in [docs/COMPARISON.md](docs/COMPARISON.md).
 
