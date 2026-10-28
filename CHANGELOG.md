@@ -20,9 +20,14 @@ entries under `[Unreleased]` in the same pull request as the change (see
   that does not parse ends the run with exit `2`. The other four are accepted
   and shown in the `--debug` settings line; `--ignore-daemonsets` and `--force`
   now change `POD_OWNERSHIP` (below) and `--delete-emptydir-data` changes
-  `POD_LOCAL_STORAGE` (below), while `--disable-eviction` changes no finding
-  yet, as the rule that uses it is planned (#109). The pod filters of kubectl 1.36.0 and 1.37.1 are
+  `POD_LOCAL_STORAGE` (below). The pod filters of kubectl 1.36.0 and 1.37.1 are
   modelled in the analyzer for those rules (#107).
+- `--disable-eviction` is in effect: `kubectl drain` then deletes the pods
+  instead of evicting them, so no PodDisruptionBudget is consulted and every
+  `PDB_*` rule reports nothing. Rules that do not read budgets, such as
+  `SINGLE_REPLICA_WORKLOAD` and `POD_OWNERSHIP`, are unchanged. With `--debug`,
+  an `eviction disabled` line says how many budgets in the cluster were not
+  consulted (#109).
 - `--debug` flag. It writes one line to stderr for each action draincheck
   takes: the settings, every list call to the API server with its object count
   and duration, how the target nodes were resolved, each rule with its number

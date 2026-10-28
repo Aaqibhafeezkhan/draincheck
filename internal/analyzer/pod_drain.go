@@ -79,6 +79,9 @@ type podDrain struct {
 	class       podClass
 	terminating bool
 	pending     bool
+	// evictionDisabled is --disable-eviction: kubectl deletes the pods instead
+	// of evicting them, so no budget is consulted for any pod.
+	evictionDisabled bool
 }
 
 // classifyPod decides what a drain with the given flags does with pod. A pod
@@ -90,6 +93,8 @@ func classifyPod(pod corev1.Pod, owners *inventory.OwnerResolver, drain DrainOpt
 		selected:    drain.selects(pod),
 		terminating: pod.DeletionTimestamp != nil,
 		pending:     pod.Status.Phase == corev1.PodPending,
+
+		evictionDisabled: drain.DisableEviction,
 	}
 	owner := owners.Resolve(pod)
 	switch {
@@ -148,7 +153,8 @@ func (d podDrain) bypassesBudget() bool {
 }
 
 // consultsBudget reports whether a budget is consulted for the pod: drain
-// evicts it and the eviction API does not let it past.
+// evicts it and the eviction API does not let it past. With --disable-eviction
+// drain deletes the pod and the eviction API is not called, so none is.
 func (d podDrain) consultsBudget() bool {
-	return d.selected && !d.bypassesBudget() && d.class != classStatic && d.class != classDaemonSet
+	return !d.evictionDisabled && d.selected && !d.bypassesBudget() && d.class != classStatic && d.class != classDaemonSet
 }

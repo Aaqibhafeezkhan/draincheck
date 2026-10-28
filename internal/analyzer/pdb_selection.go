@@ -82,8 +82,8 @@ func configuredPolicy(pdb policyv1.PodDisruptionBudget) string {
 // selectedPDBs returns every PodDisruptionBudget that selects at least one pod
 // on a target node that kubectl drain would evict, in snapshot order. Pods that
 // bypass every budget and pods drain never evicts (see podDrain.consultsBudget)
-// are not counted, and a budget with an invalid selector is
-// skipped. A pod that is not Ready and that the eviction API lets past the
+// are not counted, and with --disable-eviction no pod is, so nothing is
+// selected. A budget with an invalid selector is skipped. A pod that is not Ready and that the eviction API lets past the
 // budget (see evictedPastBudget) is kept apart in evictable, and a budget left
 // with no other pod is skipped. What the budget's status says is for the caller
 // to judge.
