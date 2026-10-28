@@ -373,7 +373,7 @@ Read-only. Needs `list` on:
 
 draincheck never cordons, evicts or modifies anything.
 
-[`examples/rbac/`](../examples/rbac) has a `ClusterRole` with exactly these permissions, each with the `list` verb only, and a `ClusterRoleBinding` to adapt. Apply them with `kubectl apply -f examples/rbac/` after replacing the subject. Keep the role and this list in step.
+[`examples/rbac/`](../examples/rbac) has a `ClusterRole` with exactly these permissions, each with the `list` verb only, and a `ClusterRoleBinding` to adapt. Apply them with `kubectl apply -f examples/rbac/` after replacing the subject. Keep the role and this list in step. A test (`internal/inventory/clientset_collector_rbac_test.go`) fails if the role and the lists the collector makes differ, in either direction; it does not read this list.
 
 ## Debug output
 

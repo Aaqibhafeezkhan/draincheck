@@ -7,9 +7,20 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
+
+// rfc3339 matches the snapshot time, which the report prints in whole seconds
+// in the header and again in the closing disclaimer. Two runs that straddle a
+// second boundary print different values, so a comparison of their stdout masks
+// it; the rest of the report is still compared byte for byte.
+var rfc3339 = regexp.MustCompile(`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z`)
+
+func maskTimestamp(out string) string {
+	return rfc3339.ReplaceAllString(out, "<time>")
+}
 
 // closedPipe returns the write end of a pipe whose reader is already gone.
 func closedPipe(t *testing.T) *os.File {
@@ -94,11 +105,11 @@ func TestClosedStderrKeepsFindingsExitCodeAndReport(t *testing.T) {
 				err := cmd.Run()
 				var ee *exec.ExitError
 				if errors.As(err, &ee) {
-					return ee.ExitCode(), stdout.String()
+					return ee.ExitCode(), maskTimestamp(stdout.String())
 				} else if err != nil {
 					t.Fatal(err)
 				}
-				return 0, stdout.String()
+				return 0, maskTimestamp(stdout.String())
 			}
 			wantCode, wantOut := run()
 			if wantCode != tc.want {
@@ -106,6 +117,24 @@ func TestClosedStderrKeepsFindingsExitCodeAndReport(t *testing.T) {
 			}
 			if gotCode, gotOut := run("--debug"); gotCode != wantCode || gotOut != wantOut {
 				t.Fatalf("closed stderr with --debug: exit %d, want %d; stdout equal = %t", gotCode, wantCode, gotOut == wantOut)
+			}
+		})
+	}
+}
+
+func TestMaskTimestamp(t *testing.T) {
+	for _, tc := range []struct{ name, in, want string }{
+		{"header", "Timestamp: 2026-10-28T09:00:01Z\n", "Timestamp: <time>\n"},
+		{"other second, same result", "Timestamp: 2026-10-28T09:00:02Z\n", "Timestamp: <time>\n"},
+		{"disclaimer", "state at 2026-10-28T09:00:01Z and does not", "state at <time> and does not"},
+		{"every occurrence", "2026-10-28T09:00:01Z 2026-10-28T09:00:01Z", "<time> <time>"},
+		{"a date alone is kept", "2026-10-28 and v1.2.3", "2026-10-28 and v1.2.3"},
+		{"no timestamp", "body\n", "body\n"},
+		{"empty", "", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := maskTimestamp(tc.in); got != tc.want {
+				t.Errorf("maskTimestamp(%q) = %q, want %q", tc.in, got, tc.want)
 			}
 		})
 	}
