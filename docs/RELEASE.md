@@ -65,7 +65,7 @@ Download the archive, `checksums.txt`, `checksums.txt.sigstore.json` and `drainc
 
 ## Cut a release
 
-1. Move the `[Unreleased]` entries of `CHANGELOG.md` under `## [X.Y.Z] - <date>` and merge to `develop`, then tag a signed tag: `git tag -s vX.Y.Z -m "vX.Y.Z" && git push origin vX.Y.Z`.
+1. Move the `[Unreleased]` entries of `CHANGELOG.md` under `## [X.Y.Z] - <date>` and merge to `develop`, then tag a signed tag: `git tag -s vX.Y.Z -m "vX.Y.Z" && git push origin vX.Y.Z`. Keep a `### Stability` block in the new section (what is meant to hold, what can still change): `docs/USAGE.md` sends readers to the latest release section for it.
 2. Watch the `Release` workflow. All three jobs must pass.
 3. Run the verification steps above against the published assets.
 
