@@ -113,6 +113,7 @@ This report describes the observed cluster state at 2026-10-14T09:30:00Z and doe
 
 - Every remediation names the read-only `kubectl` command that confirms the finding (`get`, `describe` or `auth can-i`, with `<namespace>`, `<name>` and similar placeholders taken from the resource of the finding), then the action, safest first. The standard is in [RULES.md](RULES.md#advice-standard).
 - Findings of a rule that share a remediation print it once. A rule with several distinct remediations (for example `POD_OWNERSHIP` for DaemonSet versus static pods) prints each text once, with the resources it applies to: `Remediation (DaemonSet/a/ds-1, DaemonSet/a/ds-2): ...`.
+- When a drain flag is missing, a `=== KUBECTL DRAIN FLAGS ===` section between the summary and the findings names it in one line, for example `kubectl drain will refuse without: --ignore-daemonsets --delete-emptydir-data`. The flags come from the `BLOCKED` findings: `--ignore-daemonsets` from a DaemonSet pod, `--delete-emptydir-data` from a pod with an `emptyDir` volume and `--force` from a pod with no controller, always in that order. A flag you passed is never named, because passing it lifts the finding. The line is derived from the report, not a guarantee: run again with the flags to see what is left. With `--disable-eviction` the section also says once that pods are deleted, not evicted, and PodDisruptionBudgets are not consulted. With nothing to say the section is left out.
 - Long lists are collapsed after 5 entries and end in `... and M more`. A line at the end of the report says when anything was collapsed. `--verbose` prints every finding.
 - `--verbose` prints one block per finding with its full description and remediation:
 
@@ -136,6 +137,10 @@ This report describes the observed cluster state at 2026-10-14T09:30:00Z and doe
   "schema_version": "v1",
   "generated_at": "2026-10-14T09:30:00Z",
   "disclaimer": "This report describes the observed cluster state at 2026-10-14T09:30:00Z and does not guarantee execution success. Cluster state may drift immediately after analysis.",
+  "drain_flags": {
+    "missing": [],
+    "eviction_disabled": false
+  },
   "findings": [
     {
       "rule_id": "PDB_DISRUPTION_BLOCKED",
@@ -161,6 +166,7 @@ This report describes the observed cluster state at 2026-10-14T09:30:00Z and doe
 ```
 
 - `schema_version` is `"v1"`. Any change to the document shape is a deliberate, reviewed change, pinned by the golden file `testdata/report/json-v1.golden.json`.
+- `drain_flags` is always present. `missing` lists the `kubectl drain` flags that the `BLOCKED` findings show are still needed (`--ignore-daemonsets`, `--delete-emptydir-data`, `--force`, in that order), and is an empty array when none is. `eviction_disabled` is `true` when `--disable-eviction` was given. Added after 0.1.0; it is a new field, so a parser of the 0.1.0 document keeps working.
 - `findings` is always an array, empty when there are none. It is sorted by namespace, kind, name, rule ID and severity, so the same findings and snapshot time give byte-identical output.
 - `resource` is `Kind/namespace/name`, or `Kind/name` for cluster-scoped objects.
 - `evidence` is a typed object whose shape depends on `rule_id` (see *Rules*); it is `null` when a rule has none. `PDB_DISRUPTION_BLOCKED` has two shapes: one budget for `BLOCKED`, and the budgets of one operator for `UNKNOWN`.
@@ -396,6 +402,7 @@ stdout is not touched. The text or JSON report is byte-for-byte the same with an
 | `eviction disabled` | after the target nodes are accepted, only with `--disable-eviction` | `budgets_not_consulted` (PodDisruptionBudgets in the cluster; the `PDB_*` rules report nothing) |
 | `rule start` and `rule done` | around each rule | `rule`; `findings` on `rule done` |
 | `summary` | when all rules are done | `blocked`, `risk`, `unknown`, `fail_on` |
+| `drain flags` | after `summary`, before the report is written | `missing` (the drain flags the `BLOCKED` findings still need), `eviction_disabled` |
 | `write report` | just before the report is written | `format`, `verbose`, `findings` |
 | `finished` | when the run ends, also after an error | `exit_code` |
 

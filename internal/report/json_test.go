@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -130,7 +131,7 @@ func sampleFindings() []findings.Finding {
 func render(t *testing.T, fs []findings.Finding) []byte {
 	t.Helper()
 	var buf bytes.Buffer
-	if err := WriteJSON(&buf, fs, snapshotTime); err != nil {
+	if err := WriteJSON(&buf, fs, snapshotTime, DrainFlags{}); err != nil {
 		t.Fatal(err)
 	}
 	return buf.Bytes()
@@ -185,7 +186,7 @@ func TestWriteJSONCarriesSnapshotTimeAndDisclaimer(t *testing.T) {
 func TestWriteJSONTimeIsNormalizedToUTC(t *testing.T) {
 	local := snapshotTime.In(time.FixedZone("CEST", 2*60*60))
 	var buf bytes.Buffer
-	if err := WriteJSON(&buf, nil, local); err != nil {
+	if err := WriteJSON(&buf, nil, local, DrainFlags{}); err != nil {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(buf.Bytes(), render(t, nil)) {
@@ -264,9 +265,37 @@ func (w failingWriter) Write([]byte) (int, error) { return 0, w.err }
 func TestWriteJSONReturnsWriterError(t *testing.T) {
 	want := errors.New("disk full")
 
-	err := WriteJSON(failingWriter{err: want}, sampleFindings(), snapshotTime)
+	err := WriteJSON(failingWriter{err: want}, sampleFindings(), snapshotTime, DrainFlags{})
 
 	if !errors.Is(err, want) {
 		t.Errorf("err = %v, want %v", err, want)
+	}
+}
+
+func TestWriteJSONDrainFlagsAreAlwaysPresentAndNeverNull(t *testing.T) {
+	got := string(render(t, nil))
+	want := "\"drain_flags\": {\n    \"missing\": [],\n    \"eviction_disabled\": false\n  }"
+	if !strings.Contains(got, want) {
+		t.Errorf("document lacks %q:\n%s", want, got)
+	}
+}
+
+func TestWriteJSONCarriesTheDrainFlags(t *testing.T) {
+	var buf bytes.Buffer
+	flags := DrainFlags{Missing: []string{"--ignore-daemonsets", "--force"}, EvictionDisabled: true}
+	if err := WriteJSON(&buf, nil, snapshotTime, flags); err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		DrainFlags struct {
+			Missing          []string `json:"missing"`
+			EvictionDisabled bool     `json:"eviction_disabled"`
+		} `json:"drain_flags"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &doc); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(doc.DrainFlags.Missing, flags.Missing) || !doc.DrainFlags.EvictionDisabled {
+		t.Errorf("drain_flags = %+v, want %+v", doc.DrainFlags, flags)
 	}
 }

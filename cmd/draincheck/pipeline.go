@@ -50,9 +50,11 @@ func execute(ctx context.Context, opts options, logger *slog.Logger, c inventory
 
 	fs := analyzer.Run(logger, in, analyzer.DefaultRules()...)
 	logSummary(logger, fs, opts.FailOn)
+	flags := report.SummarizeDrainFlags(fs, opts.DisableEviction)
+	logger.Debug("drain flags", "missing", flags.Missing, "eviction_disabled", flags.EvictionDisabled)
 
 	logger.Debug("write report", "format", opts.Output, "verbose", opts.Verbose, "findings", len(fs))
-	if err := writeReport(w, opts.Output, opts.Verbose, fs, snap.Timestamp()); err != nil {
+	if err := writeReport(w, opts.Output, opts.Verbose, fs, snap.Timestamp(), flags); err != nil {
 		return fmt.Errorf("write report: %w", err)
 	}
 
@@ -77,9 +79,9 @@ func logSummary(logger *slog.Logger, fs []findings.Finding, failOn string) {
 // writeReport renders fs with the formatter chosen by --output; verbose only
 // affects the text formatter, JSON always carries every finding. options
 // validation guarantees format is one of the known values.
-func writeReport(w io.Writer, format string, verbose bool, fs []findings.Finding, taken time.Time) error {
+func writeReport(w io.Writer, format string, verbose bool, fs []findings.Finding, taken time.Time, flags report.DrainFlags) error {
 	if format == outputJSON {
-		return report.WriteJSON(w, fs, taken)
+		return report.WriteJSON(w, fs, taken, flags)
 	}
-	return report.WriteText(w, fs, taken, verbose)
+	return report.WriteText(w, fs, taken, verbose, flags)
 }

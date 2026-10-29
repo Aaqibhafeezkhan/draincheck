@@ -22,8 +22,10 @@ var textSeverities = []findings.Severity{findings.Blocked, findings.Risk, findin
 //
 // By default the layout is compact: findings are grouped by rule inside each
 // severity section and each remediation is printed once. With verbose set,
-// every finding is printed in full with its own remediation.
-func WriteText(w io.Writer, fs []findings.Finding, taken time.Time, verbose bool) error {
+// every finding is printed in full with its own remediation. flags adds a
+// section between the summary and the findings when a drain flag is missing or
+// eviction is disabled; with neither, the report is unchanged.
+func WriteText(w io.Writer, fs []findings.Finding, taken time.Time, verbose bool, flags DrainFlags) error {
 	sorted := slices.Clone(fs)
 	findings.Sort(sorted)
 
@@ -31,6 +33,7 @@ func WriteText(w io.Writer, fs []findings.Finding, taken time.Time, verbose bool
 	buf.WriteString("draincheck - preflight maintenance analysis\n")
 	fmt.Fprintf(&buf, "Timestamp: %s\n\n", formatTimestamp(taken))
 	writeSummary(&buf, sorted)
+	writeDrainFlags(&buf, flags)
 
 	if len(sorted) == 0 {
 		buf.WriteString("\nNo findings reported.\n")
