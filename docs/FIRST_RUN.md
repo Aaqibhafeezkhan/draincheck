@@ -5,7 +5,7 @@ Two things surprise a new reader. Both are expected. For the flags, rules and ex
 > [!NOTE]
 > draincheck is read-only: it lists cluster state and never cordons, evicts or changes anything. The report describes a snapshot taken when you ran it, so run it again right before you drain.
 
-1. **Pass the flags you will give `kubectl drain`.** draincheck judges the plan the way `kubectl drain` with the same flags would. Without `--ignore-daemonsets`, `--delete-emptydir-data` and `--force`, DaemonSet pods, pods with an `emptyDir` volume and pods with no controller on a target node are `BLOCKED`, because `kubectl drain` refuses them. A cluster with DaemonSets therefore exits `1` on the first run. Run again with the flags: that is the fix, not a finding to chase.
+1. **Pass the flags you will give `kubectl drain`.** draincheck judges the plan the way `kubectl drain` with the same flags would. Without `--ignore-daemonsets`, `--delete-emptydir-data` and `--force`, DaemonSet pods, pods with an `emptyDir` volume and pods with no controller on a target node are `BLOCKED`, because `kubectl drain` refuses them. A cluster with DaemonSets therefore exits `1` on the first run. The report says which ones in a `KUBECTL DRAIN FLAGS` section, right under the summary. Run again with the flags: that is the fix, not a finding to chase.
 2. **Know what exit `0` covers.** The default `--fail-on blocked` looks only at `BLOCKED`. `RISK` and `UNKNOWN` findings are still printed and still matter. To gate a pipeline on `RISK` as well, use `--fail-on risk`. The exit codes are in [USAGE.md](USAGE.md#exit-codes).
 
 > [!WARNING]
@@ -19,6 +19,10 @@ $ draincheck --nodes node-a,node-b
   BLOCKED: 2
   RISK:    1
   UNKNOWN: 0
+
+=== KUBECTL DRAIN FLAGS ===
+kubectl drain will refuse without: --ignore-daemonsets --delete-emptydir-data
+(derived from the BLOCKED findings below, not a guarantee: run again with these flags to see what is left)
 
 [POD_LOCAL_STORAGE] 1 finding
   ReplicaSet/shop/api-abc: ReplicaSet shop/api-abc has 1 pod with emptyDir volumes on 1 target node. kubectl drain refuses them without --delete-emptydir-data (`cannot delete Pods with local storage`) and stops before it evicts anything; waiting does not change that.

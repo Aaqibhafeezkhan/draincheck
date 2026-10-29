@@ -23,7 +23,7 @@ func renderVerbose(t *testing.T, fs []findings.Finding) []byte {
 func renderTextMode(t *testing.T, fs []findings.Finding, verbose bool) []byte {
 	t.Helper()
 	var buf bytes.Buffer
-	if err := WriteText(&buf, fs, snapshotTime, verbose); err != nil {
+	if err := WriteText(&buf, fs, snapshotTime, verbose, DrainFlags{}); err != nil {
 		t.Fatal(err)
 	}
 	return buf.Bytes()
@@ -120,7 +120,7 @@ func TestWriteTextEndsWithNewline(t *testing.T) {
 func TestWriteTextReturnsWriterError(t *testing.T) {
 	want := errors.New("disk full")
 
-	err := WriteText(failingWriter{err: want}, sampleFindings(), snapshotTime, false)
+	err := WriteText(failingWriter{err: want}, sampleFindings(), snapshotTime, false, DrainFlags{})
 
 	if !errors.Is(err, want) {
 		t.Errorf("err = %v, want %v", err, want)
