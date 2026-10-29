@@ -84,6 +84,31 @@ func TestNoRemainingNodesText(t *testing.T) {
 	}
 }
 
+// The remediation is one fixed string. With no taint involved the description
+// names none, so the advice must not point back at "above".
+func TestNoRemainingNodesRemediationHasNoBackReference(t *testing.T) {
+	cases := map[string]Input{
+		"no taint":   {Snapshot: snapshotFromFixture(t, "node-not-schedulable.yaml"), Targets: allNodes},
+		"with taint": {Snapshot: podsNamed(t, "web-0"), Targets: []string{"worker", "soft"}},
+	}
+	for name, in := range cases {
+		t.Run(name, func(t *testing.T) {
+			got := NoRemainingNodes{}.Evaluate(in)
+			if len(got) != 1 {
+				t.Fatalf("want 1 finding, got %d", len(got))
+			}
+			for _, bad := range []string{"above", "named"} {
+				if strings.Contains(got[0].Remediation, bad) {
+					t.Errorf("remediation %q refers back with %q", got[0].Remediation, bad)
+				}
+			}
+			if !strings.Contains(got[0].Remediation, "If the description names a taint on a node") {
+				t.Errorf("remediation %q lacks the conditional taint advice", got[0].Remediation)
+			}
+		})
+	}
+}
+
 func TestNoRemainingNodesNilSnapshot(t *testing.T) {
 	if got := (NoRemainingNodes{}).Evaluate(Input{Targets: allNodes}); got != nil {
 		t.Errorf("want nil, got %+v", got)
