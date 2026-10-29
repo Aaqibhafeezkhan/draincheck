@@ -10,6 +10,9 @@
 
 Read-only preflight analyzer for multi-node `kubectl drain`. `kubectl drain` tells you what is refused on one node, now. draincheck looks at the whole plan, several nodes at once, and tells you what would block it or put something at risk **before** you cordon anything.
 
+> [!TIP]
+> **First run?** Pass the same flags you will give `kubectl drain` (`--ignore-daemonsets`, `--delete-emptydir-data`, `--force`). Without them a cluster with DaemonSets exits `1`, because `kubectl drain` refuses those pods; re-running with the flags is the fix. Exit `0` does not mean the drain is safe: the default gates on `BLOCKED` only, so read the `RISK` findings too. See [docs/FIRST_RUN.md](docs/FIRST_RUN.md).
+
 ## Example
 
 Output from a real cluster, with names anonymized. The text report is compact: findings are grouped by cause (one per PodDisruptionBudget, workload, DaemonSet or node, not one per pod), each remediation is printed once and a list is cut after 5 entries. `--verbose` prints every finding in full. The JSON report always carries every finding and every pod.
@@ -131,7 +134,7 @@ Requires Go 1.26+.
 
 ## Docs
 
-[Specification](docs/SPEC.md) · [Rules and noise budget](docs/RULES.md) · [Comparison with `kubectl drain --dry-run`](docs/COMPARISON.md) · [CI](docs/CI.md) · [Release and verification](docs/RELEASE.md)
+[First run](docs/FIRST_RUN.md) · [Specification](docs/SPEC.md) · [Rules and noise budget](docs/RULES.md) · [Comparison with `kubectl drain --dry-run`](docs/COMPARISON.md) · [CI](docs/CI.md) · [Release and verification](docs/RELEASE.md)
 
 ## About this project
 

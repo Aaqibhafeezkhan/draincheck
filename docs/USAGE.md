@@ -1,6 +1,6 @@
 # draincheck usage
 
-> **Status: pre-alpha.** The collector, rules and the text and JSON reports are wired to the CLI. Sections marked *planned* describe intended behaviour.
+> **Status: 0.x.** The collector, rules and the text and JSON reports are wired to the CLI. The exit codes, flag names, severity names and the top-level JSON fields are meant to hold; rule IDs, `evidence` fields and wording can still change (see *Stability* in the latest release section of [CHANGELOG.md](CHANGELOG.md)). Sections marked *planned* describe intended behaviour.
 
 ## Synopsis
 
