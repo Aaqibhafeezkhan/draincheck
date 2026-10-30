@@ -30,24 +30,13 @@ type SingleReplicaWorkload struct{}
 // ID implements Rule.
 func (SingleReplicaWorkload) ID() string { return SingleReplicaWorkloadID }
 
-type workloadKey struct{ kind, namespace, name string }
-
 // Evaluate implements Rule.
 func (SingleReplicaWorkload) Evaluate(in Input) []findings.Finding {
 	if in.Snapshot == nil {
 		return nil
 	}
 
-	// Desired replicas of every workload that can have one, keyed like the owner
-	// of a pod. spec.replicas defaults to 1 when unset.
-	desired := make(map[workloadKey]int32)
-	for _, d := range in.Snapshot.Deployments() {
-		desired[workloadKey{"Deployment", d.Namespace, d.Name}] = replicasOrDefault(d.Spec.Replicas)
-	}
-	for _, sts := range in.Snapshot.StatefulSets() {
-		desired[workloadKey{"StatefulSet", sts.Namespace, sts.Name}] = replicasOrDefault(sts.Spec.Replicas)
-	}
-
+	desired := desiredReplicas(in.Snapshot)
 	owners := inventory.NewOwnerResolver(in.Snapshot)
 	pods := make(map[workloadKey][]findings.SingleReplicaPod)
 	for _, pod := range in.Snapshot.Pods() {
@@ -79,12 +68,4 @@ func (SingleReplicaWorkload) Evaluate(in Input) []findings.Finding {
 		})
 	}
 	return out
-}
-
-// replicasOrDefault returns spec.replicas, which Kubernetes defaults to 1.
-func replicasOrDefault(r *int32) int32 {
-	if r == nil {
-		return 1
-	}
-	return *r
 }

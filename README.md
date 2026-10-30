@@ -71,7 +71,8 @@ The exit code is `0` here because no finding reaches the default `--fail-on bloc
 - What a server dry run (`kubectl drain --dry-run=server`) does not show, and draincheck reports (details in the [FAQ](#why-not-kubectl-drain---dry-run) and [docs/COMPARISON.md](docs/COMPARISON.md)):
   - several nodes against one PodDisruptionBudget (`PDB_BATCH_EXCEEDS_BUDGET`);
   - no node left to take the evicted pods, or only cordoned, not `Ready` or tainted ones (`NO_REMAINING_NODES`, `NODE_NOT_SCHEDULABLE`, `WORKLOAD_UNTOLERATED_TAINTS`);
-  - a workload with one replica that goes down while its pod moves (`SINGLE_REPLICA_WORKLOAD`).
+  - a workload with one replica that goes down while its pod moves (`SINGLE_REPLICA_WORKLOAD`);
+  - a workload with several replicas that all sit on the nodes you drain, so the batch takes it fully down (`ALL_REPLICAS_ON_TARGETS`).
 
 ## Install
 

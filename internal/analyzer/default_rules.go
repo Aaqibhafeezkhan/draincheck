@@ -12,6 +12,7 @@ func DefaultRules() []Rule {
 		NoRemainingNodes{},
 		WorkloadUntoleratedTaints{},
 		SingleReplicaWorkload{},
+		AllReplicasOnTargets{},
 		PodOwnership{},
 		PodLocalStorage{},
 		MissingResourceRequests{},

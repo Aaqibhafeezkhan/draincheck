@@ -15,6 +15,10 @@ entries under `[Unreleased]` in the same pull request as the change (see
 
 - The report names the `kubectl drain` flags the plan still needs: a `KUBECTL DRAIN FLAGS` section in the text report (for example `kubectl drain will refuse without: --ignore-daemonsets --delete-emptydir-data`) and a new top-level `drain_flags` object in the JSON report (`missing`, `eviction_disabled`). Only flags whose absence makes a finding `BLOCKED` are named, never one you passed; with `--disable-eviction` the report says once that PodDisruptionBudgets are not consulted. `--debug` logs the result as `drain flags` (#30).
 
+#### Analyzer rules
+
+- `ALL_REPLICAS_ON_TARGETS`: a Deployment or StatefulSet with 2 or more desired replicas whose Ready pods all run on the nodes you drain is reported as `RISK`, one finding per workload. Drained together, the nodes can take the whole workload down, because `kubectl drain` does not wait for replacements to be Ready before it drains the next node (whether it reaches zero depends on timing); `kubectl drain` does not warn about it. Only Ready pods count, so a replica still starting on another node does not clear the finding. A workload covered by a PodDisruptionBudget that needs a pod healthy is skipped (kubectl waits on the budget), unless you pass `--disable-eviction`. A workload with one replica stays with `SINGLE_REPLICA_WORKLOAD`, so the two rules never report the same workload. The JSON `evidence` has `owner_kind`, `owner_name`, `replicas`, `ready_pods`, `nodes` and `pods` (#98).
+
 ### Fixed
 
 - `NO_REMAINING_NODES` advice no longer says "a taint named above" when the report names no taint (for example when every node is drained). The taint advice now reads "if the description names a taint on a node" (#170).

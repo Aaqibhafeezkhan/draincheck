@@ -43,6 +43,7 @@ var adviceCases = []adviceCase{
 	{"NO_REMAINING_NODES", "node-not-schedulable.yaml", allNodes, DrainOptions{}},
 	{"WORKLOAD_UNTOLERATED_TAINTS", "workload-untolerated-taints.yaml", []string{"worker", "soft"}, DrainOptions{}},
 	{"SINGLE_REPLICA_WORKLOAD", "single-replica-workload.yaml", []string{"worker-01", "worker-02"}, DrainOptions{}},
+	{"ALL_REPLICAS_ON_TARGETS", "all-replicas-on-targets.yaml", []string{"worker-01", "worker-02"}, DrainOptions{}},
 	// DaemonSet, static and controller-less pods each have their own advice, and a
 	// controller-less pod has another once --force is set.
 	{"POD_OWNERSHIP", "pod-ownership.yaml", workers123, DrainOptions{}},
@@ -153,6 +154,7 @@ var adviceVariants = []string{
 	"NO_REMAINING_NODES/RISK/findings.NoRemainingNodesEvidence",
 	"WORKLOAD_UNTOLERATED_TAINTS/RISK/findings.WorkloadUntoleratedTaintsEvidence",
 	"SINGLE_REPLICA_WORKLOAD/RISK/findings.SingleReplicaEvidence",
+	"ALL_REPLICAS_ON_TARGETS/RISK/findings.AllReplicasEvidence",
 	"POD_OWNERSHIP/BLOCKED/DaemonSet",
 	"POD_OWNERSHIP/RISK/StaticPod",
 	"POD_OWNERSHIP/BLOCKED/Unmanaged",
