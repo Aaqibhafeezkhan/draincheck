@@ -83,6 +83,7 @@ A finding covers one cause, not one pod. A cause that reaches many pods, such as
 | `NO_REMAINING_NODES` | run | the target node names, joined by commas |
 | `WORKLOAD_UNTOLERATED_TAINTS` | owning workload | the workload |
 | `SINGLE_REPLICA_WORKLOAD` | Deployment or StatefulSet | the workload |
+| `ALL_REPLICAS_ON_TARGETS` | Deployment or StatefulSet | the workload |
 | `POD_OWNERSHIP` | DaemonSet, node (for its static pods) or pod without a controller | the DaemonSet, node or pod |
 | `POD_LOCAL_STORAGE` | owning workload; a pod without a controller is its own | the workload or the pod |
 | `MISSING_RESOURCE_REQUESTS` | owning workload | the workload; a pod without a controller is its own workload |
@@ -313,6 +314,21 @@ Raised when a pod on a target node belongs to a Deployment or StatefulSet that d
 - The count is the desired one, `spec.replicas` (1 when unset), not the number of live pods.
 - Finished pods, DaemonSet pods and static pods are skipped, because `kubectl drain` does not evict them. A pod that is already terminating is skipped too: the drain is not what removes it. A pod whose workload is not in the snapshot is skipped, because its replica count is unknown.
 - A HorizontalPodAutoscaler is not looked at: a workload that scales above 1 under load is still reported while it runs one replica.
+- Needs `list` on `deployments` and `statefulsets` (see *Cluster access*).
+
+### `ALL_REPLICAS_ON_TARGETS`
+
+Severity: `RISK`.
+
+Raised when a Deployment or StatefulSet desires 2 or more replicas and every Ready pod it has runs on a target node. Drained together, the nodes can take the whole workload down: `kubectl drain` waits for the pods of a node to be deleted, not for their replacements to be Ready, before it drains the next node. Anything that slows the first node (a budget on another workload, slow termination) gives the replacements time, so whether the workload reaches zero Ready pods depends on timing. It is exposed either way, even with no PodDisruptionBudget. A drain of one node of the batch alone would leave replicas elsewhere, which is why only the nodes assessed together show it. `kubectl drain` does not warn about it. The drain itself completes, so it is `RISK`; it makes the run exit `1` only with `--fail-on risk` or `any`.
+
+- **Resource:** the Deployment or StatefulSet. One finding per workload.
+- **Description:** the workload, its desired replica count, how many Ready pods it has and the target nodes they run on.
+- **Evidence:** `owner_kind`, `owner_name`, `replicas` (desired), `ready_pods`, `nodes` and `pods` (each with `namespace`, `name` and `node`).
+- Only Ready pods count. A pod that is not Ready, has finished or is already terminating does not carry the load, so a replica that is still starting on another node does not clear the finding. A workload with no Ready pod on the targets is skipped: the drain does not take it down.
+- A workload with one desired replica is left to `SINGLE_REPLICA_WORKLOAD`, so the two never report the same workload.
+- A workload whose pods are covered by a PodDisruptionBudget that needs at least one pod healthy (`desiredHealthy` above 0) is skipped: `kubectl drain` waits on the budget instead of evicting every replica, and the `PDB_*` rules report the budget. With `--disable-eviction` no budget is consulted, so none protects.
+- Whether the replacements fit on the nodes that stay is not judged; see `NO_REMAINING_NODES` and `WORKLOAD_UNTOLERATED_TAINTS`.
 - Needs `list` on `deployments` and `statefulsets` (see *Cluster access*).
 
 ### `POD_OWNERSHIP`

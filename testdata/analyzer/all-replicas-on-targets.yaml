@@ -1,0 +1,543 @@
+# Cluster for ALL_REPLICAS_ON_TARGETS.
+#
+# A Deployment or StatefulSet with 2 or more desired replicas whose READY pods
+# all run on target nodes goes fully down in a batch drain, when no budget makes
+# kubectl wait. Three nodes: worker-01, worker-02, worker-03. Pods are Ready
+# unless the comment says otherwise.
+#
+#   shop/web      Deployment, 3 replicas: 2 pods on worker-01, 1 on worker-02
+#                 -> reported for [worker-01, worker-02]; not for worker-01 alone
+#   shop/api      Deployment, 2 replicas, both on worker-01 -> reported for worker-01
+#   shop/starting Deployment, 2 replicas: Ready on worker-01, NOT Ready on worker-03
+#                 -> reported for worker-01 (a pod that is not Ready does not carry the load)
+#   shop/spread   Deployment, 2 replicas: worker-01 and worker-03 -> not reported for worker-01
+#   shop/leaving  Deployment, 2 replicas: worker-01 and a terminating pod on worker-03
+#                 -> reported for worker-01 (the terminating pod is going away)
+#   shop/single   Deployment, 1 replica on worker-01 -> not reported (SINGLE_REPLICA_WORKLOAD)
+#   shop/stuck    Deployment, 2 replicas, both NOT Ready on worker-01 -> not reported (already down)
+#   shop/guarded  Deployment, 2 replicas on worker-01, budget minAvailable 1 -> not reported
+#                 (kubectl waits on the budget); reported with --disable-eviction
+#   shop/open     Deployment, 2 replicas on worker-01, budget desiredHealthy 0 -> reported
+#   shop/db       StatefulSet, 2 replicas: db-0 on worker-01, db-1 on worker-02
+#                 -> reported for [worker-01, worker-02]
+#   shop/batch    Deployment, 2 replicas on worker-01, one pod Succeeded -> the finished pod is ignored,
+#                 one Ready pod left on worker-01 and none elsewhere -> reported
+#   shop/orphan   Deployment missing from the snapshot -> not reported (replicas unknown)
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-01
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-02
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker-03
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: web, namespace: shop}
+spec: {replicas: 3}
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: web-7d9
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: Deployment, name: web, controller: true}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-7d9-a
+  namespace: shop
+  labels: {app: web}
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: web-7d9, controller: true}
+spec: {nodeName: worker-01}
+status:
+  phase: Running
+  conditions:
+    - {type: Ready, status: "True"}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-7d9-b
+  namespace: shop
+  labels: {app: web}
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: web-7d9, controller: true}
+spec: {nodeName: worker-01}
+status:
+  phase: Running
+  conditions:
+    - {type: Ready, status: "True"}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-7d9-c
+  namespace: shop
+  labels: {app: web}
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: web-7d9, controller: true}
+spec: {nodeName: worker-02}
+status:
+  phase: Running
+  conditions:
+    - {type: Ready, status: "True"}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: api, namespace: shop}
+spec: {replicas: 2}
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: api-7d9
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: Deployment, name: api, controller: true}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-7d9-a
+  namespace: shop
+  labels: {app: api}
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: api-7d9, controller: true}
+spec: {nodeName: worker-01}
+status:
+  phase: Running
+  conditions:
+    - {type: Ready, status: "True"}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: api-7d9-b
+  namespace: shop
+  labels: {app: api}
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: api-7d9, controller: true}
+spec: {nodeName: worker-01}
+status:
+  phase: Running
+  conditions:
+    - {type: Ready, status: "True"}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: starting, namespace: shop}
+spec: {replicas: 2}
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: starting-7d9
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: Deployment, name: starting, controller: true}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: starting-7d9-a
+  namespace: shop
+  labels: {app: starting}
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: starting-7d9, controller: true}
+spec: {nodeName: worker-01}
+status:
+  phase: Running
+  conditions:
+    - {type: Ready, status: "True"}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: starting-7d9-b
+  namespace: shop
+  labels: {app: starting}
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: starting-7d9, controller: true}
+spec: {nodeName: worker-03}
+status:
+  phase: Running
+  conditions:
+    - {type: Ready, status: "False"}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: spread, namespace: shop}
+spec: {replicas: 2}
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: spread-7d9
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: Deployment, name: spread, controller: true}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: spread-7d9-a
+  namespace: shop
+  labels: {app: spread}
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: spread-7d9, controller: true}
+spec: {nodeName: worker-01}
+status:
+  phase: Running
+  conditions:
+    - {type: Ready, status: "True"}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: spread-7d9-b
+  namespace: shop
+  labels: {app: spread}
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: spread-7d9, controller: true}
+spec: {nodeName: worker-03}
+status:
+  phase: Running
+  conditions:
+    - {type: Ready, status: "True"}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: leaving, namespace: shop}
+spec: {replicas: 2}
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: leaving-7d9
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: Deployment, name: leaving, controller: true}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: leaving-7d9-a
+  namespace: shop
+  labels: {app: leaving}
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: leaving-7d9, controller: true}
+spec: {nodeName: worker-01}
+status:
+  phase: Running
+  conditions:
+    - {type: Ready, status: "True"}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: leaving-7d9-b
+  namespace: shop
+  labels: {app: leaving}
+  deletionTimestamp: "2026-10-30T10:00:00Z"
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: leaving-7d9, controller: true}
+spec: {nodeName: worker-03}
+status:
+  phase: Running
+  conditions:
+    - {type: Ready, status: "True"}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: single, namespace: shop}
+spec: {replicas: 1}
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: single-7d9
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: Deployment, name: single, controller: true}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: single-7d9-a
+  namespace: shop
+  labels: {app: single}
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: single-7d9, controller: true}
+spec: {nodeName: worker-01}
+status:
+  phase: Running
+  conditions:
+    - {type: Ready, status: "True"}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: stuck, namespace: shop}
+spec: {replicas: 2}
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: stuck-7d9
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: Deployment, name: stuck, controller: true}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: stuck-7d9-a
+  namespace: shop
+  labels: {app: stuck}
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: stuck-7d9, controller: true}
+spec: {nodeName: worker-01}
+status:
+  phase: Running
+  conditions:
+    - {type: Ready, status: "False"}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: stuck-7d9-b
+  namespace: shop
+  labels: {app: stuck}
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: stuck-7d9, controller: true}
+spec: {nodeName: worker-01}
+status:
+  phase: Running
+  conditions:
+    - {type: Ready, status: "False"}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: guarded, namespace: shop}
+spec: {replicas: 2}
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: guarded-7d9
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: Deployment, name: guarded, controller: true}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: guarded-7d9-a
+  namespace: shop
+  labels: {app: guarded}
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: guarded-7d9, controller: true}
+spec: {nodeName: worker-01}
+status:
+  phase: Running
+  conditions:
+    - {type: Ready, status: "True"}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: guarded-7d9-b
+  namespace: shop
+  labels: {app: guarded}
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: guarded-7d9, controller: true}
+spec: {nodeName: worker-01}
+status:
+  phase: Running
+  conditions:
+    - {type: Ready, status: "True"}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: {name: guarded-pdb, namespace: shop}
+spec:
+  selector:
+    matchLabels: {app: guarded}
+status:
+  currentHealthy: 2
+  desiredHealthy: 1
+  disruptionsAllowed: 1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: open, namespace: shop}
+spec: {replicas: 2}
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: open-7d9
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: Deployment, name: open, controller: true}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: open-7d9-a
+  namespace: shop
+  labels: {app: open}
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: open-7d9, controller: true}
+spec: {nodeName: worker-01}
+status:
+  phase: Running
+  conditions:
+    - {type: Ready, status: "True"}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: open-7d9-b
+  namespace: shop
+  labels: {app: open}
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: open-7d9, controller: true}
+spec: {nodeName: worker-01}
+status:
+  phase: Running
+  conditions:
+    - {type: Ready, status: "True"}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: {name: open-pdb, namespace: shop}
+spec:
+  selector:
+    matchLabels: {app: open}
+status:
+  currentHealthy: 2
+  desiredHealthy: 0
+  disruptionsAllowed: 2
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: {name: db, namespace: shop}
+spec: {replicas: 2}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: db-0
+  namespace: shop
+  labels: {app: db}
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: StatefulSet, name: db, controller: true}
+spec: {nodeName: worker-01}
+status:
+  phase: Running
+  conditions:
+    - {type: Ready, status: "True"}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: db-1
+  namespace: shop
+  labels: {app: db}
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: StatefulSet, name: db, controller: true}
+spec: {nodeName: worker-02}
+status:
+  phase: Running
+  conditions:
+    - {type: Ready, status: "True"}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: batch, namespace: shop}
+spec: {replicas: 2}
+---
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: batch-7d9
+  namespace: shop
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: Deployment, name: batch, controller: true}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: batch-7d9-a
+  namespace: shop
+  labels: {app: batch}
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: batch-7d9, controller: true}
+spec: {nodeName: worker-01}
+status:
+  phase: Running
+  conditions:
+    - {type: Ready, status: "True"}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: batch-7d9-b
+  namespace: shop
+  labels: {app: batch}
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: batch-7d9, controller: true}
+spec: {nodeName: worker-01}
+status:
+  phase: Succeeded
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: orphan-7d9-a
+  namespace: shop
+  labels: {app: orphan}
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: orphan-7d9, controller: true}
+spec: {nodeName: worker-01}
+status:
+  phase: Running
+  conditions:
+    - {type: Ready, status: "True"}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: orphan-7d9-b
+  namespace: shop
+  labels: {app: orphan}
+  ownerReferences:
+    - {apiVersion: apps/v1, kind: ReplicaSet, name: orphan-7d9, controller: true}
+spec: {nodeName: worker-01}
+status:
+  phase: Running
+  conditions:
+    - {type: Ready, status: "True"}
