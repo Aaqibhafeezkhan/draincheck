@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/spf13/cobra"
 )
@@ -15,6 +16,12 @@ func newRootCmd(version string, run func(context.Context, options) error) *cobra
 		Version:       version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		Args: func(_ *cobra.Command, args []string) error {
+			if len(args) > 0 {
+				return fmt.Errorf("unexpected argument %q: name the nodes with --nodes (comma-separated, or '*' for all nodes)", args[0])
+			}
+			return nil
+		},
 		RunE: func(c *cobra.Command, _ []string) error {
 			if err := opts.validate(); err != nil {
 				return err

@@ -23,6 +23,7 @@ entries under `[Unreleased]` in the same pull request as the change (see
 ### Fixed
 
 - A kubeconfig that logs in with the `oidc` auth provider no longer fails with `no Auth Provider found for name "oidc"`. `kubectl` accepts such a kubeconfig, so draincheck now does too. Kubeconfigs that use an exec plugin were not affected.
+- An extra positional argument is now rejected with exit `2` instead of being ignored: `draincheck --nodes n1 n2` used to check `n1` only and exit as if the plan were complete. The error points to `--nodes` (#164).
 - `NO_REMAINING_NODES` advice no longer says "a taint named above" when the report names no taint (for example when every node is drained). The taint advice now reads "if the description names a taint on a node" (#170).
 
 ### Security
