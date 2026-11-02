@@ -75,7 +75,7 @@ Do not post details of a vulnerability in a public issue. A `SECURITY.md` with a
 
 ## Development setup
 
-Requirements: Go 1.26 or newer (see `go.mod`). No cluster is needed; unit tests use the client-go fake clientset and fixtures from `testdata/`.
+Requirements: Go 1.26.10 or newer (see `go.mod`). No cluster is needed; unit tests use the client-go fake clientset and fixtures from `testdata/`.
 
 ```sh
 git clone https://github.com/<your-user>/draincheck.git

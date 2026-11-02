@@ -25,6 +25,11 @@ entries under `[Unreleased]` in the same pull request as the change (see
 - A kubeconfig that logs in with the `oidc` auth provider no longer fails with `no Auth Provider found for name "oidc"`. `kubectl` accepts such a kubeconfig, so draincheck now does too. Kubeconfigs that use an exec plugin were not affected.
 - `NO_REMAINING_NODES` advice no longer says "a taint named above" when the report names no taint (for example when every node is drained). The taint advice now reads "if the description names a taint on a node" (#170).
 
+### Security
+
+- Builds now use Go 1.26.10 (`go.mod` required 1.26.0). `govulncheck` reported 28 standard-library vulnerabilities fixed in later 1.26 patch releases, including ones in `crypto/x509` and `net/url` that draincheck's cluster client reaches; it reports none with 1.26.10. Building from source now needs Go 1.26.10 or newer (#NNN).
+- Updated `golang.org/x/net` from v0.60.0 to v0.62.0, which fixes GO-2026-6866 and GO-2026-6860 (both in `golang.org/x/net/html`). draincheck does not import that package and `govulncheck` did not report either as reachable, so releases were not affected; the update clears the scan. `golang.org/x/sys`, `x/term` and `x/text` moved with it (#NNN).
+
 ## [0.1.0] - 2026-10-28
 
 First minor release. draincheck reads a snapshot of the cluster and reports what

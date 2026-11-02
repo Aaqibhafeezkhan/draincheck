@@ -131,7 +131,7 @@ go test ./...
 go build -o draincheck ./cmd/draincheck
 ```
 
-Requires Go 1.26+.
+Requires Go 1.26.10+.
 
 ## Docs
 
