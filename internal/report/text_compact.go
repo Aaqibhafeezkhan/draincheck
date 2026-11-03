@@ -46,14 +46,14 @@ func writeCompactSection(buf *bytes.Buffer, sev findings.Severity, fs []findings
 }
 
 func writeCompactRule(buf *bytes.Buffer, id string, fs []findings.Finding) bool {
-	noun := "findings"
-	if len(fs) == 1 {
-		noun = "finding"
-	}
-	fmt.Fprintf(buf, "\n[%s] %d %s\n", id, len(fs), noun)
-
 	if len(fs) > compactLimit {
-		fmt.Fprintf(buf, "  %s\n", compactSummary(fs))
+		fmt.Fprintf(buf, "\n[%s] %s, first %d shown\n", id, compactSummary(fs), compactLimit)
+	} else {
+		noun := "findings"
+		if len(fs) == 1 {
+			noun = "finding"
+		}
+		fmt.Fprintf(buf, "\n[%s] %d %s\n", id, len(fs), noun)
 	}
 
 	collapsed := false
@@ -76,13 +76,13 @@ func writeCompactRule(buf *bytes.Buffer, id string, fs []findings.Finding) bool 
 		resources[f.Remediation] = append(resources[f.Remediation], f.Resource.String())
 	}
 	if len(texts) == 1 {
-		fmt.Fprintf(buf, "  Remediation: %s\n", texts[0])
+		fmt.Fprintf(buf, "\n  => Remediation: %s\n", texts[0])
 		return collapsed
 	}
 	for _, text := range texts {
 		list, c := joinCollapsed(resources[text])
 		collapsed = collapsed || c
-		fmt.Fprintf(buf, "  Remediation (%s): %s\n", list, text)
+		fmt.Fprintf(buf, "\n  => Remediation (%s): %s\n", list, text)
 	}
 	return collapsed
 }

@@ -56,6 +56,18 @@ func TestCompactPrintsRemediationOnceVerbosePrintsPerFinding(t *testing.T) {
 	}
 }
 
+func TestCompactSetsRemediationApartFromFindings(t *testing.T) {
+	got := string(renderText(t, manyFindings(3)))
+
+	if !strings.Contains(got, "\n\n  => Remediation: Set CPU and memory requests.\n") {
+		t.Errorf("remediation must follow a blank line and start with =>:\n%s", got)
+	}
+	verbose := string(renderVerbose(t, manyFindings(3)))
+	if strings.Contains(verbose, "=>") {
+		t.Errorf("verbose output must stay unchanged:\n%s", verbose)
+	}
+}
+
 func TestCompactGroupsFindingsByRuleWithCount(t *testing.T) {
 	got := string(renderText(t, manyFindings(3)))
 
@@ -118,8 +130,8 @@ func TestCompactPrintsEachDistinctRemediationOnce(t *testing.T) {
 	got := string(renderText(t, fs))
 
 	for _, want := range []string{
-		"  Remediation (Pod/a/ds-1, Pod/a/ds-2): Drain with --ignore-daemonsets.\n",
-		"  Remediation (Pod/a/static-1): Plan for the static pod outage.\n",
+		"\n  => Remediation (Pod/a/ds-1, Pod/a/ds-2): Drain with --ignore-daemonsets.\n",
+		"\n  => Remediation (Pod/a/static-1): Plan for the static pod outage.\n",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in:\n%s", want, got)

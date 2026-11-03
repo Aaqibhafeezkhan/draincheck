@@ -36,29 +36,27 @@ func TestCompactSummaryLine(t *testing.T) {
 	tests := []struct {
 		name       string
 		namespaces []string
-		want       string // "" means no summary line
+		want       string // rest of the rule header after "[SOME_RULE] "; "" means a plain header
 	}{
-		{"several namespaces", []string{"a", "a", "a", "b", "b", "c", "d"}, "  7 findings in 4 namespaces\n"},
-		{"one namespace", []string{"a", "a", "a", "a", "a", "a"}, "  6 findings in 1 namespace\n"},
-		{"no namespace at all", []string{"", "", "", "", "", ""}, "  6 findings\n"},
-		{"cluster-scoped are not a namespace", []string{"a", "", "", "", "b", ""}, "  6 findings in 2 namespaces\n"},
+		{"several namespaces", []string{"a", "a", "a", "b", "b", "c", "d"}, "7 findings in 4 namespaces, first 5 shown\n"},
+		{"one namespace", []string{"a", "a", "a", "a", "a", "a"}, "6 findings in 1 namespace, first 5 shown\n"},
+		{"no namespace at all", []string{"", "", "", "", "", ""}, "6 findings, first 5 shown\n"},
+		{"cluster-scoped are not a namespace", []string{"a", "", "", "", "b", ""}, "6 findings in 2 namespaces, first 5 shown\n"},
 		{"not collapsed", []string{"a", "b", "c", "d", "e"}, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := string(renderText(t, ruleFindings("SOME_RULE", tt.namespaces)))
 			if tt.want == "" {
-				if strings.Contains(got, " findings in ") || strings.Contains(got, "  5 findings\n") {
-					t.Errorf("uncollapsed rule printed a summary line:\n%s", got)
+				if strings.Contains(got, "first 5 shown") || strings.Contains(got, "Summary:") {
+					t.Errorf("uncollapsed rule printed collapse info in its header:\n%s", got)
 				}
 				return
 			}
-			// The line sits between the rule header and the first example.
-			header := fmt.Sprintf("[SOME_RULE] %d findings\n", len(tt.namespaces))
-			i := strings.Index(got, header+tt.want+"  Pod/")
-			j := strings.Index(got, header+tt.want+"  Node/")
-			if i < 0 && j < 0 {
-				t.Errorf("want %q right after the rule header, got:\n%s", tt.want, got)
+			// The totals are part of the rule header; no separate line follows it.
+			header := "[SOME_RULE] " + tt.want
+			if !strings.Contains(got, "\n"+header+"  Pod/") && !strings.Contains(got, "\n"+header+"  Node/") {
+				t.Errorf("want header %q followed by the first finding, got:\n%s", header, got)
 			}
 			if !strings.Contains(got, fmt.Sprintf("... and %d more", len(tt.namespaces)-compactLimit)) {
 				t.Errorf("'... and M more' missing or wrong:\n%s", got)
@@ -83,8 +81,8 @@ func TestCompactSummaryIsIndependentOfInputOrder(t *testing.T) {
 
 func TestVerbosePrintsNoSummaryLine(t *testing.T) {
 	got := string(renderVerbose(t, ruleFindings("SOME_RULE", []string{"a", "b", "c", "d", "e", "f", "g"})))
-	if strings.Contains(got, "findings in") {
-		t.Errorf("verbose printed a summary line:\n%s", got)
+	if strings.Contains(got, "findings in") || strings.Contains(got, "first 5 shown") {
+		t.Errorf("verbose printed collapse info:\n%s", got)
 	}
 }
 
