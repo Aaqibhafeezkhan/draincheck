@@ -14,11 +14,16 @@ entries under `[Unreleased]` in the same pull request as the change (see
 ### Added
 
 - The report names the `kubectl drain` flags the plan still needs: a `KUBECTL DRAIN FLAGS` section in the text report (for example `kubectl drain will refuse without: --ignore-daemonsets --delete-emptydir-data`) and a new top-level `drain_flags` object in the JSON report (`missing`, `eviction_disabled`). Only flags whose absence makes a finding `BLOCKED` are named, never one you passed; with `--disable-eviction` the report says once that PodDisruptionBudgets are not consulted. `--debug` logs the result as `drain flags` (#30).
+- The compact text report shows in the header of each rule whose list is collapsed how many findings and namespaces it covers, for example `[RULE] 35 findings in 4 namespaces, first 5 shown`, so the reader can tell what the hidden findings cover. Findings without a namespace are not counted as one; the order of the examples, `--verbose` and the JSON report are unchanged (#182).
 
 #### Analyzer rules
 
 - `PDB_UNSATISFIABLE`: a PodDisruptionBudget that can never allow a disruption (`minAvailable` at or above the replica count, or `maxUnavailable: 0`, which is `desiredHealthy` not below `expectedPods`) is reported as `BLOCKED`, one finding per budget. Waiting cannot fix it; only a change to the budget or the replica count does, and the description says `maxUnavailable: 0` may be deliberate. It replaces `PDB_DISRUPTION_BLOCKED` for these budgets, so the rule ID such a budget reports changes; `PDB_DISRUPTION_BLOCKED` keeps the budgets at 0 that can clear by themselves. The JSON `evidence` has `namespace`, `name`, `expected_pods`, `desired_healthy`, `min_available`, `max_unavailable`, `nodes` and `pods` (#99).
 - `ALL_REPLICAS_ON_TARGETS`: a Deployment or StatefulSet with 2 or more desired replicas whose Ready pods all run on the nodes you drain is reported as `RISK`, one finding per workload. Drained together, the nodes can take the whole workload down, because `kubectl drain` does not wait for replacements to be Ready before it drains the next node (whether it reaches zero depends on timing); `kubectl drain` does not warn about it. Only Ready pods count, so a replica still starting on another node does not clear the finding. A workload covered by a PodDisruptionBudget that needs a pod healthy is skipped (kubectl waits on the budget), unless you pass `--disable-eviction`. A workload with one replica stays with `SINGLE_REPLICA_WORKLOAD`, so the two rules never report the same workload. The JSON `evidence` has `owner_kind`, `owner_name`, `replicas`, `ready_pods`, `nodes` and `pods` (#98).
+
+### Changed
+
+- The compact text report sets each remediation apart from the findings above it: a blank line before it and a `=>` marker, for example `  => Remediation: ...`. `--verbose` and the JSON report are unchanged.
 
 ### Fixed
 
