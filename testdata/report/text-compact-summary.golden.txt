@@ -1,0 +1,43 @@
+draincheck - preflight maintenance analysis
+Timestamp: 2026-10-10T21:00:00Z
+
+=== FINDINGS SUMMARY ===
+  BLOCKED: 0
+  RISK:    19
+  UNKNOWN: 0
+
+=== RISK (19) ===
+
+[ACROSS_NAMESPACES] 7 findings
+  7 findings in 4 namespaces
+  Pod/a/r-00: d
+  Pod/a/r-01: d
+  Pod/a/r-02: d
+  Pod/b/r-03: d
+  Pod/b/r-04: d
+  ... and 2 more
+  Remediation: Fix it.
+
+[NO_NAMESPACE] 6 findings
+  6 findings
+  Node/r-00: d
+  Node/r-01: d
+  Node/r-02: d
+  Node/r-03: d
+  Node/r-04: d
+  ... and 1 more
+  Remediation: Fix it.
+
+[ONE_NAMESPACE] 6 findings
+  6 findings in 1 namespace
+  Pod/a/r-00: d
+  Pod/a/r-01: d
+  Pod/a/r-02: d
+  Pod/a/r-03: d
+  Pod/a/r-04: d
+  ... and 1 more
+  Remediation: Fix it.
+
+Some lists are collapsed. Use --verbose to print every finding.
+
+This report describes the observed cluster state at 2026-10-10T21:00:00Z and does not guarantee execution success. Cluster state may drift immediately after analysis.

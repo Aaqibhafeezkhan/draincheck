@@ -14,6 +14,7 @@ entries under `[Unreleased]` in the same pull request as the change (see
 ### Added
 
 - The report names the `kubectl drain` flags the plan still needs: a `KUBECTL DRAIN FLAGS` section in the text report (for example `kubectl drain will refuse without: --ignore-daemonsets --delete-emptydir-data`) and a new top-level `drain_flags` object in the JSON report (`missing`, `eviction_disabled`). Only flags whose absence makes a finding `BLOCKED` are named, never one you passed; with `--disable-eviction` the report says once that PodDisruptionBudgets are not consulted. `--debug` logs the result as `drain flags` (#30).
+- The compact text report prints a summary line under each rule whose list is collapsed, for example `35 findings in 4 namespaces`, so the reader can tell what the hidden findings cover. Findings without a namespace are not counted as one; the order of the examples, `--verbose` and the JSON report are unchanged (#182).
 
 #### Analyzer rules
 

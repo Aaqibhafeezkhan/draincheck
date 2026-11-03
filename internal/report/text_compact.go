@@ -15,7 +15,8 @@ const compactLimit = 5
 
 // writeCompactSection writes the findings of one severity grouped by rule: a
 // header with the count, one line per finding, then each distinct remediation
-// once. It reports whether any list was collapsed.
+// once. A rule with more findings than compactLimit gets a summary line before
+// its examples. It reports whether any list was collapsed.
 func writeCompactSection(buf *bytes.Buffer, sev findings.Severity, fs []findings.Finding) bool {
 	n := countSeverity(fs, sev)
 	if n == 0 {
@@ -50,6 +51,10 @@ func writeCompactRule(buf *bytes.Buffer, id string, fs []findings.Finding) bool 
 		noun = "finding"
 	}
 	fmt.Fprintf(buf, "\n[%s] %d %s\n", id, len(fs), noun)
+
+	if len(fs) > compactLimit {
+		fmt.Fprintf(buf, "  %s\n", compactSummary(fs))
+	}
 
 	collapsed := false
 	for i, f := range fs {
