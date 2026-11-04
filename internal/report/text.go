@@ -24,8 +24,10 @@ var textSeverities = []findings.Severity{findings.Blocked, findings.Risk, findin
 // severity section and each remediation is printed once. With verbose set,
 // every finding is printed in full with its own remediation. flags adds a
 // section between the summary and the findings when a drain flag is missing or
-// eviction is disabled; with neither, the report is unchanged.
-func WriteText(w io.Writer, fs []findings.Finding, taken time.Time, verbose bool, flags DrainFlags) error {
+// eviction is disabled; with neither, the report is unchanged. The remediation
+// of a finding comes from cat when the finding names a case in it, and from the
+// finding otherwise; a nil cat is valid.
+func WriteText(w io.Writer, fs []findings.Finding, taken time.Time, verbose bool, flags DrainFlags, cat findings.Catalog) error {
 	sorted := slices.Clone(fs)
 	findings.Sort(sorted)
 
@@ -41,10 +43,10 @@ func WriteText(w io.Writer, fs []findings.Finding, taken time.Time, verbose bool
 	collapsed := false
 	for _, sev := range textSeverities {
 		if verbose {
-			writeVerboseSection(&buf, sev, sorted)
+			writeVerboseSection(&buf, sev, sorted, cat)
 			continue
 		}
-		if writeCompactSection(&buf, sev, sorted) {
+		if writeCompactSection(&buf, sev, sorted, cat) {
 			collapsed = true
 		}
 	}

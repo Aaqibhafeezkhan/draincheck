@@ -9,7 +9,7 @@ import (
 
 // writeVerboseSection writes the findings of one severity in full: the
 // description and the remediation are repeated for every finding.
-func writeVerboseSection(buf *bytes.Buffer, sev findings.Severity, fs []findings.Finding) {
+func writeVerboseSection(buf *bytes.Buffer, sev findings.Severity, fs []findings.Finding, cat findings.Catalog) {
 	n := countSeverity(fs, sev)
 	if n == 0 {
 		return
@@ -21,6 +21,6 @@ func writeVerboseSection(buf *bytes.Buffer, sev findings.Severity, fs []findings
 		}
 		fmt.Fprintf(buf, "\n[%s] %s\n", f.RuleID, f.Resource)
 		fmt.Fprintf(buf, "  %s\n", f.Description)
-		fmt.Fprintf(buf, "  Remediation: %s\n", f.Remediation)
+		fmt.Fprintf(buf, "  Remediation: %s\n", remediationOf(cat, f))
 	}
 }
