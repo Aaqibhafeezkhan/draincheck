@@ -66,24 +66,8 @@ func writeCompactRule(buf *bytes.Buffer, id string, fs []findings.Finding, cat f
 		fmt.Fprintf(buf, "  %s: %s\n", f.Resource, f.Description)
 	}
 
-	// Distinct remediations in order of first appearance.
-	var texts []string
-	resources := map[string][]string{}
-	for _, f := range fs {
-		r := remediationOf(cat, f)
-		if _, seen := resources[r]; !seen {
-			texts = append(texts, r)
-		}
-		resources[r] = append(resources[r], f.Resource.String())
-	}
-	if len(texts) == 1 {
-		fmt.Fprintf(buf, "\n  => Remediation: %s\n", texts[0])
-		return collapsed
-	}
-	for _, text := range texts {
-		list, c := joinCollapsed(resources[text])
-		collapsed = collapsed || c
-		fmt.Fprintf(buf, "\n  => Remediation (%s): %s\n", list, text)
+	if writeCompactAdvice(buf, fs, cat) {
+		collapsed = true
 	}
 	return collapsed
 }
