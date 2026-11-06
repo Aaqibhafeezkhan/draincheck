@@ -24,6 +24,9 @@ entries under `[Unreleased]` in the same pull request as the change (see
 ### Changed
 
 - The compact text report sets each remediation apart from the findings above it: a blank line before it and a `=>` marker, for example `  => Remediation: ...`. `--verbose` and the JSON report are unchanged.
+- The text report prints a `=> Why:` line (`Why:` in `--verbose`, like its `Remediation:`), one sentence with the consequence for the drain, right above the remediation of every finding: once per case in the compact layout, for every finding with `--verbose`. A case is one situation of a rule (a DaemonSet pod and a static pod are two cases of `POD_OWNERSHIP`); its `Why` and its remediation are written once per rule and not repeated in each finding, so the finding line keeps only the facts, the numbers and names, and is shorter. The remediation text is the same as before, with `<namespace>` in place of the namespace of one finding in `ALL_REPLICAS_ON_TARGETS` and without the operator's API group in the advice for operator-managed budgets (the description names it) (#186).
+- **Breaking, JSON** report: a finding has a new `case` field, the name of its case (for example `daemonset`, `budget_at_zero`, `single_replica`), and **no longer has `remediation`**. Its `description` holds the facts only; the reason it used to contain is no longer in the JSON. No remediation, tip or `Why` is stored in the JSON report any more; the text is the same for every finding of a case, so only the text report prints it. A script that read `remediation` or the reason in `description` must read `case`. The commands that confirm a finding are in the text report. There is no deprecation period (#186).
+- The `PDB_DISRUPTION_BLOCKED` finding for an operator-managed budget names the case `operator_managed`, or `operator_managed:longhorn.io` for an operator with its own hint, so the case tells which text was printed (#186).
 
 ### Fixed
 

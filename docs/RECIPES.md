@@ -31,6 +31,25 @@ POD_OWNERSHIP	1
 UNKNOWN_CONSTRAINT	1
 ```
 
+## Count findings by case
+
+A finding names its case in `case`; the JSON report carries no remediation or other advice text. The text of each case is printed by the text report, once per case. A finding with an empty `case` has no advice.
+
+```sh
+jq -r '[.findings[].case] | sort | group_by(.)[] | "\(.[0])\t\(length)"' testdata/report/json-v1.golden.json
+```
+
+Output (the first line is the finding with no case):
+
+```text
+	1
+budget_at_zero	1
+daemonset	1
+missing_requests	1
+operator_managed	1
+overlapping	1
+```
+
 ## List nodes touched by `PDB_DISRUPTION_BLOCKED`
 
 The evidence can contain a top-level `nodes` array or, for operator-managed budgets, node arrays nested under `pdbs`.

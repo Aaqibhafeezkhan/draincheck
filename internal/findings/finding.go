@@ -6,9 +6,10 @@ type Finding struct {
 	Severity Severity    `json:"severity"`
 	Resource ResourceRef `json:"resource"`
 	Evidence Evidence    `json:"evidence"`
-	// Case names the situation of the rule this finding belongs to; the text for
-	// it is in the Catalog. Empty while a rule has not moved to cases.
-	Case        string `json:"case,omitempty"`
+	// Case names the situation of the rule this finding belongs to. The text
+	// that every finding of the case shares, why it matters and what to do, is
+	// in the Catalog and is not part of the finding.
+	Case string `json:"case"`
+	// Description holds the facts of this finding: the numbers and the names.
 	Description string `json:"description"`
-	Remediation string `json:"remediation"`
 }

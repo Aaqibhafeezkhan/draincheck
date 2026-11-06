@@ -46,25 +46,25 @@ Mark anything not implemented yet as *planned* and link the issue. Document only
 
 ## Advice standard
 
-A finding must give the operator more than `kubectl drain` would: not only what is wrong, but how to confirm it in seconds and what to do next. The `description` and the `remediation` of a finding carry five things between them.
+A finding must give the operator more than `kubectl drain` would: not only what is wrong, but how to confirm it in seconds and what to do next. The `description` of a finding and the case it names (the `Why` and the `remediation` of the case) carry five things between them. A case is the text a rule shares between all findings of one situation; it is written once per rule, in `internal/analyzer/<rule>_cases.go`, and printed once by the text report. It is not part of the JSON report: a finding names its case in `case` and carries only its own facts.
 
 | # | What | Where | Requirement |
 | - | ---- | ----- | ----------- |
-| 1 | The fact | `description` | The numbers and names, taken from the evidence: `allows 0 disruptions (3 healthy, 3 desired)`, not `is too strict`. |
-| 2 | Why it matters for this drain | `description` | In terms of the definitions in [SPEC.md](SPEC.md#31-what-blocked-and-risk-mean-for-a-drain-that-retries): the drain waits (`BLOCKED`), completes with something lost or delayed (`RISK`), or the outcome is not known (`UNKNOWN`). |
-| 3 | What `kubectl drain` itself does with it | `description` | Only what has been checked against kubectl (see SPEC.md and *Mirror kubectl* in the entries). Where draincheck cannot establish it, the description says so. |
-| 4 | A read-only command that confirms it | `remediation` | One or more commands in backticks, starting with `kubectl get`, `kubectl describe` or `kubectl auth can-i`. A command never writes: none contains `delete`, `patch`, `apply`, `create`, `cordon`, `drain`, `evict`, `scale` or `edit`. |
-| 5 | The action, safest first | `remediation` | In order, after the command. An action that writes is described in words, never as a command. |
+| 1 | The fact | `description`, facts only | The numbers and names, taken from the evidence: `allows 0 disruptions (3 healthy, 3 desired)`, not `is too strict`. |
+| 2 | Why it matters for this drain | `Why` of the case, one sentence | In terms of the definitions in [SPEC.md](SPEC.md#31-what-blocked-and-risk-mean-for-a-drain-that-retries): the drain waits (`BLOCKED`), completes with something lost or delayed (`RISK`), or the outcome is not known (`UNKNOWN`). |
+| 3 | What `kubectl drain` itself does with it | `Why` of the case | Only what has been checked against kubectl (see SPEC.md and *Mirror kubectl* in the entries). Where draincheck cannot establish it, the description says so. |
+| 4 | A read-only command that confirms it | `remediation` of the case | One or more commands in backticks, starting with `kubectl get`, `kubectl describe` or `kubectl auth can-i`. A command never writes: none contains `delete`, `patch`, `apply`, `create`, `cordon`, `drain`, `evict`, `scale` or `edit`. |
+| 5 | The action, safest first | `remediation` of the case | In order, after the command. An action that writes is described in words, never as a command. |
 
 Further requirements:
 
-- **`UNKNOWN` says what draincheck could not establish and what to look at to decide.** The description names the missing fact (a stale status, an operator, a policy value); the command reads exactly that.
+- **`UNKNOWN` says what draincheck could not establish and what to look at to decide.** The description names the missing fact (a stale status, an operator, a policy value) and the `Why` of the case says what that leaves open; the command reads exactly that.
 - **An estimate says it is an estimate and shows its inputs.** A count that ignores taints or capacity says so in the same sentence.
-- **Placeholders.** A command names the object with a placeholder in angle brackets (`<namespace>`, `<name>`, `<pod>`, `<node>`, `<kind>`, `<pdb>`, `<owner>`), taken from the `resource` and the evidence of the finding. The text stays the same for every finding of a rule, so the compact text report still prints it once.
+- **Placeholders.** A command names the object with a placeholder in angle brackets (`<namespace>`, `<name>`, `<pod>`, `<node>`, `<kind>`, `<pdb>`, `<owner>`), taken from the `resource` and the evidence of the finding. The text of a case is the same for every finding of the case, so the compact text report prints it once.
 - **Plain commands.** A command is one `kubectl` invocation with no pipe, no shell and no `xargs`. To read a field, use `-o yaml` or `-o jsonpath=` and name the field in words.
 - **Permissions.** A verify command can need a permission that draincheck's own role does not have (`describe`, or `get` on a custom resource). It runs as the operator, not as draincheck.
 
-`TestAdviceContract` (`internal/analyzer/advice_contract_test.go`) enforces the fact (1) and the read-only command (4) for every finding of every default rule, and fails for a rule that has no case in its table. It also rejects a command that is not one plain `kubectl get`, `describe` or `auth can-i` invocation (no pipe, `;`, `&` or `$(`) and a placeholder not listed above. `TestAdviceTableListsEveryDefaultRule` fails for a rule that has no row below. A structured `verify` field in the JSON report is *planned* too (#130). Until then the commands are in the `remediation` text.
+`TestAdviceContract` (`internal/analyzer/advice_contract_test.go`) enforces the fact (1), the `Why` (2) and the read-only command (4) for every finding of every default rule: each finding must name a case that `analyzer.DefaultCatalog()` holds. It fails for a rule that has no case in its table. It also rejects a command that is not one plain `kubectl get`, `describe` or `auth can-i` invocation (no pipe, `;`, `&` or `$(`) and a placeholder not listed above. `TestAdviceTableListsEveryDefaultRule` fails for a rule that has no row below. A structured `verify` field is *planned* (#130); until then the commands are in the `remediation` of the case, which only the text report prints, and the JSON report has none.
 
 ### Advice per rule
 

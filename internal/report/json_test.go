@@ -20,7 +20,17 @@ var update = flag.Bool("update", false, "rewrite golden files")
 // snapshotTime is the fixed snapshot timestamp used by every report test.
 var snapshotTime = time.Date(2026, 10, 10, 21, 0, 0, 0, time.UTC)
 
-// sampleFindings is deliberately out of sorted order.
+// testCatalog holds the text of the cases of sampleFindings.
+var testCatalog = findings.Catalog{
+	"POD_OWNERSHIP/daemonset":                    {Why: "kubectl drain refuses DaemonSet pods without --ignore-daemonsets.", Remediation: "Drain with --ignore-daemonsets."},
+	"PDB_DISRUPTION_BLOCKED/budget_at_zero":      {Why: "Eviction is refused, so the drain waits.", Remediation: "Add healthy replicas or relax the budget."},
+	"PDB_DISRUPTION_BLOCKED/operator_managed":    {Why: "Whether the drain stalls depends on the operator.", Remediation: "Check the operator's drain documentation."},
+	"MISSING_RESOURCE_REQUESTS/missing_requests": {Why: "Rescheduled pods may not fit where they land.", Remediation: "Set CPU and memory requests."},
+	"PDB_OVERLAPPING_SELECTORS/overlapping":      {Why: "The eviction API refuses a pod covered by several budgets.", Remediation: "Narrow the selectors."},
+}
+
+// sampleFindings is deliberately out of sorted order. UNKNOWN_CONSTRAINT names
+// no case, so it has no advice.
 func sampleFindings() []findings.Finding {
 	return []findings.Finding{
 		{
@@ -38,7 +48,7 @@ func sampleFindings() []findings.Finding {
 				},
 			},
 			Description: "DaemonSet monitoring/agent has 2 pods on 2 target nodes.",
-			Remediation: "Drain with --ignore-daemonsets.",
+			Case:        "daemonset",
 		},
 		{
 			RuleID:   "PDB_DISRUPTION_BLOCKED",
@@ -56,7 +66,7 @@ func sampleFindings() []findings.Finding {
 				},
 			},
 			Description: "PodDisruptionBudget billing/payments-api-pdb allows 0 disruptions.",
-			Remediation: "Add healthy replicas or relax the budget.",
+			Case:        "budget_at_zero",
 		},
 		{
 			RuleID:   "PDB_DISRUPTION_BLOCKED",
@@ -85,14 +95,13 @@ func sampleFindings() []findings.Finding {
 				},
 			},
 			Description: "Operator storage.example.com (NodeAgent) manages 2 PodDisruptionBudgets in namespace storage-system with 0 allowed disruptions.",
-			Remediation: "Check the operator's drain documentation.",
+			Case:        "operator_managed",
 		},
 		{
 			RuleID:      "UNKNOWN_CONSTRAINT",
 			Severity:    findings.Unknown,
 			Resource:    findings.ResourceRef{Kind: "Node", Name: "worker-02"},
 			Description: "A constraint could not be evaluated.",
-			Remediation: "Check it manually.",
 		},
 		{
 			RuleID:   "MISSING_RESOURCE_REQUESTS",
@@ -108,7 +117,7 @@ func sampleFindings() []findings.Finding {
 				},
 			},
 			Description: "2 of 3 pods of Deployment shop/web have containers without resource requests.",
-			Remediation: "Set CPU and memory requests.",
+			Case:        "missing_requests",
 		},
 		{
 			RuleID:   "PDB_OVERLAPPING_SELECTORS",
@@ -123,7 +132,7 @@ func sampleFindings() []findings.Finding {
 				},
 			},
 			Description: "Pod is selected by 2 PodDisruptionBudgets.",
-			Remediation: "Narrow the selectors.",
+			Case:        "overlapping",
 		},
 	}
 }

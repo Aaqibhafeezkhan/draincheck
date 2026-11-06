@@ -11,17 +11,6 @@ func TestCaseKeyJoinsRuleAndCase(t *testing.T) {
 	}
 }
 
-func TestCaseJSON(t *testing.T) {
-	b, err := json.Marshal(Case{Why: "Why text.", Remediation: "Fix it."})
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := `{"why":"Why text.","remediation":"Fix it."}`
-	if string(b) != want {
-		t.Errorf("json mismatch\n got: %s\nwant: %s", b, want)
-	}
-}
-
 func TestFindingJSONCarriesTheCase(t *testing.T) {
 	b, err := json.Marshal(Finding{RuleID: "POD_OWNERSHIP", Case: "daemonset"})
 	if err != nil {
@@ -33,5 +22,23 @@ func TestFindingJSONCarriesTheCase(t *testing.T) {
 	}
 	if got["case"] != "daemonset" {
 		t.Errorf("case = %v in %s, want daemonset", got["case"], b)
+	}
+}
+
+// The JSON report names the case and carries none of its text, so a finding
+// has no remediation or why field.
+func TestFindingJSONHasNoRemediationOrWhy(t *testing.T) {
+	b, err := json.Marshal(Finding{RuleID: "POD_OWNERSHIP", Case: "daemonset", Description: "d"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"remediation", "why", "tip"} {
+		if _, ok := got[key]; ok {
+			t.Errorf("finding JSON has %q: %s", key, b)
+		}
 	}
 }

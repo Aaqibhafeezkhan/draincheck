@@ -2,13 +2,15 @@ package findings
 
 // Case is the text a rule shares between every finding of one situation: why
 // that situation matters and what to do about it. A finding keeps only its own
-// facts and names its case, so the text is written once and printed once.
+// facts and names its case, so the text is written once and printed once. It is
+// part of the text report only: the JSON report carries the name of the case
+// and no text.
 type Case struct {
 	// Why is one sentence with the consequence for the drain.
-	Why string `json:"why"`
+	Why string
 	// Remediation is the verify command and the action, with placeholders such
 	// as <namespace> and <name> instead of the names of one finding.
-	Remediation string `json:"remediation"`
+	Remediation string
 }
 
 // CaseKey returns the key of a case in a Catalog: the rule ID and the case ID

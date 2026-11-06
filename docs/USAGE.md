@@ -107,23 +107,26 @@ Timestamp: 2026-10-14T09:30:00Z
 === BLOCKED (1) ===
 
 [PDB_DISRUPTION_BLOCKED] 1 finding
-  PodDisruptionBudget/billing/payments-api-pdb: PodDisruptionBudget billing/payments-api-pdb allows 0 disruptions (3 healthy, 3 desired), so eviction of its 2 pods on 2 target nodes will be refused. kubectl drain retries a refused eviction until --timeout, which is infinite by default, so it waits and does not complete.
+  PodDisruptionBudget/billing/payments-api-pdb: PodDisruptionBudget billing/payments-api-pdb allows 0 disruptions (3 healthy, 3 desired) and selects 2 pods on 2 target nodes.
 
+  => Why: Eviction of the pods it selects is refused, and kubectl drain retries a refused eviction until --timeout, which is infinite by default, so it waits and does not complete.
   => Remediation: Confirm with `kubectl get pdb -n <namespace> <name>` (ALLOWED DISRUPTIONS is 0) and `kubectl describe pdb -n <namespace> <name>` (selector, current and desired). Then, safest first: bring the selected pods to Ready, by adding replicas or fixing the ones that are not, until the budget allows a disruption; or, if the budget is stricter than the workload needs, relax minAvailable/maxUnavailable. Do this before draining: the drain only waits.
 
 This report describes the observed cluster state at 2026-10-14T09:30:00Z and does not guarantee execution success. Cluster state may drift immediately after analysis.
 ```
 
 - Every remediation names the read-only `kubectl` command that confirms the finding (`get`, `describe` or `auth can-i`, with `<namespace>`, `<name>` and similar placeholders taken from the resource of the finding), then the action, safest first. The standard is in [RULES.md](RULES.md#advice-standard).
-- The remediation follows a blank line and starts with `=>`, so it stands apart from the findings above it. `--verbose` and the JSON are unchanged.
-- Findings of a rule that share a remediation print it once. A rule with several distinct remediations (for example `POD_OWNERSHIP` for DaemonSet versus static pods) prints each text once, with the resources it applies to: `Remediation (DaemonSet/a/ds-1, DaemonSet/a/ds-2): ...`.
+- The advice of a case follows a blank line, and both its `Why` and its remediation start with `=>`, so they stand apart from the findings above it.
+- Every rule works in cases: a case is one situation of a rule, such as a DaemonSet pod or a static pod for `POD_OWNERSHIP`. Each case gives one `=> Why:` line, a single sentence with the consequence for the drain, right above its remediation. It is printed once per case, not per finding, and the finding line keeps only the facts: `  Why: kubectl drain refuses DaemonSet pods without --ignore-daemonsets and never evicts them.` followed by `  => Remediation: ...`. When a rule has several cases, each names its resources: `=> Why (DaemonSet/a/ds-1, DaemonSet/a/ds-2): ...` and the remediation below it. The text of a case is written once per rule, not once per finding (#186).
+- Findings of one case share its advice and print it once. A rule with several cases in the report (for example `POD_OWNERSHIP` for DaemonSet versus static pods) prints the advice of each once, with the resources it applies to: `=> Why (DaemonSet/a/ds-1, DaemonSet/a/ds-2): ...` and the remediation below it.
 - When a drain flag is missing, a `=== KUBECTL DRAIN FLAGS ===` section between the summary and the findings names it in one line, for example `kubectl drain will refuse without: --ignore-daemonsets --delete-emptydir-data`. The flags come from the `BLOCKED` findings: `--ignore-daemonsets` from a DaemonSet pod, `--delete-emptydir-data` from a pod with an `emptyDir` volume and `--force` from a pod with no controller, always in that order. A flag you passed is never named, because passing it lifts the finding. The line is derived from the report, not a guarantee: run again with the flags to see what is left. With `--disable-eviction` the section also says once that pods are deleted, not evicted, and PodDisruptionBudgets are not consulted. With nothing to say the section is left out.
 - Long lists are collapsed after 5 entries and end in `... and M more`. A rule with more than 5 findings also says in its header what it covers, such as `[RULE] 35 findings in 4 namespaces, first 5 shown`, because the 5 shown are only the first in sort order. Findings without a namespace (a node, for instance) are not counted as a namespace; when none has one, the line is just the count. A rule that is not collapsed and `--verbose` keep the plain `N findings` header, and the JSON is unchanged. A line at the end of the report says when anything was collapsed. `--verbose` prints every finding.
-- `--verbose` prints one block per finding with its full description and remediation:
+- `--verbose` prints one block per finding with its description, the `Why` of its case (when it has one) and its remediation:
 
 ```text
 [POD_OWNERSHIP] DaemonSet/monitoring/agent
-  DaemonSet monitoring/agent has 2 pods on 2 target nodes. kubectl drain refuses DaemonSet pods without --ignore-daemonsets and never evicts them.
+  DaemonSet monitoring/agent has 2 pods on 2 target nodes.
+  Why: kubectl drain refuses DaemonSet pods without --ignore-daemonsets and never evicts them.
   Remediation: Confirm with `kubectl get daemonset -n <namespace> <name>` and `kubectl get pods -A --field-selector spec.nodeName=<node> -o wide`. Then drain with --ignore-daemonsets; DaemonSet pods stay until the node itself goes down. If the DaemonSet is not found, its pods are orphans, which kubectl drain treats differently.
 ```
 
@@ -162,8 +165,8 @@ This report describes the observed cluster state at 2026-10-14T09:30:00Z and doe
           { "namespace": "billing", "name": "payments-api-1", "node": "worker-03" }
         ]
       },
-      "description": "...",
-      "remediation": "..."
+      "case": "budget_at_zero",
+      "description": "..."
     }
   ]
 }
@@ -174,6 +177,7 @@ This report describes the observed cluster state at 2026-10-14T09:30:00Z and doe
 - `findings` is always an array, empty when there are none. It is sorted by namespace, kind, name, rule ID and severity, so the same findings and snapshot time give byte-identical output.
 - `resource` is `Kind/namespace/name`, or `Kind/name` for cluster-scoped objects.
 - `evidence` is a typed object whose shape depends on `rule_id` (see *Rules*); it is `null` when a rule has none. `PDB_DISRUPTION_BLOCKED` has two shapes: one budget for `BLOCKED`, and the budgets of one operator for `UNKNOWN`.
+- `case` names the situation of the rule a finding belongs to, for example `daemonset` or `static_pod` for `POD_OWNERSHIP`. The list of cases of each rule is in [RULES.md](RULES.md). **Breaking, after 0.1.0:** a finding has no `remediation`, no tip and no explanation of why it matters any more; its `description` holds the facts only (numbers and names). That text is the same for every finding of a case, so it is written once and only the text report prints it. A script that read `remediation` or the reason in `description` must read `case` instead; the commands to confirm a finding are in the text report (#186).
 - `generated_at` is the time the cluster snapshot was taken (RFC 3339, UTC), not the time the document was written, so the same snapshot always gives the same bytes.
 - `disclaimer` is the mandatory statement that the report does not guarantee execution success. It names the same timestamp.
 

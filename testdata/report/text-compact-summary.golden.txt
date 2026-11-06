@@ -16,8 +16,6 @@ Timestamp: 2026-10-10T21:00:00Z
   Pod/b/r-04: d
   ... and 2 more
 
-  => Remediation: Fix it.
-
 [NO_NAMESPACE] 6 findings, first 5 shown
   Node/r-00: d
   Node/r-01: d
@@ -26,8 +24,6 @@ Timestamp: 2026-10-10T21:00:00Z
   Node/r-04: d
   ... and 1 more
 
-  => Remediation: Fix it.
-
 [ONE_NAMESPACE] 6 findings in 1 namespace, first 5 shown
   Pod/a/r-00: d
   Pod/a/r-01: d
@@ -35,8 +31,6 @@ Timestamp: 2026-10-10T21:00:00Z
   Pod/a/r-03: d
   Pod/a/r-04: d
   ... and 1 more
-
-  => Remediation: Fix it.
 
 Some lists are collapsed. Use --verbose to print every finding.
 

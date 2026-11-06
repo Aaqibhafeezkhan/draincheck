@@ -23,7 +23,7 @@ func renderVerbose(t *testing.T, fs []findings.Finding) []byte {
 func renderTextMode(t *testing.T, fs []findings.Finding, verbose bool) []byte {
 	t.Helper()
 	var buf bytes.Buffer
-	if err := WriteText(&buf, fs, snapshotTime, verbose, DrainFlags{}, nil); err != nil {
+	if err := WriteText(&buf, fs, snapshotTime, verbose, DrainFlags{}, testCatalog); err != nil {
 		t.Fatal(err)
 	}
 	return buf.Bytes()
@@ -59,7 +59,6 @@ func TestWriteTextOmitsSectionsWithoutFindings(t *testing.T) {
 		Severity:    findings.Risk,
 		Resource:    findings.ResourceRef{Kind: "Pod", Namespace: "ns", Name: "p"},
 		Description: "d",
-		Remediation: "r",
 	}}
 
 	got := string(renderText(t, fs))

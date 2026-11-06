@@ -1,7 +1,6 @@
 package findings
 
-// Catalog maps CaseKey values to the cases of every rule. JSON writes its keys
-// in sorted order, so a catalog serializes the same way every time.
+// Catalog maps CaseKey values to the cases of every rule.
 type Catalog map[string]Case
 
 // Lookup returns the case a finding names. It reports false when the finding

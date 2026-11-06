@@ -10,30 +10,34 @@ Timestamp: 2026-10-10T21:00:00Z
 
 [PDB_OVERLAPPING_SELECTORS] Pod/billing/payments-api-1
   Pod is selected by 2 PodDisruptionBudgets.
+  Why: The eviction API refuses a pod covered by several budgets.
   Remediation: Narrow the selectors.
 
 [PDB_DISRUPTION_BLOCKED] PodDisruptionBudget/billing/payments-api-pdb
   PodDisruptionBudget billing/payments-api-pdb allows 0 disruptions.
+  Why: Eviction is refused, so the drain waits.
   Remediation: Add healthy replicas or relax the budget.
 
 === RISK (2) ===
 
 [POD_OWNERSHIP] DaemonSet/monitoring/agent
   DaemonSet monitoring/agent has 2 pods on 2 target nodes.
+  Why: kubectl drain refuses DaemonSet pods without --ignore-daemonsets.
   Remediation: Drain with --ignore-daemonsets.
 
 [MISSING_RESOURCE_REQUESTS] Deployment/shop/web
   2 of 3 pods of Deployment shop/web have containers without resource requests.
+  Why: Rescheduled pods may not fit where they land.
   Remediation: Set CPU and memory requests.
 
 === UNKNOWN (2) ===
 
 [PDB_DISRUPTION_BLOCKED] Namespace/storage-system
   Operator storage.example.com (NodeAgent) manages 2 PodDisruptionBudgets in namespace storage-system with 0 allowed disruptions.
+  Why: Whether the drain stalls depends on the operator.
   Remediation: Check the operator's drain documentation.
 
 [UNKNOWN_CONSTRAINT] Node/worker-02
   A constraint could not be evaluated.
-  Remediation: Check it manually.
 
 This report describes the observed cluster state at 2026-10-10T21:00:00Z and does not guarantee execution success. Cluster state may drift immediately after analysis.

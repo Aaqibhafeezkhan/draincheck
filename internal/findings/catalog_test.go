@@ -1,9 +1,6 @@
 package findings
 
-import (
-	"encoding/json"
-	"testing"
-)
+import "testing"
 
 func TestCatalogLookupFindsTheCaseOfAFinding(t *testing.T) {
 	c := Catalog{
@@ -35,17 +32,5 @@ func TestCatalogLookupOnNilCatalog(t *testing.T) {
 	var c Catalog
 	if _, ok := c.Lookup(Finding{RuleID: "R", Case: "c"}); ok {
 		t.Error("a nil catalog must find nothing")
-	}
-}
-
-func TestCatalogJSONIsSortedByKey(t *testing.T) {
-	c := Catalog{"B/x": {Why: "b"}, "A/y": {Why: "a"}}
-	b, err := json.Marshal(c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := `{"A/y":{"why":"a","remediation":""},"B/x":{"why":"b","remediation":""}}`
-	if string(b) != want {
-		t.Errorf("json mismatch\n got: %s\nwant: %s", b, want)
 	}
 }

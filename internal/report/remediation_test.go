@@ -17,28 +17,22 @@ func renderWithCatalog(t *testing.T, fs []findings.Finding, cat findings.Catalog
 	return buf.String()
 }
 
-func TestRemediationOfPrefersTheCatalog(t *testing.T) {
+func TestRemediationOfComesOnlyFromTheCatalog(t *testing.T) {
 	cat := findings.Catalog{"R/c": {Why: "w", Remediation: "From the catalog."}}
-	f := findings.Finding{RuleID: "R", Case: "c", Remediation: "From the finding."}
 
-	if got := remediationOf(cat, f); got != "From the catalog." {
+	if got := remediationOf(cat, findings.Finding{RuleID: "R", Case: "c"}); got != "From the catalog." {
 		t.Errorf("remediationOf = %q, want the catalog text", got)
 	}
-}
-
-func TestRemediationOfFallsBackToTheFinding(t *testing.T) {
-	cat := findings.Catalog{"R/c": {Remediation: "From the catalog."}}
-
 	for name, f := range map[string]findings.Finding{
-		"no case":      {RuleID: "R", Remediation: "From the finding."},
-		"unknown case": {RuleID: "R", Case: "other", Remediation: "From the finding."},
+		"no case":      {RuleID: "R"},
+		"unknown case": {RuleID: "R", Case: "other"},
 	} {
-		if got := remediationOf(cat, f); got != "From the finding." {
-			t.Errorf("%s: remediationOf = %q, want the finding text", name, got)
+		if got := remediationOf(cat, f); got != "" {
+			t.Errorf("%s: remediationOf = %q, want empty", name, got)
 		}
 	}
-	if got := remediationOf(nil, findings.Finding{Remediation: "x"}); got != "x" {
-		t.Errorf("nil catalog: remediationOf = %q, want x", got)
+	if got := remediationOf(nil, findings.Finding{RuleID: "R", Case: "c"}); got != "" {
+		t.Errorf("nil catalog: remediationOf = %q, want empty", got)
 	}
 }
 
