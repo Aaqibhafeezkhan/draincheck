@@ -83,5 +83,5 @@ func writeReport(w io.Writer, format string, verbose bool, fs []findings.Finding
 	if format == outputJSON {
 		return report.WriteJSON(w, fs, taken, flags)
 	}
-	return report.WriteText(w, fs, taken, verbose, flags)
+	return report.WriteText(w, fs, taken, verbose, flags, analyzer.DefaultCatalog())
 }

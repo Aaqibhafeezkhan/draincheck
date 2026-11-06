@@ -128,13 +128,16 @@ func TestWorkloadUntoleratedTaintsText(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("want 1 finding, got %d", len(got))
 	}
-	for _, want := range []string{"StatefulSet shop/db", "2 pods", "control-plane", "gpu", "Pending"} {
+	for _, want := range []string{"StatefulSet shop/db", "2 pods", "control-plane", "gpu"} {
 		if !strings.Contains(got[0].Description, want) {
 			t.Errorf("description %q lacks %q", got[0].Description, want)
 		}
 	}
-	if !strings.Contains(got[0].Remediation, "kubectl describe node") {
-		t.Errorf("remediation %q lacks the taint check", got[0].Remediation)
+	if why := catalogWhy(t, got[0]); !strings.Contains(why, "stay Pending") {
+		t.Errorf("why %q lacks the consequence", why)
+	}
+	if !strings.Contains(catalogRemediation(t, got[0]), "kubectl describe node") {
+		t.Errorf("remediation %q lacks the taint check", catalogRemediation(t, got[0]))
 	}
 }
 

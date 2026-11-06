@@ -54,7 +54,7 @@ func TestPDBOverlappingSelectors(t *testing.T) {
 
 			// Ignore prose; it is covered by TestPDBOverlappingSelectorsDescribesFinding.
 			for i := range got {
-				got[i].Description, got[i].Remediation = "", ""
+				got[i].Description, got[i].Case = "", ""
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("findings mismatch\n got: %+v\nwant: %+v", got, tt.want)
@@ -71,13 +71,13 @@ func TestPDBOverlappingSelectorsDescribesFinding(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("got %d findings, want 1", len(got))
 	}
-	if got[0].Description == "" || got[0].Remediation == "" {
+	if got[0].Description == "" || catalogRemediation(t, got[0]) == "" {
 		t.Errorf("description and remediation must be set: %+v", got[0])
 	}
 	// Checked on a kind cluster: kubectl drain gets the refusal as an error for
 	// the pod and does not retry it, unlike a budget at 0.
-	if !strings.Contains(got[0].Description, "kubectl drain reports this error for the pod at once and does not retry it") {
-		t.Errorf("description should say what kubectl drain does: %s", got[0].Description)
+	if why := catalogWhy(t, got[0]); !strings.Contains(why, "kubectl drain reports that error at once and does not retry it") {
+		t.Errorf("why should say what kubectl drain does: %s", why)
 	}
 	for _, name := range []string{"etl", "everything", "etl-0"} {
 		if !strings.Contains(got[0].Description, name) {

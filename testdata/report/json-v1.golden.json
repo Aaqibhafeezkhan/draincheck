@@ -54,16 +54,16 @@
           }
         ]
       },
-      "description": "Operator storage.example.com (NodeAgent) manages 2 PodDisruptionBudgets in namespace storage-system with 0 allowed disruptions.",
-      "remediation": "Check the operator's drain documentation."
+      "case": "operator_managed",
+      "description": "Operator storage.example.com (NodeAgent) manages 2 PodDisruptionBudgets in namespace storage-system with 0 allowed disruptions."
     },
     {
       "rule_id": "UNKNOWN_CONSTRAINT",
       "severity": "UNKNOWN",
       "resource": "Node/worker-02",
       "evidence": null,
-      "description": "A constraint could not be evaluated.",
-      "remediation": "Check it manually."
+      "case": "",
+      "description": "A constraint could not be evaluated."
     },
     {
       "rule_id": "PDB_OVERLAPPING_SELECTORS",
@@ -90,8 +90,8 @@
           }
         ]
       },
-      "description": "Pod is selected by 2 PodDisruptionBudgets.",
-      "remediation": "Narrow the selectors."
+      "case": "overlapping",
+      "description": "Pod is selected by 2 PodDisruptionBudgets."
     },
     {
       "rule_id": "PDB_DISRUPTION_BLOCKED",
@@ -120,8 +120,8 @@
           }
         ]
       },
-      "description": "PodDisruptionBudget billing/payments-api-pdb allows 0 disruptions.",
-      "remediation": "Add healthy replicas or relax the budget."
+      "case": "budget_at_zero",
+      "description": "PodDisruptionBudget billing/payments-api-pdb allows 0 disruptions."
     },
     {
       "rule_id": "POD_OWNERSHIP",
@@ -148,8 +148,8 @@
           }
         ]
       },
-      "description": "DaemonSet monitoring/agent has 2 pods on 2 target nodes.",
-      "remediation": "Drain with --ignore-daemonsets."
+      "case": "daemonset",
+      "description": "DaemonSet monitoring/agent has 2 pods on 2 target nodes."
     },
     {
       "rule_id": "MISSING_RESOURCE_REQUESTS",
@@ -184,8 +184,8 @@
           }
         ]
       },
-      "description": "2 of 3 pods of Deployment shop/web have containers without resource requests.",
-      "remediation": "Set CPU and memory requests."
+      "case": "missing_requests",
+      "description": "2 of 3 pods of Deployment shop/web have containers without resource requests."
     }
   ]
 }

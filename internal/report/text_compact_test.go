@@ -11,7 +11,8 @@ import (
 	"github.com/Veinar/draincheck/internal/findings"
 )
 
-// manyFindings returns n findings of one rule that share one remediation.
+// manyFindings returns n findings of one rule that share one case, whose
+// remediation is in testCatalog.
 func manyFindings(n int) []findings.Finding {
 	fs := make([]findings.Finding, n)
 	for i := range fs {
@@ -19,8 +20,8 @@ func manyFindings(n int) []findings.Finding {
 			RuleID:      "MISSING_RESOURCE_REQUESTS",
 			Severity:    findings.Risk,
 			Resource:    findings.ResourceRef{Kind: "Pod", Namespace: "shop", Name: fmt.Sprintf("web-%02d", i)},
+			Case:        "missing_requests",
 			Description: fmt.Sprintf("Pod shop/web-%02d has containers without resource requests.", i),
-			Remediation: "Set CPU and memory requests.",
 		}
 	}
 	return fs
@@ -56,15 +57,15 @@ func TestCompactPrintsRemediationOnceVerbosePrintsPerFinding(t *testing.T) {
 	}
 }
 
-func TestCompactSetsRemediationApartFromFindings(t *testing.T) {
+func TestCompactSetsTheAdviceApartFromFindings(t *testing.T) {
 	got := string(renderText(t, manyFindings(3)))
 
-	if !strings.Contains(got, "\n\n  => Remediation: Set CPU and memory requests.\n") {
-		t.Errorf("remediation must follow a blank line and start with =>:\n%s", got)
+	if !strings.Contains(got, "\n\n  => Why: Rescheduled pods may not fit where they land.\n  => Remediation: Set CPU and memory requests.\n") {
+		t.Errorf("the advice must follow a blank line, with the remediation starting with =>:\n%s", got)
 	}
 	verbose := string(renderVerbose(t, manyFindings(3)))
 	if strings.Contains(verbose, "=>") {
-		t.Errorf("verbose output must stay unchanged:\n%s", verbose)
+		t.Errorf("verbose output has no => marker:\n%s", verbose)
 	}
 }
 
@@ -117,25 +118,6 @@ func TestCompactDoesNotCollapseAtTheLimit(t *testing.T) {
 
 	if strings.Contains(got, "... and ") || strings.Contains(got, "--verbose") {
 		t.Errorf("a list at the limit must not be collapsed:\n%s", got)
-	}
-}
-
-func TestCompactPrintsEachDistinctRemediationOnce(t *testing.T) {
-	fs := []findings.Finding{
-		{RuleID: "POD_OWNERSHIP", Severity: findings.Risk, Resource: findings.ResourceRef{Kind: "Pod", Namespace: "a", Name: "ds-1"}, Description: "d1", Remediation: "Drain with --ignore-daemonsets."},
-		{RuleID: "POD_OWNERSHIP", Severity: findings.Risk, Resource: findings.ResourceRef{Kind: "Pod", Namespace: "a", Name: "ds-2"}, Description: "d2", Remediation: "Drain with --ignore-daemonsets."},
-		{RuleID: "POD_OWNERSHIP", Severity: findings.Risk, Resource: findings.ResourceRef{Kind: "Pod", Namespace: "a", Name: "static-1"}, Description: "d3", Remediation: "Plan for the static pod outage."},
-	}
-
-	got := string(renderText(t, fs))
-
-	for _, want := range []string{
-		"\n  => Remediation (Pod/a/ds-1, Pod/a/ds-2): Drain with --ignore-daemonsets.\n",
-		"\n  => Remediation (Pod/a/static-1): Plan for the static pod outage.\n",
-	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("missing %q in:\n%s", want, got)
-		}
 	}
 }
 

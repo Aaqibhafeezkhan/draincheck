@@ -17,7 +17,7 @@ const compactLimit = 5
 // header with the count, one line per finding, then each distinct remediation
 // once. A rule with more findings than compactLimit gets a summary line before
 // its examples. It reports whether any list was collapsed.
-func writeCompactSection(buf *bytes.Buffer, sev findings.Severity, fs []findings.Finding) bool {
+func writeCompactSection(buf *bytes.Buffer, sev findings.Severity, fs []findings.Finding, cat findings.Catalog) bool {
 	n := countSeverity(fs, sev)
 	if n == 0 {
 		return false
@@ -38,14 +38,14 @@ func writeCompactSection(buf *bytes.Buffer, sev findings.Severity, fs []findings
 
 	collapsed := false
 	for _, id := range rules {
-		if writeCompactRule(buf, id, byRule[id]) {
+		if writeCompactRule(buf, id, byRule[id], cat) {
 			collapsed = true
 		}
 	}
 	return collapsed
 }
 
-func writeCompactRule(buf *bytes.Buffer, id string, fs []findings.Finding) bool {
+func writeCompactRule(buf *bytes.Buffer, id string, fs []findings.Finding, cat findings.Catalog) bool {
 	if len(fs) > compactLimit {
 		fmt.Fprintf(buf, "\n[%s] %s, first %d shown\n", id, compactSummary(fs), compactLimit)
 	} else {
@@ -66,23 +66,8 @@ func writeCompactRule(buf *bytes.Buffer, id string, fs []findings.Finding) bool 
 		fmt.Fprintf(buf, "  %s: %s\n", f.Resource, f.Description)
 	}
 
-	// Distinct remediations in order of first appearance.
-	var texts []string
-	resources := map[string][]string{}
-	for _, f := range fs {
-		if _, seen := resources[f.Remediation]; !seen {
-			texts = append(texts, f.Remediation)
-		}
-		resources[f.Remediation] = append(resources[f.Remediation], f.Resource.String())
-	}
-	if len(texts) == 1 {
-		fmt.Fprintf(buf, "\n  => Remediation: %s\n", texts[0])
-		return collapsed
-	}
-	for _, text := range texts {
-		list, c := joinCollapsed(resources[text])
-		collapsed = collapsed || c
-		fmt.Fprintf(buf, "\n  => Remediation (%s): %s\n", list, text)
+	if writeCompactAdvice(buf, fs, cat) {
+		collapsed = true
 	}
 	return collapsed
 }

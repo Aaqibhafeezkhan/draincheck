@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/Veinar/draincheck/internal/findings"
@@ -81,7 +82,7 @@ func TestPDBStaleStatus(t *testing.T) {
 
 			// Ignore prose; it is covered by TestPDBStaleStatusDescribesFinding.
 			for i := range got {
-				got[i].Description, got[i].Remediation = "", ""
+				got[i].Description, got[i].Case = "", ""
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("findings mismatch\n got: %+v\nwant: %+v", got, tt.want)
@@ -123,12 +124,12 @@ func TestPDBStaleStatusDescribesFinding(t *testing.T) {
 		{
 			name:    "states both generations and the pod and node counts",
 			targets: []string{"worker-01", "worker-02"},
-			want:    "PodDisruptionBudget billing/api-pdb has not been reconciled (status.observedGeneration 1, metadata.generation 2), so the numbers in its status are out of date and draincheck cannot tell whether eviction of its 2 pods on 2 target nodes will be refused.",
+			want:    "PodDisruptionBudget billing/api-pdb has not been reconciled (status.observedGeneration 1, metadata.generation 2); it selects 2 pods on 2 target nodes.",
 		},
 		{
 			name:    "singular for one pod on one node",
 			targets: []string{"worker-02"},
-			want:    "PodDisruptionBudget billing/api-pdb has not been reconciled (status.observedGeneration 1, metadata.generation 2), so the numbers in its status are out of date and draincheck cannot tell whether eviction of its 1 pod on 1 target node will be refused.",
+			want:    "PodDisruptionBudget billing/api-pdb has not been reconciled (status.observedGeneration 1, metadata.generation 2); it selects 1 pod on 1 target node.",
 		},
 	}
 	for _, tt := range tests {
@@ -146,8 +147,11 @@ func TestPDBStaleStatusDescribesFinding(t *testing.T) {
 			if got.Description != tt.want {
 				t.Errorf("description\n got: %s\nwant: %s", got.Description, tt.want)
 			}
-			if got.Remediation == "" {
+			if catalogRemediation(t, *got) == "" {
 				t.Error("remediation must be set")
+			}
+			if why := catalogWhy(t, *got); !strings.Contains(why, "out of date") {
+				t.Errorf("why %q lacks the consequence", why)
 			}
 		})
 	}

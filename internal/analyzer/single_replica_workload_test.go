@@ -143,13 +143,16 @@ func TestSingleReplicaWorkloadText(t *testing.T) {
 	if i < 0 {
 		t.Fatalf("no finding for web in %+v", got)
 	}
-	for _, want := range []string{"Deployment shop/web", "1 replica", "worker-01", "unavailable"} {
+	for _, want := range []string{"Deployment shop/web", "1 replica", "worker-01"} {
 		if !strings.Contains(got[i].Description, want) {
 			t.Errorf("description %q lacks %q", got[i].Description, want)
 		}
 	}
-	if got[i].Remediation == "" {
+	if catalogRemediation(t, got[i]) == "" {
 		t.Error("remediation is empty")
+	}
+	if why := catalogWhy(t, got[i]); !strings.Contains(why, "unavailable") {
+		t.Errorf("why %q lacks the consequence", why)
 	}
 }
 

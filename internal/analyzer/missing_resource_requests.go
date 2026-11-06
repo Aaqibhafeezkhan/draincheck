@@ -97,8 +97,8 @@ func (MissingResourceRequests) Evaluate(in Input) []findings.Finding {
 				PodsOnTargets: g.total,
 				Pods:          g.missing,
 			},
+			Case:        missingResourceRequestsMissingRequests,
 			Description: describeMissingRequests(g),
-			Remediation: "Confirm with `kubectl get pod -n <namespace> <pod> -o jsonpath='{.spec.containers[*].resources.requests}'` for a pod named in the finding (empty output: no request is set; a LimitRange or webhook default shows here). Then set CPU and memory requests on every container, or a pod-level request, in the pod template of the workload so the scheduler and capacity checks can account for it. kubectl drain evicts these pods whatever they request; the risk is where they land.",
 		})
 	}
 	return out
@@ -163,6 +163,6 @@ func describeMissingRequests(g *requestsGroup) string {
 			len(g.missing), g.total, noun, g.owner.Kind, g.owner.Namespace, g.owner.Name)
 	}
 	return fmt.Sprintf(
-		"Missing resource requests in %s: %s. The scheduler treats a missing request as needing nothing, so rescheduled pods may not fit where they land.",
+		"Missing resource requests in %s: %s.",
 		subject, strings.Join(shortfalls, ", "))
 }

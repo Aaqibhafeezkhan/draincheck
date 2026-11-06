@@ -43,11 +43,11 @@ func (PDBUnsatisfiable) Evaluate(in Input) []findings.Finding {
 		pdb := sel.pdb
 		minAvail, maxUnavail := intOrPercent(pdb.Spec.MinAvailable), intOrPercent(pdb.Spec.MaxUnavailable)
 
-		var why string
+		var cause string
 		if maxUnavail != "" && budgetIsZero(pdb.Spec.MaxUnavailable) {
-			why = "maxUnavailable is 0, which is often deliberate (a workload that must never lose a pod), but it means no pod can be evicted."
+			cause = "maxUnavailable is 0, which is often deliberate (a workload that must never lose a pod), but it means no pod can be evicted."
 		} else {
-			why = fmt.Sprintf("minAvailable %s asks for %d healthy pods and the workload has %d expected pods, so there is never one to spare.",
+			cause = fmt.Sprintf("minAvailable %s asks for %d healthy pods and the workload has %d expected pods, so there is never one to spare.",
 				minAvail, pdb.Status.DesiredHealthy, pdb.Status.ExpectedPods)
 		}
 		out = append(out, findings.Finding{
@@ -60,11 +60,11 @@ func (PDBUnsatisfiable) Evaluate(in Input) []findings.Finding {
 				MinAvailable: minAvail, MaxUnavailable: maxUnavail,
 				Nodes: sel.nodes, Pods: sel.pods,
 			},
+			Case: pdbUnsatisfiableNeverAllows,
 			Description: fmt.Sprintf(
-				"PodDisruptionBudget %s/%s can never allow a disruption: it needs %d healthy of %d expected pods. %s Eviction of its %s on %s will be refused however healthy the workload is. kubectl drain retries a refused eviction until --timeout, which is infinite by default, so it waits and does not complete.",
-				pdb.Namespace, pdb.Name, pdb.Status.DesiredHealthy, pdb.Status.ExpectedPods, why,
+				"PodDisruptionBudget %s/%s can never allow a disruption: it needs %d healthy of %d expected pods. %s It selects %s on %s.",
+				pdb.Namespace, pdb.Name, pdb.Status.DesiredHealthy, pdb.Status.ExpectedPods, cause,
 				plural(len(sel.pods), "pod"), plural(len(sel.nodes), "target node")),
-			Remediation: "Confirm with `kubectl get pdb -n <namespace> <name>` (ALLOWED DISRUPTIONS is 0) and `kubectl get pdb -n <namespace> <name> -o yaml` (spec.minAvailable or spec.maxUnavailable against status.expectedPods). Waiting does not help: only a change to the budget or to the replica count does. Then, safest first: scale the workload above minAvailable and wait until the new pods are Ready; or, if the budget is stricter than the workload needs, relax minAvailable/maxUnavailable for the drain and restore it afterwards. Do this before draining.",
 		})
 	}
 	return out

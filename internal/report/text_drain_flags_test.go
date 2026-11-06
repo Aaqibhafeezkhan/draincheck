@@ -11,7 +11,7 @@ import (
 func renderTextFlags(t *testing.T, fs []findings.Finding, flags DrainFlags) string {
 	t.Helper()
 	var buf bytes.Buffer
-	if err := WriteText(&buf, fs, snapshotTime, false, flags); err != nil {
+	if err := WriteText(&buf, fs, snapshotTime, false, flags, testCatalog); err != nil {
 		t.Fatal(err)
 	}
 	return buf.String()

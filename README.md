@@ -15,12 +15,12 @@ Read-only preflight analyzer for multi-node `kubectl drain`. `kubectl drain` tel
 
 ## Example
 
-Output from a real cluster, with names anonymized. The text report is compact: findings are grouped by cause (one per PodDisruptionBudget, workload, DaemonSet or node, not one per pod), each remediation is printed once, a rule with more than 5 findings starts with a line such as `15 findings in 4 namespaces`, and a list is cut after 5 entries. `--verbose` prints every finding in full. The JSON report always carries every finding and every pod.
+Output from a real cluster, with names anonymized. The text report is compact: findings are grouped by cause (one per PodDisruptionBudget, workload, DaemonSet or node, not one per pod), each rule prints the one-sentence reason (`Why`) and the remediation of a case once, with the facts of a finding on its own line, a rule with more than 5 findings starts with a line such as `15 findings in 4 namespaces`, and a list is cut after 5 entries. `--verbose` prints every finding in full. The JSON report always carries every finding and every pod.
 
 ```text
 $ draincheck --nodes worker-01 --ignore-daemonsets --delete-emptydir-data
 draincheck - preflight maintenance analysis
-Timestamp: 2026-11-03T08:20:21Z
+Timestamp: 2026-11-04T12:15:42Z
 
 === FINDINGS SUMMARY ===
   BLOCKED: 0
@@ -30,50 +30,55 @@ Timestamp: 2026-11-03T08:20:21Z
 === RISK (47) ===
 
 [MISSING_RESOURCE_REQUESTS] 15 findings in 4 namespaces, first 5 shown
-  Deployment/cattle-fleet-system/fleet-controller: Missing resource requests in 1 of 1 pod of Deployment cattle-fleet-system/fleet-controller on the target nodes: fleet-controller (cpu, memory), fleet-cleanup (cpu, memory), fleet-agentmanagement (cpu, memory). The scheduler treats a missing request as needing nothing, so rescheduled pods may not fit where they land.
-  Deployment/cattle-fleet-system/gitjob: Missing resource requests in 1 of 1 pod of Deployment cattle-fleet-system/gitjob on the target nodes: gitjob (cpu, memory). The scheduler treats a missing request as needing nothing, so rescheduled pods may not fit where they land.
-  Deployment/cattle-fleet-system/helmops: Missing resource requests in 1 of 1 pod of Deployment cattle-fleet-system/helmops on the target nodes: helmops (cpu, memory). The scheduler treats a missing request as needing nothing, so rescheduled pods may not fit where they land.
-  Deployment/kube-system/cilium-operator: Missing resource requests in 1 of 1 pod of Deployment kube-system/cilium-operator on the target nodes: cilium-operator (cpu, memory). The scheduler treats a missing request as needing nothing, so rescheduled pods may not fit where they land.
-  Deployment/kube-system/hubble-relay: Missing resource requests in 1 of 1 pod of Deployment kube-system/hubble-relay on the target nodes: hubble-relay (cpu, memory). The scheduler treats a missing request as needing nothing, so rescheduled pods may not fit where they land.
+  Deployment/cattle-fleet-system/fleet-controller: Missing resource requests in 1 of 1 pod of Deployment cattle-fleet-system/fleet-controller on the target nodes: fleet-controller (cpu, memory), fleet-cleanup (cpu, memory), fleet-agentmanagement (cpu, memory).
+  Deployment/cattle-fleet-system/gitjob: Missing resource requests in 1 of 1 pod of Deployment cattle-fleet-system/gitjob on the target nodes: gitjob (cpu, memory).
+  Deployment/cattle-fleet-system/helmops: Missing resource requests in 1 of 1 pod of Deployment cattle-fleet-system/helmops on the target nodes: helmops (cpu, memory).
+  Deployment/kube-system/cilium-operator: Missing resource requests in 1 of 1 pod of Deployment kube-system/cilium-operator on the target nodes: cilium-operator (cpu, memory).
+  Deployment/kube-system/hubble-relay: Missing resource requests in 1 of 1 pod of Deployment kube-system/hubble-relay on the target nodes: hubble-relay (cpu, memory).
   ... and 10 more
 
+  => Why: The scheduler treats a missing request as needing nothing, so rescheduled pods may not fit where they land.
   => Remediation: Confirm with `kubectl get pod -n <namespace> <pod> -o jsonpath='{.spec.containers[*].resources.requests}'` for a pod named in the finding (empty output: no request is set; a LimitRange or webhook default shows here). Then set CPU and memory requests on every container, or a pod-level request, in the pod template of the workload so the scheduler and capacity checks can account for it. kubectl drain evicts these pods whatever they request; the risk is where they land.
 
 [POD_LOCAL_STORAGE] 12 findings in 8 namespaces, first 5 shown
-  Deployment/cattle-fleet-system/fleet-controller: Deployment cattle-fleet-system/fleet-controller has 1 pod with emptyDir volumes on 1 target node. With --delete-emptydir-data kubectl drain deletes the pods and the data in those volumes is lost; a controller recreates the pod with an empty volume.
-  Deployment/cattle-fleet-system/gitjob: Deployment cattle-fleet-system/gitjob has 1 pod with emptyDir volumes on 1 target node. With --delete-emptydir-data kubectl drain deletes the pods and the data in those volumes is lost; a controller recreates the pod with an empty volume.
-  Deployment/cattle-fleet-system/helmops: Deployment cattle-fleet-system/helmops has 1 pod with emptyDir volumes on 1 target node. With --delete-emptydir-data kubectl drain deletes the pods and the data in those volumes is lost; a controller recreates the pod with an empty volume.
-  Deployment/shop-dev/shop-frontend: Deployment shop-dev/shop-frontend has 1 pod with emptyDir volumes on 1 target node. With --delete-emptydir-data kubectl drain deletes the pods and the data in those volumes is lost; a controller recreates the pod with an empty volume.
-  Deployment/shop-test/shop-frontend: Deployment shop-test/shop-frontend has 1 pod with emptyDir volumes on 1 target node. With --delete-emptydir-data kubectl drain deletes the pods and the data in those volumes is lost; a controller recreates the pod with an empty volume.
+  Deployment/cattle-fleet-system/fleet-controller: Deployment cattle-fleet-system/fleet-controller has 1 pod with emptyDir volumes on 1 target node.
+  Deployment/cattle-fleet-system/gitjob: Deployment cattle-fleet-system/gitjob has 1 pod with emptyDir volumes on 1 target node.
+  Deployment/cattle-fleet-system/helmops: Deployment cattle-fleet-system/helmops has 1 pod with emptyDir volumes on 1 target node.
+  Deployment/shop-dev/shop-frontend: Deployment shop-dev/shop-frontend has 1 pod with emptyDir volumes on 1 target node.
+  Deployment/shop-test/shop-frontend: Deployment shop-test/shop-frontend has 1 pod with emptyDir volumes on 1 target node.
   ... and 7 more
 
+  => Why: With --delete-emptydir-data kubectl drain deletes the pods and the data in those volumes is lost; a controller recreates the pod with an empty volume.
   => Remediation: Confirm with `kubectl get pod -n <namespace> <pod> -o jsonpath='{.spec.volumes}'` (an entry with emptyDir is local storage). Then, safest first: move data that must survive to a PersistentVolumeClaim before the drain; or accept the loss, which is what --delete-emptydir-data already says.
 
 [POD_OWNERSHIP] 1 finding
-  Node/worker-01: Node worker-01 runs 1 static pod (kube-system/kube-proxy-worker-01). Static pods cannot be evicted or rescheduled and stop when the node goes down.
+  Node/worker-01: Node worker-01 runs 1 static pod (kube-system/kube-proxy-worker-01).
 
+  => Why: Static pods cannot be evicted or rescheduled and stop when the node goes down.
   => Remediation: Confirm with `kubectl get pods -A --field-selector spec.nodeName=<node>` and `kubectl get pod -n <namespace> <pod> -o jsonpath='{.metadata.annotations}'` (the annotation kubernetes.io/config.mirror marks a static pod). Then plan for the static pods to be unavailable while the node is down; kubectl drain skips them.
 
 [SINGLE_REPLICA_WORKLOAD] 19 findings in 10 namespaces, first 5 shown
-  Deployment/cattle-fleet-system/fleet-controller: Deployment cattle-fleet-system/fleet-controller has 1 replica and it runs on node worker-01. The workload is unavailable from the eviction until the new pod is Ready; kubectl drain does not warn about it.
-  Deployment/cattle-fleet-system/gitjob: Deployment cattle-fleet-system/gitjob has 1 replica and it runs on node worker-01. The workload is unavailable from the eviction until the new pod is Ready; kubectl drain does not warn about it.
-  Deployment/cattle-fleet-system/helmops: Deployment cattle-fleet-system/helmops has 1 replica and it runs on node worker-01. The workload is unavailable from the eviction until the new pod is Ready; kubectl drain does not warn about it.
-  Deployment/cattle-turtles-system/rancher-turtles-controller-manager: Deployment cattle-turtles-system/rancher-turtles-controller-manager has 1 replica and it runs on node worker-01. The workload is unavailable from the eviction until the new pod is Ready; kubectl drain does not warn about it.
-  Deployment/shop-dev/shop-frontend: Deployment shop-dev/shop-frontend has 1 replica and it runs on node worker-01. The workload is unavailable from the eviction until the new pod is Ready; kubectl drain does not warn about it.
+  Deployment/cattle-fleet-system/fleet-controller: Deployment cattle-fleet-system/fleet-controller has 1 replica and it runs on node worker-01.
+  Deployment/cattle-fleet-system/gitjob: Deployment cattle-fleet-system/gitjob has 1 replica and it runs on node worker-01.
+  Deployment/cattle-fleet-system/helmops: Deployment cattle-fleet-system/helmops has 1 replica and it runs on node worker-01.
+  Deployment/cattle-turtles-system/rancher-turtles-controller-manager: Deployment cattle-turtles-system/rancher-turtles-controller-manager has 1 replica and it runs on node worker-01.
+  Deployment/shop-dev/shop-frontend: Deployment shop-dev/shop-frontend has 1 replica and it runs on node worker-01.
   ... and 14 more
 
+  => Why: The workload is unavailable from the eviction until the new pod is Ready, and kubectl drain does not warn about it.
   => Remediation: Confirm with `kubectl get <kind> -n <namespace> <name> -o jsonpath='{.spec.replicas}'` (1) and `kubectl get pdb -n <namespace>`. Then, safest first: run at least 2 replicas and wait until they are Ready, with a PodDisruptionBudget so a later drain keeps one up; or accept the downtime for this one. Replicas can also be raised by an autoscaler, which draincheck does not read.
 
 === UNKNOWN (1) ===
 
 [PDB_DISRUPTION_BLOCKED] 1 finding
-  Namespace/longhorn-system: Operator longhorn.io (InstanceManager) manages 2 PodDisruptionBudgets in namespace longhorn-system with 0 allowed disruptions, covering 2 pods on 1 target node. Whether the drain stalls depends on operator state draincheck cannot see, and the operator may remove such budgets when a node is cordoned.
+  Namespace/longhorn-system: Operator longhorn.io (InstanceManager) manages 2 PodDisruptionBudgets in namespace longhorn-system with 0 allowed disruptions, covering 2 pods on 1 target node.
 
-  => Remediation: Budgets managed by operator longhorn.io: confirm the numbers with `kubectl get pdb -n <namespace>` (ALLOWED DISRUPTIONS) and see who manages a budget with `kubectl get pdb -n <namespace> <name> -o yaml` (labels, ownerReferences). Then check its drain documentation and the health of what it protects before draining. Do not relax minAvailable on them; the operator may recreate the budget. Longhorn can block a drain while the node holds the last healthy replica of a volume: check volume health and Longhorn's node drain policy setting before draining.
+  => Why: Whether the drain stalls depends on operator state draincheck cannot see, and the operator may remove such budgets when a node is cordoned.
+  => Remediation: Confirm the numbers with `kubectl get pdb -n <namespace>` (ALLOWED DISRUPTIONS) and see who manages a budget with `kubectl get pdb -n <namespace> <name> -o yaml` (labels, ownerReferences). Then check the operator's drain documentation and the health of what it protects before draining. Do not relax minAvailable on them; the operator may recreate the budget. Longhorn can block a drain while the node holds the last healthy replica of a volume: check volume health and Longhorn's node drain policy setting before draining.
 
 Some lists are collapsed. Use --verbose to print every finding.
 
-This report describes the observed cluster state at 2026-11-03T08:20:21Z and does not guarantee execution success. Cluster state may drift immediately after analysis.
+This report describes the observed cluster state at 2026-11-04T12:15:42Z and does not guarantee execution success. Cluster state may drift immediately after analysis.
 $ echo $?
 0
 ```

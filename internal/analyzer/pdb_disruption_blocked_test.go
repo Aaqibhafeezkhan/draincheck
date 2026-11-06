@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -83,7 +84,7 @@ func TestPDBDisruptionBlocked(t *testing.T) {
 
 			// Ignore prose; it is covered by TestPDBDisruptionBlockedDescribesFinding.
 			for i := range got {
-				got[i].Description, got[i].Remediation = "", ""
+				got[i].Description, got[i].Case = "", ""
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("findings mismatch\n got: %+v\nwant: %+v", got, tt.want)
@@ -158,12 +159,12 @@ func TestPDBDisruptionBlockedDescribesFinding(t *testing.T) {
 		{
 			name:    "states the numbers once and the pod and node counts",
 			targets: []string{"worker-01", "worker-02", "worker-03"},
-			want:    "PodDisruptionBudget billing/api-pdb allows 0 disruptions (3 healthy, 3 desired), so eviction of its 3 pods on 3 target nodes will be refused. kubectl drain retries a refused eviction until --timeout, which is infinite by default, so it waits and does not complete.",
+			want:    "PodDisruptionBudget billing/api-pdb allows 0 disruptions (3 healthy, 3 desired) and selects 3 pods on 3 target nodes.",
 		},
 		{
 			name:    "singular for one pod on one node",
 			targets: []string{"worker-02"},
-			want:    "PodDisruptionBudget billing/api-pdb allows 0 disruptions (3 healthy, 3 desired), so eviction of its 1 pod on 1 target node will be refused. kubectl drain retries a refused eviction until --timeout, which is infinite by default, so it waits and does not complete.",
+			want:    "PodDisruptionBudget billing/api-pdb allows 0 disruptions (3 healthy, 3 desired) and selects 1 pod on 1 target node.",
 		},
 	}
 	for _, tt := range tests {
@@ -181,8 +182,11 @@ func TestPDBDisruptionBlockedDescribesFinding(t *testing.T) {
 			if got.Description != tt.want {
 				t.Errorf("description\n got: %s\nwant: %s", got.Description, tt.want)
 			}
-			if got.Remediation == "" {
+			if catalogRemediation(t, *got) == "" {
 				t.Error("remediation must be set")
+			}
+			if why := catalogWhy(t, *got); !strings.Contains(why, "retries a refused eviction until --timeout") {
+				t.Errorf("why %q lacks what kubectl drain does", why)
 			}
 		})
 	}
@@ -224,7 +228,7 @@ func TestPDBDisruptionBlockedUnhealthyPods(t *testing.T) {
 
 	got := Run(nil, Input{Snapshot: s, Targets: targets}, PDBDisruptionBlocked{})
 	for i := range got {
-		got[i].Description, got[i].Remediation = "", ""
+		got[i].Description, got[i].Case = "", ""
 	}
 	// solo, aa and bypass select only pods the budget cannot refuse; stale is
 	// left to PDB_STALE_STATUS; cnt and cnt2 allow disruptions.
@@ -246,12 +250,12 @@ func TestPDBDisruptionBlockedDescribesUnhealthyPods(t *testing.T) {
 		{
 			name: "an unhealthy budget says it refuses unhealthy pods too",
 			pdb:  "sick-pdb",
-			want: "PodDisruptionBudget sick/sick-pdb allows 0 disruptions (1 healthy, 2 desired), so eviction of its 1 pod on 1 target node will be refused. kubectl drain retries a refused eviction until --timeout, which is infinite by default, so it waits and does not complete. The budget itself is unhealthy, so with IfHealthyBudget it refuses the pods that are not Ready as well.",
+			want: "PodDisruptionBudget sick/sick-pdb allows 0 disruptions (1 healthy, 2 desired) and selects 1 pod on 1 target node. The budget itself is unhealthy, so with IfHealthyBudget it refuses the pods that are not Ready as well.",
 		},
 		{
 			name: "an unknown policy says why the answer is not known",
 			pdb:  "odd-pdb",
-			want: "PodDisruptionBudget odd/odd-pdb allows 0 disruptions (1 healthy, 1 desired), but its unhealthyPodEvictionPolicy \"SometimesAllow\" is not one draincheck knows, so it cannot tell whether eviction of its 1 pod on 1 target node will be refused.",
+			want: "PodDisruptionBudget odd/odd-pdb allows 0 disruptions (1 healthy, 1 desired) and its unhealthyPodEvictionPolicy \"SometimesAllow\" is not one draincheck knows; it selects 1 pod on 1 target node.",
 		},
 	}
 	for _, tt := range tests {
@@ -306,7 +310,7 @@ func TestPDBDisruptionBlockedSkipsOverlappingPDBs(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := Run(nil, Input{Snapshot: s, Targets: tt.targets}, PDBDisruptionBlocked{})
 			for i := range got {
-				got[i].Description, got[i].Remediation = "", ""
+				got[i].Description, got[i].Case = "", ""
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("findings mismatch\n got: %+v\nwant: %+v", got, tt.want)

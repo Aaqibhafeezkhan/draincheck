@@ -83,10 +83,10 @@ func (WorkloadUntoleratedTaints) Evaluate(in Input) []findings.Finding {
 			Severity: findings.Risk,
 			Resource: findings.ResourceRef{Kind: g.owner.Kind, Namespace: g.owner.Namespace, Name: g.owner.Name},
 			Evidence: ev,
+			Case:     workloadUntoleratedTaintsUntolerated,
 			Description: fmt.Sprintf(
-				"%s %s/%s has %s on the target nodes and none can land on the %s left: %s. Other pods of this drain can. The controller recreates the pods and they stay Pending until a node takes them. kubectl drain only evicts, so it completes.",
+				"%s %s/%s has %s on the target nodes and none can land on the %s left: %s. Other pods of this drain can.",
 				g.owner.Kind, g.owner.Namespace, g.owner.Name, plural(len(ev.Pods), "pod"), plural(len(nodes), "node"), taintList(ev.TaintedNodes)),
-			Remediation: "Confirm with `kubectl describe node <node>` for a node named in the finding (the taints are under Taints) and `kubectl get pod -n <namespace> <pod> -o jsonpath='{.spec.tolerations}'` for a pod of the workload. Then, safest first: add or uncordon a node the workload tolerates before draining; or drain fewer nodes at once; or give the workload a toleration for the taint, only if that node is meant to run it. The drain itself completes either way; afterwards `kubectl get pods -A --field-selector=status.phase=Pending` shows what is waiting. Cordons, readiness and taints are checked, not affinity or capacity.",
 		})
 	}
 	return out

@@ -103,7 +103,7 @@ func TestPDBDisruptionBlockedOperatorManaged(t *testing.T) {
 
 			// Ignore prose; it is covered by the description tests below.
 			for i := range got {
-				got[i].Description, got[i].Remediation = "", ""
+				got[i].Description, got[i].Case = "", ""
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("findings mismatch\n got: %+v\nwant: %+v", got, tt.want)
@@ -147,31 +147,31 @@ func TestPDBDisruptionBlockedOperatorManagedDescribesFinding(t *testing.T) {
 		name            string
 		kind, namespace string
 		wantDescription string
-		wantRemediation string
+		wantCase        string
 	}{
 		{
 			name: "several budgets: counts of budgets, pods and nodes",
 			kind: "NodeAgent", namespace: "storage-system",
-			wantDescription: "Operator storage.example.com (NodeAgent) manages 4 PodDisruptionBudgets in namespace storage-system with 0 allowed disruptions, covering 4 pods on 4 target nodes. Whether the drain stalls depends on operator state draincheck cannot see, and the operator may remove such budgets when a node is cordoned.",
-			wantRemediation: operatorRemediation("storage.example.com"),
+			wantDescription: "Operator storage.example.com (NodeAgent) manages 4 PodDisruptionBudgets in namespace storage-system with 0 allowed disruptions, covering 4 pods on 4 target nodes.",
+			wantCase:        "operator_managed",
 		},
 		{
 			name: "one budget on one node: singular counts",
 			kind: "Widget", namespace: "widgets",
-			wantDescription: "Operator other.example.org (Widget) manages 1 PodDisruptionBudget in namespace widgets with 0 allowed disruptions, covering 1 pod on 1 target node. Whether the drain stalls depends on operator state draincheck cannot see, and the operator may remove such budgets when a node is cordoned.",
-			wantRemediation: operatorRemediation("other.example.org"),
+			wantDescription: "Operator other.example.org (Widget) manages 1 PodDisruptionBudget in namespace widgets with 0 allowed disruptions, covering 1 pod on 1 target node.",
+			wantCase:        "operator_managed",
 		},
 		{
 			name: "three pods on one node are three pods and one node",
 			kind: "Gadget", namespace: "twin",
-			wantDescription: "Operator other.example.org (Gadget) manages 1 PodDisruptionBudget in namespace twin with 0 allowed disruptions, covering 3 pods on 1 target node. Whether the drain stalls depends on operator state draincheck cannot see, and the operator may remove such budgets when a node is cordoned.",
-			wantRemediation: operatorRemediation("other.example.org"),
+			wantDescription: "Operator other.example.org (Gadget) manages 1 PodDisruptionBudget in namespace twin with 0 allowed disruptions, covering 3 pods on 1 target node.",
+			wantCase:        "operator_managed",
 		},
 		{
 			name: "an operator with a table entry gets its more specific text",
 			kind: "InstanceManager", namespace: "block-storage",
-			wantDescription: "Operator longhorn.io (InstanceManager) manages 1 PodDisruptionBudget in namespace block-storage with 0 allowed disruptions, covering 1 pod on 1 target node. Whether the drain stalls depends on operator state draincheck cannot see, and the operator may remove such budgets when a node is cordoned.",
-			wantRemediation: operatorRemediation("longhorn.io"),
+			wantDescription: "Operator longhorn.io (InstanceManager) manages 1 PodDisruptionBudget in namespace block-storage with 0 allowed disruptions, covering 1 pod on 1 target node.",
+			wantCase:        "operator_managed:longhorn.io",
 		},
 	}
 	for _, tt := range tests {
@@ -181,8 +181,11 @@ func TestPDBDisruptionBlockedOperatorManagedDescribesFinding(t *testing.T) {
 			if got.Description != tt.wantDescription {
 				t.Errorf("description\n got: %s\nwant: %s", got.Description, tt.wantDescription)
 			}
-			if got.Remediation != tt.wantRemediation {
-				t.Errorf("remediation\n got: %s\nwant: %s", got.Remediation, tt.wantRemediation)
+			if got.Case != tt.wantCase {
+				t.Errorf("case = %q, want %q", got.Case, tt.wantCase)
+			}
+			if why := catalogWhy(t, got); !strings.Contains(why, "operator state draincheck cannot see") {
+				t.Errorf("why = %q", why)
 			}
 		})
 	}
@@ -240,24 +243,26 @@ func TestOperatorManagedFindings(t *testing.T) {
 	}
 }
 
-func TestOperatorRemediation(t *testing.T) {
-	generic := operatorRemediation("unlisted.example.org")
-	for _, want := range []string{"unlisted.example.org", "drain documentation", "health of what it protects", "Do not relax minAvailable", "recreate"} {
+func TestOperatorManagedCases(t *testing.T) {
+	cat := DefaultCatalog()
+	generic := cat[findings.CaseKey(PDBDisruptionBlockedID, operatorCaseID("unlisted.example.org"))].Remediation
+	for _, want := range []string{"drain documentation", "health of what it protects", "Do not relax minAvailable", "recreate"} {
 		if !strings.Contains(generic, want) {
 			t.Errorf("generic remediation should mention %q: %s", want, generic)
 		}
 	}
-
-	if generic != genericOperatorRemediation("unlisted.example.org") {
+	if generic != operatorManagedRemediation {
 		t.Errorf("an operator not in the table must get exactly the generic text, got: %s", generic)
 	}
 
 	// A listed operator gets the generic advice first, then its own hint; the
 	// table never replaces the general warning.
-	known := operatorRemediation("longhorn.io")
-	base := genericOperatorRemediation("longhorn.io")
-	if !strings.HasPrefix(known, base+" ") || len(known) <= len(base)+1 || !strings.Contains(known, "Longhorn") {
-		t.Errorf("a listed operator should get its hint after the generic text\n got: %s\nbase: %s", known, base)
+	known := cat[findings.CaseKey(PDBDisruptionBlockedID, operatorCaseID("longhorn.io"))].Remediation
+	if !strings.HasPrefix(known, operatorManagedRemediation+" ") || len(known) <= len(operatorManagedRemediation)+1 || !strings.Contains(known, "Longhorn") {
+		t.Errorf("a listed operator should get its hint after the generic text\n got: %s\nbase: %s", known, operatorManagedRemediation)
+	}
+	if operatorCaseID("longhorn.io") == operatorCaseID("unlisted.example.org") {
+		t.Error("an operator with a hint needs a case of its own")
 	}
 }
 
@@ -284,12 +289,17 @@ func TestOperatorOwned(t *testing.T) {
 	}
 }
 
-// The API group comes from the cluster and is printed in the remediation. A
-// backtick in it must not open a span that reads as a suggested command.
-func TestOperatorRemediationGroupCannotForgeACommand(t *testing.T) {
-	safe := strings.Count(operatorRemediation("safe.example.org"), "`")
-	got := operatorRemediation("evil`kubectl delete pdb x`.example.org")
-	if n := strings.Count(got, "`"); n != safe {
-		t.Errorf("a group changed the number of backticks from %d to %d: %s", safe, n, got)
+// The API group comes from the cluster. It must not reach the text of a case,
+// where a backtick in it could open a span that reads as a suggested command:
+// the case is chosen by the table of hints, and its text is fixed.
+func TestOperatorCaseTextDoesNotDependOnTheGroup(t *testing.T) {
+	evil := "evil`kubectl delete pdb x`.example.org"
+	id := operatorCaseID(evil)
+	if id != pdbOperatorManaged {
+		t.Errorf("case = %q, want the general case %q", id, pdbOperatorManaged)
+	}
+	c := DefaultCatalog()[findings.CaseKey(PDBDisruptionBlockedID, id)]
+	if strings.Contains(c.Remediation, "evil") || strings.Contains(c.Why, "evil") {
+		t.Errorf("the group leaked into the case: %+v", c)
 	}
 }

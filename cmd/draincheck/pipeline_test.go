@@ -160,6 +160,22 @@ func TestExecuteVerboseSelectsFullTextLayout(t *testing.T) {
 	}
 }
 
+// A finding of a rule that has cases prints the Why and the remediation of its case, in the
+// compact and in the verbose layout; the finding itself carries none.
+func TestExecutePrintsTheRemediationOfTheCase(t *testing.T) {
+	for _, verbose := range []bool{false, true} {
+		opts := options{Nodes: []string{"worker-1"}, Output: outputText, FailOn: failOnBlocked, Force: true, Verbose: verbose}
+		var out bytes.Buffer
+		_ = execute(context.Background(), opts, nil, inventory.NewClientsetCollector(unmanagedCluster(), nil), &out)
+		if want := "`kubectl get pod -n <namespace> <name> -o jsonpath='{.metadata.ownerReferences}'`"; !strings.Contains(out.String(), want) {
+			t.Errorf("verbose=%v: missing the remediation of the case %q:\n%s", verbose, want, out.String())
+		}
+		if want := "Why: With --force kubectl drain deletes a pod with no controller, and nothing recreates it."; !strings.Contains(out.String(), want) {
+			t.Errorf("verbose=%v: missing the Why of the case %q:\n%s", verbose, want, out.String())
+		}
+	}
+}
+
 type failingCollector struct{}
 
 func (failingCollector) Collect(context.Context) (*inventory.Snapshot, error) {

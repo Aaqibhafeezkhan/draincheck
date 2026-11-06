@@ -26,7 +26,6 @@ func ruleFindings(rule string, namespaces []string) []findings.Finding {
 			Severity:    findings.Risk,
 			Resource:    findings.ResourceRef{Kind: kind, Namespace: ns, Name: fmt.Sprintf("r-%02d", i)},
 			Description: "d",
-			Remediation: "Fix it.",
 		}
 	}
 	return fs

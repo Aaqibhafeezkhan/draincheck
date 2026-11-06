@@ -16,22 +16,22 @@ func ownershipPod(ns, name, node string) findings.OwnershipPod {
 	return findings.OwnershipPod{Namespace: ns, Name: name, Node: node}
 }
 
-func ownershipFinding(sev findings.Severity, r findings.ResourceRef, e findings.OwnershipEvidence) findings.Finding {
-	return findings.Finding{RuleID: "POD_OWNERSHIP", Severity: sev, Resource: r, Evidence: e}
+func ownershipFinding(sev findings.Severity, caseID string, r findings.ResourceRef, e findings.OwnershipEvidence) findings.Finding {
+	return findings.Finding{RuleID: "POD_OWNERSHIP", Severity: sev, Resource: r, Evidence: e, Case: caseID}
 }
 
 // daemonSetFinding is the one finding for a DaemonSet: nodes are the nodes its
 // pods run on, pods are all of its pods on the target nodes. Without
 // --ignore-daemonsets kubectl drain refuses these pods, so it is BLOCKED.
 func daemonSetFinding(ns, name string, nodes []string, pods ...findings.OwnershipPod) findings.Finding {
-	return ownershipFinding(findings.Blocked,
+	return ownershipFinding(findings.Blocked, "daemonset",
 		findings.ResourceRef{Kind: "DaemonSet", Namespace: ns, Name: name},
 		findings.OwnershipEvidence{Category: findings.OwnershipDaemonSet, OwnerKind: "DaemonSet", OwnerName: name, Nodes: nodes, Pods: pods})
 }
 
 // staticPodsFinding is the one finding for the static pods of a node.
 func staticPodsFinding(node string, pods ...findings.OwnershipPod) findings.Finding {
-	return ownershipFinding(findings.Risk,
+	return ownershipFinding(findings.Risk, "static_pod",
 		findings.ResourceRef{Kind: "Node", Name: node},
 		findings.OwnershipEvidence{Category: findings.OwnershipStaticPod, Nodes: []string{node}, Pods: pods})
 }
@@ -39,7 +39,7 @@ func staticPodsFinding(node string, pods ...findings.OwnershipPod) findings.Find
 // unmanagedFinding is the finding for a pod with no controller. Without
 // --force kubectl drain refuses it, so it is BLOCKED.
 func unmanagedFinding(pod findings.OwnershipPod) findings.Finding {
-	return ownershipFinding(findings.Blocked,
+	return ownershipFinding(findings.Blocked, "no_controller",
 		findings.ResourceRef{Kind: "Pod", Namespace: pod.Namespace, Name: pod.Name},
 		findings.OwnershipEvidence{Category: findings.OwnershipUnmanaged, Nodes: []string{pod.Node}, Pods: []findings.OwnershipPod{pod}})
 }
@@ -109,7 +109,7 @@ func TestPodOwnership(t *testing.T) {
 
 			// Ignore prose; it is covered by TestPodOwnershipDescribesFinding.
 			for i := range got {
-				got[i].Description, got[i].Remediation = "", ""
+				got[i].Description = ""
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("findings mismatch\n got: %+v\nwant: %+v", got, tt.want)
@@ -178,8 +178,8 @@ func TestPodOwnershipDescribesFinding(t *testing.T) {
 
 	byResource := make(map[string]findings.Finding, len(got))
 	for _, g := range got {
-		if g.Description == "" || g.Remediation == "" {
-			t.Errorf("%s: description and remediation must be set: %+v", g.Resource, g)
+		if g.Description == "" || g.Case == "" {
+			t.Errorf("%s: want a description and a case: %+v", g.Resource, g)
 		}
 		byResource[g.Resource.String()] = g
 	}
@@ -188,11 +188,16 @@ func TestPodOwnershipDescribesFinding(t *testing.T) {
 		resource    string
 		description []string
 		remediation []string
+		// notInDescription is text the Why of the case carries; the description
+		// keeps the facts only.
+		notInDescription []string
 	}{
 		{
 			resource:    "DaemonSet/monitoring/agent",
-			description: []string{"DaemonSet monitoring/agent has 3 pods on 3 target nodes", "--ignore-daemonsets"},
+			description: []string{"DaemonSet monitoring/agent has 3 pods on 3 target nodes"},
 			remediation: []string{"--ignore-daemonsets"},
+
+			notInDescription: []string{"refuses", "--ignore-daemonsets"},
 		},
 		{
 			resource:    "DaemonSet/logging/agent",
@@ -201,7 +206,7 @@ func TestPodOwnershipDescribesFinding(t *testing.T) {
 		},
 		{
 			resource:    "Node/worker-01",
-			description: []string{"Node worker-01 runs 2 static pods", "edge/proxy-worker-01", "kube-system/etcd-worker-01", "stop when the node goes down"},
+			description: []string{"Node worker-01 runs 2 static pods", "edge/proxy-worker-01", "kube-system/etcd-worker-01"},
 			remediation: []string{"kubectl drain skips them", "node is down"},
 		},
 		{
@@ -211,8 +216,10 @@ func TestPodOwnershipDescribesFinding(t *testing.T) {
 		},
 		{
 			resource:    "Pod/tools/debug",
-			description: []string{"Pod tools/debug on node worker-01 has no controller", "--force"},
+			description: []string{"Pod tools/debug on node worker-01 has no controller"},
 			remediation: []string{"--force"},
+
+			notInDescription: []string{"refuses", "recreated"},
 		},
 	}
 	for _, tt := range tests {
@@ -226,20 +233,26 @@ func TestPodOwnershipDescribesFinding(t *testing.T) {
 				t.Errorf("%s: description %q does not contain %q", tt.resource, g.Description, want)
 			}
 		}
+		for _, text := range tt.notInDescription {
+			if strings.Contains(g.Description, text) {
+				t.Errorf("%s: description %q repeats the Why of its case (%q)", tt.resource, g.Description, text)
+			}
+		}
+		remediation := catalogRemediation(t, g)
 		for _, want := range tt.remediation {
-			if !strings.Contains(g.Remediation, want) {
-				t.Errorf("%s: remediation %q does not contain %q", tt.resource, g.Remediation, want)
+			if !strings.Contains(remediation, want) {
+				t.Errorf("%s: remediation %q does not contain %q", tt.resource, remediation, want)
 			}
 		}
 	}
 
-	// Findings with the same cause share one remediation, so the compact text
-	// report prints it once.
-	if a, b := byResource["DaemonSet/monitoring/agent"], byResource["DaemonSet/logging/agent"]; a.Remediation != b.Remediation {
-		t.Errorf("DaemonSet findings differ in remediation: %q vs %q", a.Remediation, b.Remediation)
+	// Findings with the same cause name the same case, so the compact text
+	// report prints its remediation once.
+	if a, b := byResource["DaemonSet/monitoring/agent"], byResource["DaemonSet/logging/agent"]; a.Case != b.Case {
+		t.Errorf("DaemonSet findings differ in case: %q vs %q", a.Case, b.Case)
 	}
-	if a, b := byResource["Node/worker-01"], byResource["Node/worker-02"]; a.Remediation != b.Remediation {
-		t.Errorf("static pod findings differ in remediation: %q vs %q", a.Remediation, b.Remediation)
+	if a, b := byResource["Node/worker-01"], byResource["Node/worker-02"]; a.Case != b.Case {
+		t.Errorf("static pod findings differ in case: %q vs %q", a.Case, b.Case)
 	}
 }
 
@@ -549,35 +562,63 @@ func TestPodOwnershipDescribesSeverity(t *testing.T) {
 
 	t.Run("BLOCKED naked pod says kubectl refuses it and offers --force", func(t *testing.T) {
 		f := byResource(DrainOptions{})["Pod/tools/debug"]
-		contains(t, "description", f.Description, "no controller", "refuses", "--force")
-		contains(t, "remediation", f.Remediation, "--force", "kubectl get pod")
+		contains(t, "description", f.Description, "no controller")
+		contains(t, "why", catalogWhy(t, f), "refuses", "--force", "recreates")
+		contains(t, "remediation", catalogRemediation(t, f), "--force", "kubectl get pod")
 	})
 	t.Run("RISK naked pod with --force says it is deleted and not recreated, and does not ask for --force", func(t *testing.T) {
 		f := byResource(DrainOptions{Force: true})["Pod/tools/debug"]
-		contains(t, "description", f.Description, "no controller", "--force", "deletes", "not be recreated")
-		if strings.Contains(f.Description, "refuses") {
-			t.Errorf("description %q says kubectl refuses, but --force is set", f.Description)
+		contains(t, "description", f.Description, "no controller")
+		why := catalogWhy(t, f)
+		contains(t, "why", why, "--force", "deletes", "recreates")
+		if strings.Contains(why, "refuses") {
+			t.Errorf("why %q says kubectl refuses, but --force is set", why)
 		}
-		if strings.Contains(f.Remediation, "drain with --force") {
-			t.Errorf("remediation %q asks for a flag that is already set", f.Remediation)
+		if f.Case != "no_controller_forced" {
+			t.Errorf("case = %q, want no_controller_forced", f.Case)
 		}
-		contains(t, "remediation", f.Remediation, "kubectl get pod", "controller")
+		remediation := catalogRemediation(t, f)
+		if strings.Contains(remediation, "drain with --force") {
+			t.Errorf("remediation %q asks for a flag that is already set", remediation)
+		}
+		contains(t, "remediation", remediation, "kubectl get pod", "controller")
 	})
 	t.Run("BLOCKED DaemonSet says kubectl refuses it and offers --ignore-daemonsets", func(t *testing.T) {
 		f := byResource(DrainOptions{})["DaemonSet/monitoring/agent"]
-		contains(t, "description", f.Description, "refuses", "--ignore-daemonsets")
-		contains(t, "remediation", f.Remediation, "--ignore-daemonsets", "kubectl get daemonset")
+		contains(t, "why", catalogWhy(t, f), "refuses", "--ignore-daemonsets")
+		contains(t, "remediation", catalogRemediation(t, f), "--ignore-daemonsets", "kubectl get daemonset")
 	})
 	t.Run("a static pod keeps its text whatever the flags are", func(t *testing.T) {
 		a, b := byResource(DrainOptions{})["Node/worker-01"], byResource(DrainOptions{Force: true, IgnoreDaemonSets: true})["Node/worker-01"]
-		if a.Description != b.Description || a.Remediation != b.Remediation {
+		if a.Description != b.Description || a.Case != b.Case {
 			t.Errorf("static pod text changed with the flags:\n%+v\n%+v", a, b)
 		}
 	})
-	t.Run("findings of one cause and severity share their remediation", func(t *testing.T) {
+	t.Run("findings of one cause and severity share their case", func(t *testing.T) {
 		got := byResource(DrainOptions{Force: true})
-		if a, b := got["Pod/tools/debug"], got["Pod/tools/scratch"]; a.Remediation != b.Remediation {
-			t.Errorf("remediation differs: %q vs %q", a.Remediation, b.Remediation)
+		if a, b := got["Pod/tools/debug"], got["Pod/tools/scratch"]; a.Case != b.Case {
+			t.Errorf("case differs: %q vs %q", a.Case, b.Case)
 		}
 	})
+}
+
+// catalogRemediation is the remediation the report prints for f: the text of
+// the case f names, which must exist in the default catalog.
+func catalogRemediation(t *testing.T, f findings.Finding) string {
+	t.Helper()
+	c, ok := DefaultCatalog().Lookup(f)
+	if !ok {
+		t.Fatalf("%s: case %q is not in the default catalog", f.Resource, f.Case)
+	}
+	return c.Remediation
+}
+
+// catalogWhy is the Why the report prints for f, from the case f names.
+func catalogWhy(t *testing.T, f findings.Finding) string {
+	t.Helper()
+	c, ok := DefaultCatalog().Lookup(f)
+	if !ok {
+		t.Fatalf("%s: case %q is not in the default catalog", f.Resource, f.Case)
+	}
+	return c.Why
 }

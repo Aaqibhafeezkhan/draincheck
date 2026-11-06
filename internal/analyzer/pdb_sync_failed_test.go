@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/Veinar/draincheck/internal/findings"
@@ -88,7 +89,7 @@ func TestPDBSyncFailed(t *testing.T) {
 
 			// Ignore prose; it is covered by TestPDBSyncFailedDescribesFinding.
 			for i := range got {
-				got[i].Description, got[i].Remediation = "", ""
+				got[i].Description, got[i].Case = "", ""
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("findings mismatch\n got: %+v\nwant: %+v", got, tt.want)
@@ -134,12 +135,12 @@ func TestPDBSyncFailedDescribesFinding(t *testing.T) {
 		{
 			name:    "states the controller error and the pod and node counts",
 			targets: []string{"worker-01", "worker-02"},
-			want:    "The disruption controller could not compute PodDisruptionBudget billing/api-pdb (found no controllers for pod api-0), so the numbers in its status cannot be trusted and draincheck cannot tell whether eviction of its 2 pods on 2 target nodes will be refused.",
+			want:    "The disruption controller could not compute PodDisruptionBudget billing/api-pdb (found no controllers for pod api-0); it selects 2 pods on 2 target nodes.",
 		},
 		{
 			name:    "singular for one pod on one node",
 			targets: []string{"worker-02"},
-			want:    "The disruption controller could not compute PodDisruptionBudget billing/api-pdb (found no controllers for pod api-0), so the numbers in its status cannot be trusted and draincheck cannot tell whether eviction of its 1 pod on 1 target node will be refused.",
+			want:    "The disruption controller could not compute PodDisruptionBudget billing/api-pdb (found no controllers for pod api-0); it selects 1 pod on 1 target node.",
 		},
 	}
 	for _, tt := range tests {
@@ -157,8 +158,11 @@ func TestPDBSyncFailedDescribesFinding(t *testing.T) {
 			if got.Description != tt.want {
 				t.Errorf("description\n got: %s\nwant: %s", got.Description, tt.want)
 			}
-			if got.Remediation == "" {
+			if catalogRemediation(t, *got) == "" {
 				t.Error("remediation must be set")
+			}
+			if why := catalogWhy(t, *got); !strings.Contains(why, "cannot be trusted") {
+				t.Errorf("why %q lacks the consequence", why)
 			}
 		})
 	}

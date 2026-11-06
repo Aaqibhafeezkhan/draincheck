@@ -119,14 +119,14 @@ func (PodOwnership) Evaluate(in Input) []findings.Finding {
 		if g.category == findings.OwnershipDaemonSet {
 			ev.OwnerKind, ev.OwnerName = g.resource.Kind, g.resource.Name
 		}
-		description, remediation := describeOwnership(g, len(nodes))
+		caseID, description := describeOwnership(g, len(nodes))
 		out = append(out, findings.Finding{
 			RuleID:      PodOwnershipID,
 			Severity:    g.severity,
 			Resource:    g.resource,
 			Evidence:    ev,
+			Case:        caseID,
 			Description: description,
-			Remediation: remediation,
 		})
 	}
 	return out
@@ -155,39 +155,36 @@ func unmanagedSeverity(v drainVerdict) findings.Severity {
 	return ""
 }
 
-// describeOwnership returns the description and remediation for g, which
-// covers pods on nodeCount distinct nodes. The pods themselves are in the
-// evidence; static pods are also named here because they are the whole point
-// of their finding. The text says what kubectl does under the flags in force:
-// a refusal for BLOCKED, a deletion for the RISK of a pod with no controller.
-func describeOwnership(g *ownershipGroup, nodeCount int) (description, remediation string) {
+// describeOwnership returns the case and the description for g, which covers
+// pods on nodeCount distinct nodes. The description holds the facts only; why
+// they matter and what to do are the text of the case, in podOwnershipCases,
+// which says what kubectl does under the flags in force. The pods themselves
+// are in the evidence; static pods are also named here because they are the
+// whole point of their finding.
+func describeOwnership(g *ownershipGroup, nodeCount int) (caseID, description string) {
 	switch g.category {
 	case findings.OwnershipStaticPod:
 		names := make([]string, len(g.pods))
 		for i, p := range g.pods {
 			names[i] = p.Namespace + "/" + p.Name
 		}
-		return fmt.Sprintf(
-				"Node %s runs %s (%s). Static pods cannot be evicted or rescheduled and stop when the node goes down.",
-				g.resource.Name, plural(len(g.pods), "static pod"), strings.Join(names, ", ")),
-			"Confirm with `kubectl get pods -A --field-selector spec.nodeName=<node>` and `kubectl get pod -n <namespace> <pod> -o jsonpath='{.metadata.annotations}'` (the annotation kubernetes.io/config.mirror marks a static pod). Then plan for the static pods to be unavailable while the node is down; kubectl drain skips them."
+		return podOwnershipStaticPod, fmt.Sprintf(
+			"Node %s runs %s (%s).",
+			g.resource.Name, plural(len(g.pods), "static pod"), strings.Join(names, ", "))
 	case findings.OwnershipDaemonSet:
-		return fmt.Sprintf(
-				"DaemonSet %s/%s has %s on %s. kubectl drain refuses DaemonSet pods without --ignore-daemonsets and never evicts them.",
-				g.resource.Namespace, g.resource.Name, plural(len(g.pods), "pod"), plural(nodeCount, "target node")),
-			"Confirm with `kubectl get daemonset -n <namespace> <name>` and `kubectl get pods -A --field-selector spec.nodeName=<node> -o wide`. Then drain with --ignore-daemonsets; DaemonSet pods stay until the node itself goes down. If the DaemonSet is not found, its pods are orphans, which kubectl drain treats differently."
+		return podOwnershipDaemonSet, fmt.Sprintf(
+			"DaemonSet %s/%s has %s on %s.",
+			g.resource.Namespace, g.resource.Name, plural(len(g.pods), "pod"), plural(nodeCount, "target node"))
 	default:
 		pod := g.pods[0]
 		if g.severity == findings.Risk {
-			return fmt.Sprintf(
-					"Pod %s/%s on node %s has no controller. With --force kubectl drain deletes it and it will not be recreated.",
-					pod.Namespace, pod.Name, pod.Node),
-				"Confirm with `kubectl get pod -n <namespace> <name> -o jsonpath='{.metadata.ownerReferences}'` (empty: no controller). Then, safest first: put the workload under a controller (Deployment, StatefulSet or Job) so it is recreated; or accept its loss."
+			return podOwnershipNoControllerForced, fmt.Sprintf(
+				"Pod %s/%s on node %s has no controller.",
+				pod.Namespace, pod.Name, pod.Node)
 		}
-		return fmt.Sprintf(
-				"Pod %s/%s on node %s has no controller; kubectl drain refuses it without --force and it will not be recreated.",
-				pod.Namespace, pod.Name, pod.Node),
-			"Confirm with `kubectl get pod -n <namespace> <name> -o jsonpath='{.metadata.ownerReferences}'` (empty: no controller). Then, safest first: put the workload under a controller (Deployment, StatefulSet or Job) so it is recreated; or accept its loss and drain with --force."
+		return podOwnershipNoController, fmt.Sprintf(
+			"Pod %s/%s on node %s has no controller.",
+			pod.Namespace, pod.Name, pod.Node)
 	}
 }
 
