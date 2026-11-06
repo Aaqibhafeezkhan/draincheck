@@ -54,10 +54,10 @@ func (PDBOverlappingSelectors) Evaluate(in Input) []findings.Finding {
 			Severity: findings.Blocked,
 			Resource: findings.ResourceRef{Kind: "Pod", Namespace: pod.Namespace, Name: pod.Name},
 			Evidence: findings.OverlappingPDBsEvidence{Namespace: pod.Namespace, PDBs: names, Budgets: budgets},
+			Case:     pdbOverlappingSelectorsOverlapping,
 			Description: fmt.Sprintf(
-				"Pod %s on node %s is selected by %d PodDisruptionBudgets in namespace %s (%s); the eviction API does not support more than one and will refuse the eviction. kubectl drain reports this error for the pod at once and does not retry it. The disruption controller chooses one of them arbitrarily when a pod changes, so their numbers can be out of date and are not used for other findings; as reported they are %s.",
+				"Pod %s on node %s is selected by %d PodDisruptionBudgets in namespace %s (%s). The disruption controller chooses one of them arbitrarily when a pod changes, so their numbers can be out of date and are not used for other findings; as reported they are %s.",
 				pod.Name, pod.Spec.NodeName, len(names), pod.Namespace, strings.Join(names, ", "), strings.Join(numbers, "; ")),
-			Remediation: "Confirm with `kubectl get pod -n <namespace> <pod> --show-labels` and `kubectl describe pdb -n <namespace> <pdb>` for each budget named in the finding (the selector of each). Then narrow the PodDisruptionBudget selectors so that each pod is covered by exactly one budget, or merge the budgets, before draining. Waiting does not help: the eviction API refuses a pod covered by several budgets whatever they allow. Run draincheck again afterwards: the budgets are checked on their own once they no longer overlap.",
 		})
 	}
 	return out

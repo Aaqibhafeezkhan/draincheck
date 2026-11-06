@@ -74,13 +74,16 @@ func TestNoRemainingNodesText(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("want 1 finding, got %d", len(got))
 	}
-	for _, want := range []string{"8 of 8 nodes", "no node is left", "3 pods", "Pending"} {
+	for _, want := range []string{"8 of 8 nodes", "no node is left", "3 pods"} {
 		if !strings.Contains(got[0].Description, want) {
 			t.Errorf("description %q lacks %q", got[0].Description, want)
 		}
 	}
-	if got[0].Remediation == "" {
+	if catalogRemediation(t, got[0]) == "" {
 		t.Error("remediation is empty")
+	}
+	if why := catalogWhy(t, got[0]); !strings.Contains(why, "stay Pending") {
+		t.Errorf("why %q lacks the consequence", why)
 	}
 }
 
@@ -98,12 +101,12 @@ func TestNoRemainingNodesRemediationHasNoBackReference(t *testing.T) {
 				t.Fatalf("want 1 finding, got %d", len(got))
 			}
 			for _, bad := range []string{"above", "named"} {
-				if strings.Contains(got[0].Remediation, bad) {
-					t.Errorf("remediation %q refers back with %q", got[0].Remediation, bad)
+				if strings.Contains(catalogRemediation(t, got[0]), bad) {
+					t.Errorf("remediation %q refers back with %q", catalogRemediation(t, got[0]), bad)
 				}
 			}
-			if !strings.Contains(got[0].Remediation, "If the description names a taint on a node") {
-				t.Errorf("remediation %q lacks the conditional taint advice", got[0].Remediation)
+			if !strings.Contains(catalogRemediation(t, got[0]), "If the description names a taint on a node") {
+				t.Errorf("remediation %q lacks the conditional taint advice", catalogRemediation(t, got[0]))
 			}
 		})
 	}
@@ -263,8 +266,8 @@ func TestNoRemainingNodesTaintsText(t *testing.T) {
 			t.Errorf("description %q lacks %q", got[0].Description, want)
 		}
 	}
-	if !strings.Contains(got[0].Remediation, "kubectl describe node") {
-		t.Errorf("remediation %q lacks the taint check", got[0].Remediation)
+	if !strings.Contains(catalogRemediation(t, got[0]), "kubectl describe node") {
+		t.Errorf("remediation %q lacks the taint check", catalogRemediation(t, got[0]))
 	}
 }
 

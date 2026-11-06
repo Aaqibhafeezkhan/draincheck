@@ -75,7 +75,7 @@ func TestNodeNotSchedulable(t *testing.T) {
 	}
 }
 
-// withText copies Description and Remediation from got into want, so the table
+// withText copies Description and Case from got into want, so the table
 // states the typed fields and TestNodeNotSchedulableText states the wording.
 func withText(want, got []findings.Finding) []findings.Finding {
 	if len(want) == 0 || len(want) != len(got) {
@@ -85,7 +85,7 @@ func withText(want, got []findings.Finding) []findings.Finding {
 	for i := range want {
 		out[i] = want[i]
 		out[i].Description = got[i].Description
-		out[i].Remediation = got[i].Remediation
+		out[i].Case = got[i].Case
 	}
 	return out
 }
@@ -106,7 +106,7 @@ func TestNodeNotSchedulableText(t *testing.T) {
 			t.Errorf("description %q lacks %q", got[0].Description, want)
 		}
 	}
-	if got[0].Remediation == "" {
+	if catalogRemediation(t, got[0]) == "" {
 		t.Error("remediation is empty")
 	}
 }

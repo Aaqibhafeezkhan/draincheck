@@ -126,7 +126,7 @@ func TestPDBUnsatisfiableText(t *testing.T) {
 		ns   string
 		want []string
 	}{
-		{"a", []string{"PodDisruptionBudget a/min-eq", "can never allow a disruption", "minAvailable 2", "2 expected pods", "until --timeout"}},
+		{"a", []string{"PodDisruptionBudget a/min-eq", "can never allow a disruption", "minAvailable 2", "2 expected pods"}},
 		{"b", []string{"maxUnavailable is 0", "deliberate"}},
 		{"c", []string{"minAvailable 5", "2 expected pods"}},
 	}
@@ -141,11 +141,14 @@ func TestPDBUnsatisfiableText(t *testing.T) {
 			}
 		}
 	}
+	if why := catalogWhy(t, got["a"]); !strings.Contains(why, "until --timeout") {
+		t.Errorf("why %q lacks what kubectl drain does", why)
+	}
 	if strings.Contains(got["a"].Description, "deliberate") {
 		t.Errorf("a minAvailable budget is not described as deliberate: %q", got["a"].Description)
 	}
-	if !strings.Contains(got["a"].Remediation, "kubectl get pdb -n <namespace> <name>") {
-		t.Errorf("remediation %q has no read-only command to confirm", got["a"].Remediation)
+	if !strings.Contains(catalogRemediation(t, got["a"]), "kubectl get pdb -n <namespace> <name>") {
+		t.Errorf("remediation %q has no read-only command to confirm", catalogRemediation(t, got["a"]))
 	}
 }
 

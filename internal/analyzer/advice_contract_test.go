@@ -87,9 +87,17 @@ func remediationCommands(remediation string) (cmds []string, ok bool) {
 	return cmds, true
 }
 
-// adviceViolations lists how f breaks the advice contract; empty when it holds.
-func adviceViolations(f findings.Finding) []string {
+// adviceViolations lists how f, with the case c it names, breaks the advice
+// contract; empty when it holds. The description and the evidence belong to the
+// finding; the why and the remediation, with its commands, to the case.
+func adviceViolations(f findings.Finding, c findings.Case) []string {
 	var v []string
+	if f.Case == "" {
+		v = append(v, "the finding names no case")
+	}
+	if strings.TrimSpace(c.Why) == "" {
+		v = append(v, "why is empty")
+	}
 	if f.Resource.Kind == "" || f.Resource.Name == "" {
 		v = append(v, "resource is not set")
 	}
@@ -104,11 +112,11 @@ func adviceViolations(f findings.Finding) []string {
 	} else if !strings.ContainsFunc(f.Description, unicode.IsDigit) && !strings.Contains(f.Description, f.Resource.Name) {
 		v = append(v, "description states neither a number nor the name of the resource")
 	}
-	if strings.TrimSpace(f.Remediation) == "" {
+	if strings.TrimSpace(c.Remediation) == "" {
 		return append(v, "remediation is empty")
 	}
 
-	cmds, ok := remediationCommands(f.Remediation)
+	cmds, ok := remediationCommands(c.Remediation)
 	if !ok {
 		return append(v, "remediation has an unclosed backtick")
 	}
@@ -200,7 +208,8 @@ func TestAdviceContract(t *testing.T) {
 				if f.RuleID != c.rule {
 					t.Errorf("%s: reported under rule %q", f.Resource, f.RuleID)
 				}
-				for _, msg := range adviceViolations(f) {
+				cs, _ := DefaultCatalog().Lookup(f)
+				for _, msg := range adviceViolations(f, cs) {
 					t.Errorf("%s %s: %s", f.Severity, f.Resource, msg)
 				}
 			}
@@ -227,49 +236,61 @@ func TestAdviceViolations(t *testing.T) {
 		Severity:    findings.Blocked,
 		Resource:    findings.ResourceRef{Kind: "PodDisruptionBudget", Namespace: "shop", Name: "web-pdb"},
 		Evidence:    findings.PDBEvidence{Namespace: "shop", Name: "web-pdb"},
+		Case:        "c",
 		Description: "PodDisruptionBudget shop/web-pdb allows 0 disruptions.",
+	}
+	goodCase := findings.Case{
+		Why:         "Eviction is refused and the drain waits.",
 		Remediation: "Confirm with `kubectl get pdb -n <namespace> <name>`. Then add replicas.",
 	}
-	if v := adviceViolations(good); len(v) != 0 {
+	if v := adviceViolations(good, goodCase); len(v) != 0 {
 		t.Fatalf("a finding that meets the contract has violations: %v", v)
 	}
 
-	with := func(edit func(*findings.Finding)) findings.Finding {
-		f := good
-		edit(&f)
-		return f
+	type subject struct {
+		f findings.Finding
+		c findings.Case
+	}
+	with := func(edit func(*findings.Finding, *findings.Case)) subject {
+		s := subject{good, goodCase}
+		edit(&s.f, &s.c)
+		return s
 	}
 	tests := []struct {
 		name string
-		f    findings.Finding
+		s    subject
 		want string
 	}{
-		{"no verify command", with(func(f *findings.Finding) { f.Remediation = "Add replicas." }), "names no verify command"},
-		{"empty remediation", with(func(f *findings.Finding) { f.Remediation = "" }), "remediation is empty"},
-		{"command outside the read-only set", with(func(f *findings.Finding) { f.Remediation = "Run `kubectl top pods`." }), "does not start with"},
-		{"unclosed backtick", with(func(f *findings.Finding) { f.Remediation = "Run `kubectl get pdb" }), "unclosed backtick"},
-		{"delete", with(func(f *findings.Finding) { f.Remediation = "`kubectl get pdb x` then `kubectl delete pdb x`" }), `contains "delete"`},
-		{"get that writes by another word", with(func(f *findings.Finding) {
-			f.Remediation = "`kubectl get pods --field-selector=x -o name | xargs kubectl drain`"
+		{"no verify command", with(func(f *findings.Finding, c *findings.Case) { c.Remediation = "Add replicas." }), "names no verify command"},
+		{"no case", with(func(f *findings.Finding, c *findings.Case) { f.Case = "" }), "names no case"},
+		{"empty why", with(func(f *findings.Finding, c *findings.Case) { c.Why = " " }), "why is empty"},
+		{"empty remediation", with(func(f *findings.Finding, c *findings.Case) { c.Remediation = "" }), "remediation is empty"},
+		{"command outside the read-only set", with(func(f *findings.Finding, c *findings.Case) { c.Remediation = "Run `kubectl top pods`." }), "does not start with"},
+		{"unclosed backtick", with(func(f *findings.Finding, c *findings.Case) { c.Remediation = "Run `kubectl get pdb" }), "unclosed backtick"},
+		{"delete", with(func(f *findings.Finding, c *findings.Case) {
+			c.Remediation = "`kubectl get pdb x` then `kubectl delete pdb x`"
+		}), `contains "delete"`},
+		{"get that writes by another word", with(func(f *findings.Finding, c *findings.Case) {
+			c.Remediation = "`kubectl get pods --field-selector=x -o name | xargs kubectl drain`"
 		}), `contains "drain"`},
-		{"edit in a get", with(func(f *findings.Finding) { f.Remediation = "`kubectl get pdb x --edit`" }), `contains "edit"`},
-		{"command behind another program", with(func(f *findings.Finding) { f.Remediation = "`sudo kubectl get pdb x`" }), "does not start with"},
-		{"upper case kubectl", with(func(f *findings.Finding) { f.Remediation = "`KUBECTL delete pdb x`" }), "does not start with"},
-		{"pipe", with(func(f *findings.Finding) { f.Remediation = "`kubectl get pods -o name | sh`" }), `contains "|"`},
-		{"second command after a semicolon", with(func(f *findings.Finding) { f.Remediation = "`kubectl get pods; rm x`" }), `contains ";"`},
-		{"command substitution", with(func(f *findings.Finding) { f.Remediation = "`kubectl get pods $(id)`" }), `contains "$("`},
-		{"placeholder typo", with(func(f *findings.Finding) { f.Remediation = "`kubectl get pdb -n <namepsace> <name>`" }), "unknown placeholder <namepsace>"},
-		{"empty placeholder", with(func(f *findings.Finding) { f.Remediation = "`kubectl get pdb -n <> x`" }), "unknown placeholder <>"},
-		{"no evidence", with(func(f *findings.Finding) { f.Evidence = nil }), "evidence is empty"},
-		{"zero evidence", with(func(f *findings.Finding) { f.Evidence = findings.PDBEvidence{} }), "evidence is empty"},
-		{"invalid severity", with(func(f *findings.Finding) { f.Severity = "SAFE" }), "not valid"},
-		{"no resource", with(func(f *findings.Finding) { f.Resource = findings.ResourceRef{} }), "resource is not set"},
-		{"description without a number or name", with(func(f *findings.Finding) { f.Description = "A budget is a problem." }), "neither a number nor the name"},
-		{"empty description", with(func(f *findings.Finding) { f.Description = "" }), "description is empty"},
+		{"edit in a get", with(func(f *findings.Finding, c *findings.Case) { c.Remediation = "`kubectl get pdb x --edit`" }), `contains "edit"`},
+		{"command behind another program", with(func(f *findings.Finding, c *findings.Case) { c.Remediation = "`sudo kubectl get pdb x`" }), "does not start with"},
+		{"upper case kubectl", with(func(f *findings.Finding, c *findings.Case) { c.Remediation = "`KUBECTL delete pdb x`" }), "does not start with"},
+		{"pipe", with(func(f *findings.Finding, c *findings.Case) { c.Remediation = "`kubectl get pods -o name | sh`" }), `contains "|"`},
+		{"second command after a semicolon", with(func(f *findings.Finding, c *findings.Case) { c.Remediation = "`kubectl get pods; rm x`" }), `contains ";"`},
+		{"command substitution", with(func(f *findings.Finding, c *findings.Case) { c.Remediation = "`kubectl get pods $(id)`" }), `contains "$("`},
+		{"placeholder typo", with(func(f *findings.Finding, c *findings.Case) { c.Remediation = "`kubectl get pdb -n <namepsace> <name>`" }), "unknown placeholder <namepsace>"},
+		{"empty placeholder", with(func(f *findings.Finding, c *findings.Case) { c.Remediation = "`kubectl get pdb -n <> x`" }), "unknown placeholder <>"},
+		{"no evidence", with(func(f *findings.Finding, c *findings.Case) { f.Evidence = nil }), "evidence is empty"},
+		{"zero evidence", with(func(f *findings.Finding, c *findings.Case) { f.Evidence = findings.PDBEvidence{} }), "evidence is empty"},
+		{"invalid severity", with(func(f *findings.Finding, c *findings.Case) { f.Severity = "SAFE" }), "not valid"},
+		{"no resource", with(func(f *findings.Finding, c *findings.Case) { f.Resource = findings.ResourceRef{} }), "resource is not set"},
+		{"description without a number or name", with(func(f *findings.Finding, c *findings.Case) { f.Description = "A budget is a problem." }), "neither a number nor the name"},
+		{"empty description", with(func(f *findings.Finding, c *findings.Case) { f.Description = "" }), "description is empty"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := adviceViolations(tt.f)
+			v := adviceViolations(tt.s.f, tt.s.c)
 			if !slices.ContainsFunc(v, func(s string) bool { return strings.Contains(s, tt.want) }) {
 				t.Errorf("violations %v do not include %q", v, tt.want)
 			}

@@ -70,11 +70,11 @@ func (NodeNotSchedulable) Evaluate(in Input) []findings.Finding {
 		Severity: findings.Risk,
 		Resource: findings.ResourceRef{Kind: "Node", Name: strings.Join(names, ",")},
 		Evidence: findings.NodeNotSchedulableEvidence{PodsToMove: moving, RemainingNodes: remaining, Nodes: blocked},
+		Case:     nodeNotSchedulableNotSchedulable,
 		Description: fmt.Sprintf(
-			"%d of the %s that stay up cannot take evicted pods: %s. The %s moved off the target nodes can land on at most %s; taints and capacity are not checked.",
+			"%d of the %s that stay up cannot take evicted pods: %s. The %s moved off the target nodes can land on at most %s.",
 			len(blocked), plural(remaining, "node"), strings.Join(reasons, ", "),
 			plural(moving, "pod"), plural(remaining-len(blocked), "node")),
-		Remediation: "Confirm with `kubectl get nodes` (SchedulingDisabled or NotReady in STATUS) and `kubectl describe node <node>` (Unschedulable, Conditions). Then, safest first: repair the not Ready nodes, or uncordon the cordoned ones once the work they wait for is done; if they must stay out, count only the other nodes as room for the evicted pods. The count in the finding is an upper bound: taints and capacity are not checked.",
 	}}
 }
 

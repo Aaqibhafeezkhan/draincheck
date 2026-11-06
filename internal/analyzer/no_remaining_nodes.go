@@ -73,10 +73,10 @@ func (NoRemainingNodes) Evaluate(in Input) []findings.Finding {
 			TotalNodes:           len(nodes),
 			RemainingSchedulable: 0,
 		},
+		Case: noRemainingNodesNoRemaining,
 		Description: fmt.Sprintf(
-			"The drain targets %d of %s and no node is left that takes new pods. %sThe %s it evicts are recreated by their controllers and stay Pending until a node can take them. kubectl drain only evicts, so it completes.",
+			"The drain targets %d of %s and no node is left that takes new pods. %sIt evicts %s.",
 			len(targets), plural(len(nodes), "node"), taintClause(tainted), plural(len(moving), "pod")),
-		Remediation: "Confirm with `kubectl get nodes`: no node outside the drain is Ready without SchedulingDisabled. Then, safest first: add a node, or repair or uncordon one, before draining; or drain fewer nodes at once. The drain itself completes either way; afterwards `kubectl get pods -A --field-selector=status.phase=Pending` shows what is waiting. If the description names a taint on a node, `kubectl describe node <node>` shows it under Taints; remove it, or give the workload a matching toleration, only if the node is meant to run it. Cordons, readiness and taints are checked, not affinity or capacity.",
 	}}
 }
 

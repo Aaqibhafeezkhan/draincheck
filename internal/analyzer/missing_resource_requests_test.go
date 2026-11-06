@@ -102,7 +102,7 @@ func TestMissingResourceRequests(t *testing.T) {
 
 			// Ignore prose; it is covered by TestMissingResourceRequestsDescribesFinding.
 			for i := range got {
-				got[i].Description, got[i].Remediation = "", ""
+				got[i].Description, got[i].Case = "", ""
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("findings mismatch\n got: %+v\nwant: %+v", got, tt.want)
@@ -142,7 +142,7 @@ func TestMissingResourceRequestsDescribesFinding(t *testing.T) {
 
 	byResource := make(map[string]findings.Finding, len(got))
 	for _, g := range got {
-		if g.Description == "" || g.Remediation == "" {
+		if g.Description == "" || catalogRemediation(t, g) == "" {
 			t.Errorf("%s: description and remediation must be set: %+v", g.Resource, g)
 		}
 		byResource[g.Resource.String()] = g
@@ -181,8 +181,8 @@ func TestMissingResourceRequestsSharesRemediation(t *testing.T) {
 	got := Run(nil, Input{Snapshot: s, Targets: []string{"worker-01", "worker-02"}}, MissingResourceRequests{})
 
 	for _, g := range got[1:] {
-		if g.Remediation != got[0].Remediation {
-			t.Errorf("%s: remediation %q differs from %q", g.Resource, g.Remediation, got[0].Remediation)
+		if catalogRemediation(t, g) != catalogRemediation(t, got[0]) {
+			t.Errorf("%s: remediation %q differs from %q", g.Resource, catalogRemediation(t, g), catalogRemediation(t, got[0]))
 		}
 	}
 }

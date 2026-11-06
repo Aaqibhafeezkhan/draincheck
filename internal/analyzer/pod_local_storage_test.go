@@ -321,18 +321,18 @@ func TestPodLocalStorageTextAndSchema(t *testing.T) {
 	pod := storagePod("web-a", running, emptyDirVolume("cache"))
 
 	blocked := storageFindings([]corev1.Pod{pod}, DrainOptions{})[0]
-	if !strings.Contains(blocked.Description, "--delete-emptydir-data") || !strings.Contains(blocked.Description, "cannot delete Pods with local storage") {
-		t.Errorf("BLOCKED description does not say what kubectl does: %s", blocked.Description)
+	if why := catalogWhy(t, blocked); !strings.Contains(why, "--delete-emptydir-data") || !strings.Contains(why, "cannot delete Pods with local storage") {
+		t.Errorf("BLOCKED why does not say what kubectl does: %s", why)
 	}
-	if !strings.Contains(blocked.Remediation, "--delete-emptydir-data") {
-		t.Errorf("BLOCKED remediation does not name the flag: %s", blocked.Remediation)
+	if !strings.Contains(catalogRemediation(t, blocked), "--delete-emptydir-data") {
+		t.Errorf("BLOCKED remediation does not name the flag: %s", catalogRemediation(t, blocked))
 	}
 	risk := storageFindings([]corev1.Pod{pod}, DrainOptions{DeleteEmptyDirData: true})[0]
-	if !strings.Contains(risk.Description, "lost") {
-		t.Errorf("RISK description does not say the data is lost: %s", risk.Description)
+	if why := catalogWhy(t, risk); !strings.Contains(why, "lost") {
+		t.Errorf("RISK why does not say the data is lost: %s", why)
 	}
-	if strings.Contains(risk.Remediation, "drain with --delete-emptydir-data") {
-		t.Errorf("RISK remediation tells the operator to pass a flag already given: %s", risk.Remediation)
+	if strings.Contains(catalogRemediation(t, risk), "drain with --delete-emptydir-data") {
+		t.Errorf("RISK remediation tells the operator to pass a flag already given: %s", catalogRemediation(t, risk))
 	}
 
 	raw, err := json.Marshal(blocked.Evidence)

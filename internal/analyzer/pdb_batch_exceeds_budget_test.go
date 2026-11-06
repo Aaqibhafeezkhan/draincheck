@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/Veinar/draincheck/internal/findings"
@@ -71,7 +72,7 @@ func TestPDBBatchExceedsBudget(t *testing.T) {
 
 			// Ignore prose; it is covered by TestPDBBatchExceedsBudgetDescribesFinding.
 			for i := range got {
-				got[i].Description, got[i].Remediation = "", ""
+				got[i].Description, got[i].Case = "", ""
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("findings mismatch\n got: %+v\nwant: %+v", got, tt.want)
@@ -114,13 +115,13 @@ func TestPDBBatchExceedsBudgetDescribesFinding(t *testing.T) {
 			name:    "states pods, nodes and how many the budget allows at once",
 			targets: []string{"worker-01", "worker-02", "worker-03"},
 			pdb:     "api-pdb",
-			want:    "Draining 3 target nodes evicts 3 pods selected by PodDisruptionBudget billing/api-pdb, which allows 2 disruptions at once, so the drain will wait for replacements to become Ready between evictions.",
+			want:    "Draining 3 target nodes evicts 3 pods selected by PodDisruptionBudget billing/api-pdb, which allows 2 disruptions at once.",
 		},
 		{
 			name:    "singular for one disruption",
 			targets: []string{"worker-01", "worker-02"},
 			pdb:     "web-pdb",
-			want:    "Draining 2 target nodes evicts 2 pods selected by PodDisruptionBudget shop/web-pdb, which allows 1 disruption at once, so the drain will wait for replacements to become Ready between evictions.",
+			want:    "Draining 2 target nodes evicts 2 pods selected by PodDisruptionBudget shop/web-pdb, which allows 1 disruption at once.",
 		},
 	}
 	for _, tt := range tests {
@@ -137,8 +138,11 @@ func TestPDBBatchExceedsBudgetDescribesFinding(t *testing.T) {
 			if got.Description != tt.want {
 				t.Errorf("description\n got: %s\nwant: %s", got.Description, tt.want)
 			}
-			if got.Remediation == "" {
+			if catalogRemediation(t, *got) == "" {
 				t.Error("remediation is empty")
+			}
+			if why := catalogWhy(t, *got); !strings.Contains(why, "waits for replacements") {
+				t.Errorf("why %q lacks the consequence", why)
 			}
 		})
 	}
@@ -153,7 +157,7 @@ func TestPDBBatchExceedsBudgetIgnoresUnhealthyEvictions(t *testing.T) {
 
 	got := Run(nil, Input{Snapshot: s, Targets: []string{"worker-01", "worker-02", "worker-03"}}, PDBBatchExceedsBudget{})
 	for i := range got {
-		got[i].Description, got[i].Remediation = "", ""
+		got[i].Description, got[i].Case = "", ""
 	}
 
 	want := batchFinding("cnt2", "cnt2-pdb", 3, 2, 1, []string{"worker-01", "worker-02"},
@@ -178,7 +182,7 @@ func TestPDBBatchExceedsBudgetSkipsOverlappingPDBs(t *testing.T) {
 	got := Run(nil, Input{Snapshot: s, Targets: []string{"worker-01", "worker-02"}}, PDBBatchExceedsBudget{})
 
 	for i := range got {
-		got[i].Description, got[i].Remediation = "", ""
+		got[i].Description, got[i].Case = "", ""
 	}
 	want := []findings.Finding{
 		batchFinding("shop", "api-pdb", 2, 1, 1, []string{"worker-01", "worker-02"},

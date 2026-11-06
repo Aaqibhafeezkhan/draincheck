@@ -103,14 +103,14 @@ func (PodLocalStorage) Evaluate(in Input) []findings.Finding {
 		if !g.owner.Unmanaged() {
 			ev.OwnerKind, ev.OwnerName = g.owner.Kind, g.owner.Name
 		}
-		description, remediation := describeLocalStorage(g, len(nodes))
+		caseID, description := describeLocalStorage(g, len(nodes))
 		out = append(out, findings.Finding{
 			RuleID:      PodLocalStorageID,
 			Severity:    g.severity,
 			Resource:    g.resource,
 			Evidence:    ev,
+			Case:        caseID,
 			Description: description,
-			Remediation: remediation,
 		})
 	}
 	return out
@@ -153,23 +153,20 @@ func emptyDirNames(pod corev1.Pod) []string {
 	return names
 }
 
-// describeLocalStorage returns the description and remediation for g, which
-// covers pods on nodeCount distinct nodes. The text says what kubectl does
-// under the flags in force: a refusal for BLOCKED, a deletion for RISK.
-func describeLocalStorage(g *localStorageGroup, nodeCount int) (description, remediation string) {
-	var subject string
+// describeLocalStorage returns the case and the description for g, which covers
+// pods on nodeCount distinct nodes. The description holds the facts; what
+// kubectl does under the flags in force (a refusal for BLOCKED, a deletion for
+// RISK) is the Why of the case, in podLocalStorageCases.
+func describeLocalStorage(g *localStorageGroup, nodeCount int) (caseID, description string) {
 	if g.owner.Unmanaged() {
 		pod := g.pods[0]
-		subject = fmt.Sprintf("Pod %s/%s on node %s has emptyDir volumes (%s).", pod.Namespace, pod.Name, pod.Node, strings.Join(pod.Volumes, ", "))
+		description = fmt.Sprintf("Pod %s/%s on node %s has emptyDir volumes (%s).", pod.Namespace, pod.Name, pod.Node, strings.Join(pod.Volumes, ", "))
 	} else {
-		subject = fmt.Sprintf("%s %s/%s has %s with emptyDir volumes on %s.",
+		description = fmt.Sprintf("%s %s/%s has %s with emptyDir volumes on %s.",
 			g.resource.Kind, g.resource.Namespace, g.resource.Name, plural(len(g.pods), "pod"), plural(nodeCount, "target node"))
 	}
-	command := "Confirm with `kubectl get pod -n <namespace> <pod> -o jsonpath='{.spec.volumes}'` (an entry with emptyDir is local storage). "
 	if g.severity == findings.Risk {
-		return subject + " With --delete-emptydir-data kubectl drain deletes the pods and the data in those volumes is lost; a controller recreates the pod with an empty volume.",
-			command + "Then, safest first: move data that must survive to a PersistentVolumeClaim before the drain; or accept the loss, which is what --delete-emptydir-data already says."
+		return podLocalStorageDeleted, description
 	}
-	return subject + " kubectl drain refuses them without --delete-emptydir-data (`cannot delete Pods with local storage`) and stops before it evicts anything; waiting does not change that.",
-		command + "Then, safest first: move data that must survive to a PersistentVolumeClaim; or, if the volumes only hold a cache or scratch data, drain with --delete-emptydir-data and accept that the data is lost."
+	return podLocalStorageRefused, description
 }

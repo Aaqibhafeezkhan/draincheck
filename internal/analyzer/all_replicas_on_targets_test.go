@@ -133,8 +133,11 @@ func TestAllReplicasOnTargetsText(t *testing.T) {
 				t.Errorf("description %q lacks %q", f.Description, want)
 			}
 		}
-		if !strings.Contains(f.Remediation, "kubectl get pods -n shop") {
-			t.Errorf("remediation %q has no read-only command to confirm", f.Remediation)
+		if !strings.Contains(catalogRemediation(t, f), "kubectl get pods -n <namespace>") {
+			t.Errorf("remediation %q has no read-only command to confirm", catalogRemediation(t, f))
+		}
+		if why := catalogWhy(t, f); !strings.Contains(why, "does not wait for a replacement") {
+			t.Errorf("why %q does not say what kubectl drain does", why)
 		}
 		return
 	}

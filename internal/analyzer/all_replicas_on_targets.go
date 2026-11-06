@@ -89,7 +89,7 @@ func (AllReplicasOnTargets) Evaluate(in Input) []findings.Finding {
 
 		n := ready[key]
 		desc := fmt.Sprintf(
-			"%s %s/%s has %d desired replicas and its %s run on %s, all targets of this drain. The drain evicts every one of them and kubectl drain does not wait for a replacement to be Ready before it drains the next node, so the workload can be fully unavailable until a replacement is Ready on a node outside the batch; no budget makes kubectl drain wait, and it does not warn about it.",
+			"%s %s/%s has %d desired replicas and its %s run on %s, all targets of this drain.",
 			key.kind, key.namespace, key.name, desired[key], countOf(n, "ready pod"), nodeList(nodes))
 		if int32(n) < desired[key] {
 			desc += fmt.Sprintf(" Only Ready pods carry the load: the other %d of the desired replicas are not Ready.", int(desired[key])-n)
@@ -99,8 +99,8 @@ func (AllReplicasOnTargets) Evaluate(in Input) []findings.Finding {
 			Severity:    findings.Risk,
 			Resource:    findings.ResourceRef{Kind: key.kind, Namespace: key.namespace, Name: key.name},
 			Evidence:    findings.AllReplicasEvidence{OwnerKind: key.kind, OwnerName: key.name, Replicas: desired[key], ReadyPods: n, Nodes: nodes, Pods: ps},
+			Case:        allReplicasOnTargetsAllOnTargets,
 			Description: desc,
-			Remediation: fmt.Sprintf("Confirm with `kubectl get pods -n %s -o wide` (the NODE column shows where each replica runs) and `kubectl get pdb -n %s`. Then, safest first: drain the nodes one at a time and wait until the replacements are Ready before the next; or spread the replicas over nodes outside the batch first (topologySpreadConstraints or pod anti-affinity) and wait until they are Ready; or add a PodDisruptionBudget so kubectl drain waits instead of evicting every replica. The replacements need a node outside the batch to land on (see NO_REMAINING_NODES).", key.namespace, key.namespace),
 		})
 	}
 	return out
