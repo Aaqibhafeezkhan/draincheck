@@ -1,7 +1,6 @@
 package analyzer
 
 import (
-	"github.com/Veinar/draincheck/internal/findings"
 	"reflect"
 	"testing"
 
@@ -52,29 +51,6 @@ func TestUntoleratedTaints(t *testing.T) {
 				t.Errorf("untoleratedTaints = %+v, want %+v", got, tt.want)
 			}
 		})
-	}
-}
-
-func TestTaintsAgainst(t *testing.T) {
-	node := corev1.Node{Spec: corev1.NodeSpec{Taints: []corev1.Taint{
-		taint("a", "", corev1.TaintEffectNoSchedule),
-		taint("b", "", corev1.TaintEffectNoExecute),
-		taint("c", "", corev1.TaintEffectPreferNoSchedule),
-	}}}
-	plain := corev1.Pod{}
-	tolA := corev1.Pod{Spec: corev1.PodSpec{Tolerations: []corev1.Toleration{{Key: "a", Operator: corev1.TolerationOpExists}}}}
-	tolAll := corev1.Pod{Spec: corev1.PodSpec{Tolerations: []corev1.Toleration{{Operator: corev1.TolerationOpExists}}}}
-
-	got, room := taintsAgainst([]corev1.Pod{plain, tolA}, node)
-	want := []findings.NodeTaint{{Key: "a", Effect: "NoSchedule"}, {Key: "b", Effect: "NoExecute"}}
-	if room || !reflect.DeepEqual(got, want) {
-		t.Errorf("no room: got %+v room=%v, want %+v", got, room, want)
-	}
-	if _, room := taintsAgainst([]corev1.Pod{plain, tolAll}, node); !room {
-		t.Error("one pod that tolerates everything is room")
-	}
-	if _, room := taintsAgainst([]corev1.Pod{plain}, corev1.Node{}); !room {
-		t.Error("an untainted node is room")
 	}
 }
 
@@ -143,29 +119,5 @@ func TestUntoleratedTaintsMatchingEdges(t *testing.T) {
 				t.Errorf("untoleratedTaints = %+v, want %+v", got, tt.want)
 			}
 		})
-	}
-}
-
-// Two taints with the same key and effect but different values are one entry
-// in the evidence, in the order the node lists them.
-func TestTaintsAgainstSameKeyAndEffect(t *testing.T) {
-	node := corev1.Node{Spec: corev1.NodeSpec{Taints: []corev1.Taint{
-		taint("team", "a", corev1.TaintEffectNoSchedule),
-		taint("first", "", corev1.TaintEffectNoSchedule),
-		taint("team", "b", corev1.TaintEffectNoSchedule),
-	}}}
-	got, room := taintsAgainst([]corev1.Pod{{}}, node)
-	want := []findings.NodeTaint{{Key: "team", Effect: "NoSchedule"}, {Key: "first", Effect: "NoSchedule"}}
-	if room || !reflect.DeepEqual(got, want) {
-		t.Errorf("got %+v room=%v, want %+v", got, room, want)
-	}
-}
-
-// With no pod there is nothing to land: no room, and no taint to blame.
-func TestTaintsAgainstNoPods(t *testing.T) {
-	node := corev1.Node{Spec: corev1.NodeSpec{Taints: []corev1.Taint{taint("a", "", corev1.TaintEffectNoSchedule)}}}
-	got, room := taintsAgainst(nil, node)
-	if room || got != nil {
-		t.Errorf("got %+v room=%v, want nil and false", got, room)
 	}
 }

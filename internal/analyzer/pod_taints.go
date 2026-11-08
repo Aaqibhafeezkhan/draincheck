@@ -1,7 +1,6 @@
 package analyzer
 
 import (
-	"github.com/Veinar/draincheck/internal/findings"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 )
@@ -31,28 +30,4 @@ func untoleratedTaints(pod corev1.Pod, node corev1.Node) []corev1.Taint {
 		}
 	}
 	return out
-}
-
-// taintsAgainst reports whether any of the pods can land on node as far as
-// taints go (room), and otherwise the distinct taints that keep them off,
-// as (key, effect) pairs in the order the node lists them.
-func taintsAgainst(pods []corev1.Pod, node corev1.Node) (blocking []findings.NodeTaint, room bool) {
-	seen := map[findings.NodeTaint]bool{}
-	for _, pod := range pods {
-		untolerated := untoleratedTaints(pod, node)
-		if len(untolerated) == 0 {
-			return nil, true
-		}
-		for _, t := range untolerated {
-			seen[findings.NodeTaint{Key: t.Key, Effect: string(t.Effect)}] = true
-		}
-	}
-	for _, t := range node.Spec.Taints {
-		nt := findings.NodeTaint{Key: t.Key, Effect: string(t.Effect)}
-		if seen[nt] {
-			blocking = append(blocking, nt)
-			delete(seen, nt)
-		}
-	}
-	return blocking, false
 }
