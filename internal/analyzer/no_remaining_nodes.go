@@ -53,11 +53,11 @@ func (NoRemainingNodes) Evaluate(in Input) []findings.Finding {
 		if _, blocked := unschedulable(node); blocked {
 			continue
 		}
-		taints, room := taintsAgainst(moving, node)
-		if room {
+		placement := placementOn(moving, node)
+		if placement.Room {
 			return nil
 		}
-		tainted = append(tainted, findings.TaintedNode{Name: node.Name, Taints: taints})
+		tainted = append(tainted, findings.TaintedNode{Name: node.Name, Taints: placement.taints()})
 	}
 	slices.SortFunc(tainted, func(a, b findings.TaintedNode) int { return strings.Compare(a.Name, b.Name) })
 

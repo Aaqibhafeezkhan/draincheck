@@ -96,7 +96,7 @@ func (WorkloadUntoleratedTaints) Evaluate(in Input) []findings.Finding {
 // as taints go.
 func hasRoom(pods []corev1.Pod, nodes []corev1.Node) bool {
 	for _, node := range nodes {
-		if _, room := taintsAgainst(pods, node); room {
+		if placementOn(pods, node).Room {
 			return true
 		}
 	}
@@ -113,8 +113,7 @@ func untoleratedEvidence(g *untoleratedGroup, nodes []corev1.Node) findings.Work
 		return cmp.Or(cmp.Compare(a.Name, b.Name), cmp.Compare(a.Node, b.Node))
 	})
 	for _, node := range nodes {
-		taints, _ := taintsAgainst(g.pods, node)
-		ev.TaintedNodes = append(ev.TaintedNodes, findings.TaintedNode{Name: node.Name, Taints: taints})
+		ev.TaintedNodes = append(ev.TaintedNodes, findings.TaintedNode{Name: node.Name, Taints: placementOn(g.pods, node).taints()})
 	}
 	slices.SortFunc(ev.TaintedNodes, func(a, b findings.TaintedNode) int { return strings.Compare(a.Name, b.Name) })
 	return ev
