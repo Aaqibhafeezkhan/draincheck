@@ -13,6 +13,7 @@ func workloadsFixture() Workloads {
 	return Workloads{
 		Deployments:  []appsv1.Deployment{{ObjectMeta: metav1.ObjectMeta{Name: "api", Namespace: "billing", Labels: map[string]string{"app": "api"}}}},
 		StatefulSets: []appsv1.StatefulSet{{ObjectMeta: metav1.ObjectMeta{Name: "db", Namespace: "billing", Labels: map[string]string{"app": "db"}}}},
+		DaemonSets:   []appsv1.DaemonSet{{ObjectMeta: metav1.ObjectMeta{Name: "agent", Namespace: "kube-system", Labels: map[string]string{"app": "agent"}}}},
 		Jobs:         []batchv1.Job{{ObjectMeta: metav1.ObjectMeta{Name: "report-29", Namespace: "billing", Labels: map[string]string{"app": "report"}}}},
 		CronJobs:     []batchv1.CronJob{{ObjectMeta: metav1.ObjectMeta{Name: "report", Namespace: "billing", Labels: map[string]string{"app": "report"}}}},
 	}
@@ -21,7 +22,7 @@ func workloadsFixture() Workloads {
 func TestSnapshotWorkloadsEmptyByDefault(t *testing.T) {
 	s := NewSnapshot(nil, nil, nil, nil, time.Time{})
 
-	if len(s.Deployments()) != 0 || len(s.StatefulSets()) != 0 || len(s.Jobs()) != 0 || len(s.CronJobs()) != 0 {
+	if len(s.Deployments()) != 0 || len(s.StatefulSets()) != 0 || len(s.DaemonSets()) != 0 || len(s.Jobs()) != 0 || len(s.CronJobs()) != 0 {
 		t.Errorf("a snapshot built without WithWorkloads should hold no workloads")
 	}
 }
@@ -34,6 +35,9 @@ func TestSnapshotExposesWorkloads(t *testing.T) {
 	}
 	if got := s.StatefulSets(); len(got) != 1 || got[0].Name != "db" {
 		t.Errorf("StatefulSets() = %+v", got)
+	}
+	if got := s.DaemonSets(); len(got) != 1 || got[0].Name != "agent" {
+		t.Errorf("DaemonSets() = %+v", got)
 	}
 	if got := s.Jobs(); len(got) != 1 || got[0].Name != "report-29" {
 		t.Errorf("Jobs() = %+v", got)
@@ -49,6 +53,7 @@ func TestSnapshotWorkloadsAreIsolatedFromInput(t *testing.T) {
 
 	w.Deployments[0].Labels["app"] = "changed"
 	w.StatefulSets[0].Labels["app"] = "changed"
+	w.DaemonSets[0].Labels["app"] = "changed"
 	w.Jobs[0].Labels["app"] = "changed"
 	w.CronJobs[0].Labels["app"] = "changed"
 
@@ -57,6 +62,9 @@ func TestSnapshotWorkloadsAreIsolatedFromInput(t *testing.T) {
 	}
 	if got := s.StatefulSets()[0].Labels["app"]; got != "db" {
 		t.Errorf("statefulset label = %q, input mutation leaked into the snapshot", got)
+	}
+	if got := s.DaemonSets()[0].Labels["app"]; got != "agent" {
+		t.Errorf("daemonset label = %q, input mutation leaked into the snapshot", got)
 	}
 	if got := s.Jobs()[0].Labels["app"]; got != "report" {
 		t.Errorf("job label = %q, input mutation leaked into the snapshot", got)
@@ -71,6 +79,7 @@ func TestSnapshotWorkloadsAreIsolatedFromCallers(t *testing.T) {
 
 	s.Deployments()[0].Labels["app"] = "changed"
 	s.StatefulSets()[0].Labels["app"] = "changed"
+	s.DaemonSets()[0].Labels["app"] = "changed"
 	s.Jobs()[0].Labels["app"] = "changed"
 	s.CronJobs()[0].Labels["app"] = "changed"
 
@@ -79,6 +88,9 @@ func TestSnapshotWorkloadsAreIsolatedFromCallers(t *testing.T) {
 	}
 	if got := s.StatefulSets()[0].Labels["app"]; got != "db" {
 		t.Errorf("statefulset label = %q, a caller changed the snapshot", got)
+	}
+	if got := s.DaemonSets()[0].Labels["app"]; got != "agent" {
+		t.Errorf("daemonset label = %q, a caller changed the snapshot", got)
 	}
 	if got := s.Jobs()[0].Labels["app"]; got != "report" {
 		t.Errorf("job label = %q, a caller changed the snapshot", got)

@@ -7,7 +7,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// listWorkloads lists Deployments, StatefulSets, Jobs and CronJobs (all
+// listWorkloads lists Deployments, StatefulSets, DaemonSets, Jobs and CronJobs (all
 // namespaces). A failed list is an error, never an empty result: an empty list
 // would hide findings.
 func (c *ClientsetCollector) listWorkloads(ctx context.Context) (Workloads, error) {
@@ -28,6 +28,14 @@ func (c *ClientsetCollector) listWorkloads(ctx context.Context) (Workloads, erro
 	}
 	c.listed("statefulsets", start, len(statefulSets.Items))
 	w.StatefulSets = statefulSets.Items
+
+	start = time.Now()
+	daemonSets, err := c.client.AppsV1().DaemonSets(metav1.NamespaceAll).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return Workloads{}, c.listFailed("daemonsets", start, err)
+	}
+	c.listed("daemonsets", start, len(daemonSets.Items))
+	w.DaemonSets = daemonSets.Items
 
 	start = time.Now()
 	jobs, err := c.client.BatchV1().Jobs(metav1.NamespaceAll).List(ctx, metav1.ListOptions{})

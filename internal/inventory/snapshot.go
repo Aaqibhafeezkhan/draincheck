@@ -21,8 +21,12 @@ type Snapshot struct {
 
 	deployments  []appsv1.Deployment
 	statefulSets []appsv1.StatefulSet
+	daemonSets   []appsv1.DaemonSet
 	jobs         []batchv1.Job
 	cronJobs     []batchv1.CronJob
+	// workloadsLoaded is true when WithWorkloads ran, so absent objects are
+	// really absent and not just never collected.
+	workloadsLoaded bool
 
 	pvcs []corev1.PersistentVolumeClaim
 	pvs  []corev1.PersistentVolume

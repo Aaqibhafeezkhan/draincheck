@@ -2,7 +2,10 @@ package analyzer
 
 import (
 	"testing"
+	"time"
 
+	"github.com/Veinar/draincheck/internal/inventory"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -188,7 +191,7 @@ func TestJudgePod(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := judgePod(tt.pod.pod(), tt.opts); got != tt.want {
+			if got := judgePod(tt.pod.pod(), tt.opts, nil); got != tt.want {
 				t.Errorf("judgePod = %+v, want %+v", got, tt.want)
 			}
 		})
@@ -199,8 +202,66 @@ func TestJudgePod(t *testing.T) {
 func TestJudgePodDoesNotMutate(t *testing.T) {
 	pod := filterPod{owner: "DaemonSet", phase: corev1.PodRunning, emptyDir: true, mirror: true}.pod()
 	before := pod.DeepCopy()
-	judgePod(pod, DrainOptions{Force: true})
+	judgePod(pod, DrainOptions{Force: true}, nil)
 	if len(pod.OwnerReferences) != len(before.OwnerReferences) || len(pod.Spec.Volumes) != len(before.Spec.Volumes) || len(pod.Annotations) != len(before.Annotations) {
 		t.Error("judgePod changed the pod")
+	}
+}
+
+// ownersWithDaemonSets resolves owners from a snapshot that collected exactly
+// the DaemonSets named, in namespace "shop" (the namespace filterPod uses).
+func ownersWithDaemonSets(names ...string) *inventory.OwnerResolver {
+	var sets []appsv1.DaemonSet
+	for _, n := range names {
+		sets = append(sets, appsv1.DaemonSet{ObjectMeta: metav1.ObjectMeta{Namespace: "shop", Name: n}})
+	}
+	return inventory.NewOwnerResolver(inventory.NewSnapshot(nil, nil, nil, nil, time.Time{}, inventory.WithWorkloads(inventory.Workloads{DaemonSets: sets})))
+}
+
+// A pod whose DaemonSet is gone. kubectl looks the DaemonSet up and, when it is
+// not found, refuses the pod unless --force is set; --ignore-daemonsets does
+// not help. Observed with kubectl v1.36.1 against a Kubernetes v1.37.0 kind
+// cluster: --ignore-daemonsets alone stopped the drain with `cannot delete
+// daemonsets.apps "ghost" not found`, and with --force the pod was evicted.
+func TestDaemonSetFilterOrphanedPod(t *testing.T) {
+	orphan := filterPod{owner: "DaemonSet", phase: corev1.PodRunning}.pod()
+	gone := drainVerdict{drainRefuse, reasonDaemonSetGone}
+	deleted := drainVerdict{drainDelete, reasonDaemonSetGone}
+	tests := []struct {
+		name   string
+		owners *inventory.OwnerResolver
+		opts   DrainOptions
+		want   drainVerdict
+	}{
+		{"gone, no flags: refused", ownersWithDaemonSets(), DrainOptions{}, gone},
+		{"gone, --ignore-daemonsets does not help", ownersWithDaemonSets(), DrainOptions{IgnoreDaemonSets: true}, gone},
+		{"gone, --force deletes the pod", ownersWithDaemonSets(), DrainOptions{Force: true}, deleted},
+		{"gone, both flags: deleted", ownersWithDaemonSets(), DrainOptions{IgnoreDaemonSets: true, Force: true}, deleted},
+		{"the DaemonSet exists, no flags: refused as a DaemonSet pod", ownersWithDaemonSets("x"), DrainOptions{}, drainVerdict{drainRefuse, reasonDaemonSet}},
+		{"the DaemonSet exists, --ignore-daemonsets: skipped", ownersWithDaemonSets("x"), DrainOptions{IgnoreDaemonSets: true}, drainVerdict{drainSkip, reasonDaemonSet}},
+		{"DaemonSets not collected: treated as present", nil, DrainOptions{IgnoreDaemonSets: true}, drainVerdict{drainSkip, reasonDaemonSet}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := daemonSetFilter(orphan, tt.opts, tt.owners); got != tt.want {
+				t.Errorf("daemonSetFilter = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+// With --force kubectl goes on to the other filters, so an orphaned pod with an
+// emptyDir volume still needs --delete-emptydir-data.
+func TestJudgePodOrphanedDaemonSetGoesOnToOtherFilters(t *testing.T) {
+	pod := filterPod{owner: "DaemonSet", phase: corev1.PodRunning, emptyDir: true}.pod()
+	owners := ownersWithDaemonSets()
+	if got := judgePod(pod, DrainOptions{Force: true}, owners); got != (drainVerdict{drainRefuse, reasonLocalStorage}) {
+		t.Errorf("--force: judgePod = %+v, want a refusal for local storage", got)
+	}
+	if got := judgePod(pod, DrainOptions{Force: true, DeleteEmptyDirData: true}, owners); got.action != drainDelete {
+		t.Errorf("--force and --delete-emptydir-data: judgePod = %+v, want the pod deleted", got)
+	}
+	if got := judgePod(pod, DrainOptions{IgnoreDaemonSets: true}, owners); got != (drainVerdict{drainRefuse, reasonDaemonSetGone}) {
+		t.Errorf("--ignore-daemonsets only: judgePod = %+v, want the DaemonSet refusal first", got)
 	}
 }

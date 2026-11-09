@@ -18,6 +18,8 @@ func TestClientsetCollectorCollectsWorkloads(t *testing.T) {
 		&appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "api", Namespace: "billing"}},
 		&appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "web", Namespace: "shop"}},
 		&appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: "db", Namespace: "billing"}},
+		&appsv1.DaemonSet{ObjectMeta: metav1.ObjectMeta{Name: "agent", Namespace: "kube-system"}},
+		&appsv1.DaemonSet{ObjectMeta: metav1.ObjectMeta{Name: "logs", Namespace: "billing"}},
 		&batchv1.Job{ObjectMeta: metav1.ObjectMeta{Name: "report-29", Namespace: "billing"}},
 		&batchv1.CronJob{ObjectMeta: metav1.ObjectMeta{Name: "report", Namespace: "billing"}},
 		&batchv1.CronJob{ObjectMeta: metav1.ObjectMeta{Name: "cleanup", Namespace: "shop"}},
@@ -33,6 +35,9 @@ func TestClientsetCollectorCollectsWorkloads(t *testing.T) {
 	if got := len(s.StatefulSets()); got != 1 {
 		t.Errorf("statefulsets = %d, want 1", got)
 	}
+	if got := len(s.DaemonSets()); got != 2 {
+		t.Errorf("daemonsets = %d, want 2 (all namespaces)", got)
+	}
 	if got := len(s.Jobs()); got != 1 {
 		t.Errorf("jobs = %d, want 1", got)
 	}
@@ -42,7 +47,7 @@ func TestClientsetCollectorCollectsWorkloads(t *testing.T) {
 }
 
 func TestClientsetCollectorWorkloadListError(t *testing.T) {
-	for _, resource := range []string{"deployments", "statefulsets", "jobs", "cronjobs"} {
+	for _, resource := range []string{"deployments", "statefulsets", "daemonsets", "jobs", "cronjobs"} {
 		t.Run(resource, func(t *testing.T) {
 			client := fake.NewClientset()
 			client.PrependReactor("list", resource, func(k8stesting.Action) (bool, runtime.Object, error) {
@@ -71,7 +76,7 @@ func TestClientsetCollectorReadsWorkloadsWithListOnly(t *testing.T) {
 			t.Errorf("non-read call: %s %s", a.GetVerb(), a.GetResource().Resource)
 		}
 	}
-	for _, resource := range []string{"deployments", "statefulsets", "jobs", "cronjobs"} {
+	for _, resource := range []string{"deployments", "statefulsets", "daemonsets", "jobs", "cronjobs"} {
 		if !seen[resource] {
 			t.Errorf("%s was never listed", resource)
 		}

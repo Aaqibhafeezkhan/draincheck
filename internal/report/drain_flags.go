@@ -22,7 +22,7 @@ var missingFlagOrder = []string{"--ignore-daemonsets", "--delete-emptydir-data",
 // SummarizeDrainFlags derives the flags kubectl drain would still demand from
 // the BLOCKED findings in fs: a DaemonSet pod needs --ignore-daemonsets, a pod
 // with an emptyDir volume needs --delete-emptydir-data and a pod with no
-// controller needs --force. RISK and UNKNOWN findings name no flag, because
+// controller, or whose DaemonSet is gone, needs --force. RISK and UNKNOWN findings name no flag, because
 // nothing refuses the drain there. evictionDisabled is the --disable-eviction
 // flag of the run.
 func SummarizeDrainFlags(fs []findings.Finding, evictionDisabled bool) DrainFlags {
@@ -36,7 +36,7 @@ func SummarizeDrainFlags(fs []findings.Finding, evictionDisabled bool) DrainFlag
 			switch ev.Category {
 			case findings.OwnershipDaemonSet:
 				need["--ignore-daemonsets"] = true
-			case findings.OwnershipUnmanaged:
+			case findings.OwnershipUnmanaged, findings.OwnershipOrphanedDaemonSet:
 				need["--force"] = true
 			}
 		case findings.LocalStorageEvidence:

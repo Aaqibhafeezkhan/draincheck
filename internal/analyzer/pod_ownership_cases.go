@@ -4,10 +4,12 @@ import "github.com/Veinar/draincheck/internal/findings"
 
 // The cases of POD_OWNERSHIP. A finding names one; the text is below.
 const (
-	podOwnershipDaemonSet          = "daemonset"
-	podOwnershipStaticPod          = "static_pod"
-	podOwnershipNoController       = "no_controller"
-	podOwnershipNoControllerForced = "no_controller_forced"
+	podOwnershipDaemonSet           = "daemonset"
+	podOwnershipStaticPod           = "static_pod"
+	podOwnershipNoController        = "no_controller"
+	podOwnershipNoControllerForced  = "no_controller_forced"
+	podOwnershipDaemonSetGone       = "daemonset_gone"
+	podOwnershipDaemonSetGoneForced = "daemonset_gone_forced"
 )
 
 // podOwnershipCases holds the text of each case, keyed as findings.CaseKey does.
@@ -27,5 +29,13 @@ var podOwnershipCases = findings.Catalog{
 	findings.CaseKey(PodOwnershipID, podOwnershipNoControllerForced): {
 		Why:         "With --force kubectl drain deletes a pod with no controller, and nothing recreates it.",
 		Remediation: "Confirm with `kubectl get pod -n <namespace> <name> -o jsonpath='{.metadata.ownerReferences}'` (empty: no controller). Then, safest first: put the workload under a controller (Deployment, StatefulSet or Job) so it is recreated; or accept its loss.",
+	},
+	findings.CaseKey(PodOwnershipID, podOwnershipDaemonSetGone): {
+		Why:         "kubectl drain refuses a pod whose DaemonSet no longer exists unless --force is set; --ignore-daemonsets does not help, and nothing recreates the pod.",
+		Remediation: "Confirm with `kubectl get daemonset -n <namespace> <name>` (NotFound) and `kubectl get pod -n <namespace> <pod> -o jsonpath='{.metadata.ownerReferences}'`. Then delete the leftover pods if they are not needed, or accept their loss and drain with --force.",
+	},
+	findings.CaseKey(PodOwnershipID, podOwnershipDaemonSetGoneForced): {
+		Why:         "With --force kubectl drain evicts a pod whose DaemonSet no longer exists, and nothing recreates it.",
+		Remediation: "Confirm with `kubectl get daemonset -n <namespace> <name>` (NotFound) and `kubectl get pod -n <namespace> <pod> -o jsonpath='{.metadata.ownerReferences}'`. Then decide whether the pod is still needed; if it is, recreate it under a controller before the drain.",
 	},
 }

@@ -21,6 +21,10 @@ const (
 	classStatic
 	// classDaemonSet is a pod controlled by a DaemonSet.
 	classDaemonSet
+	// classOrphanedDaemonSet is a pod controlled by a DaemonSet that no longer
+	// exists (kubectl drain looks it up). It is evicted, not skipped, and nothing
+	// recreates it.
+	classOrphanedDaemonSet
 	// classUnmanaged is a pod with no controller.
 	classUnmanaged
 	// classManaged is a pod controlled by anything else.
@@ -64,7 +68,7 @@ func (f drainFate) String() string {
 	case fateLeftAlone:
 		return "left alone by kubectl drain (DaemonSet or static pod)"
 	case fateEvictedUnmanaged:
-		return "evicted, not recreated (no controller)"
+		return "evicted, not recreated (no controller, or its DaemonSet is gone)"
 	case fateEvictedRescheduled:
 		return "evicted, recreated by its controller"
 	default:
@@ -102,6 +106,8 @@ func classifyPod(pod corev1.Pod, owners *inventory.OwnerResolver, drain DrainOpt
 		d.class = classFinished
 	case isMirrorPod(pod):
 		d.class = classStatic
+	case owners.DaemonSetGone(pod):
+		d.class = classOrphanedDaemonSet
 	case owner.Kind == "DaemonSet":
 		d.class = classDaemonSet
 	case owner.Unmanaged():
@@ -135,7 +141,7 @@ func (d podDrain) fate() drainFate {
 		return fateLeaving
 	case d.class == classStatic || d.class == classDaemonSet:
 		return fateLeftAlone
-	case d.class == classUnmanaged:
+	case d.class == classUnmanaged || d.class == classOrphanedDaemonSet:
 		return fateEvictedUnmanaged
 	default:
 		return fateEvictedRescheduled

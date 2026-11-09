@@ -35,6 +35,7 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 		"/apis/policy/v1/poddisruptionbudgets": `{"kind":"PodDisruptionBudgetList","apiVersion":"policy/v1","items":[]}`,
 		"/apis/apps/v1/deployments":            `{"kind":"DeploymentList","apiVersion":"apps/v1","items":[]}`,
 		"/apis/apps/v1/statefulsets":           `{"kind":"StatefulSetList","apiVersion":"apps/v1","items":[]}`,
+		"/apis/apps/v1/daemonsets":             `{"kind":"DaemonSetList","apiVersion":"apps/v1","items":[]}`,
 		"/apis/batch/v1/jobs":                  `{"kind":"JobList","apiVersion":"batch/v1","items":[]}`,
 		"/apis/batch/v1/cronjobs":              `{"kind":"CronJobList","apiVersion":"batch/v1","items":[]}`,
 		"/api/v1/persistentvolumeclaims":       `{"kind":"PersistentVolumeClaimList","apiVersion":"v1","items":[]}`,

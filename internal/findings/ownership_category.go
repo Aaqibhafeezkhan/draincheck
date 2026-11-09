@@ -13,4 +13,8 @@ const (
 	// OwnershipUnmanaged is a pod with no controller. kubectl drain refuses it
 	// unless --force is set, and nothing recreates it once deleted.
 	OwnershipUnmanaged OwnershipCategory = "Unmanaged"
+	// OwnershipOrphanedDaemonSet is a pod whose controller is a DaemonSet that
+	// no longer exists. kubectl drain refuses it unless --force is set (also
+	// with --ignore-daemonsets) and then evicts it; nothing recreates it.
+	OwnershipOrphanedDaemonSet OwnershipCategory = "OrphanedDaemonSet"
 )

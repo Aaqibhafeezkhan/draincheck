@@ -9,6 +9,7 @@ import (
 type Workloads struct {
 	Deployments  []appsv1.Deployment
 	StatefulSets []appsv1.StatefulSet
+	DaemonSets   []appsv1.DaemonSet
 	Jobs         []batchv1.Job
 	CronJobs     []batchv1.CronJob
 }
@@ -19,6 +20,8 @@ func WithWorkloads(w Workloads) SnapshotOption {
 	return func(s *Snapshot) {
 		s.deployments = copyDeployments(w.Deployments)
 		s.statefulSets = copyStatefulSets(w.StatefulSets)
+		s.daemonSets = copyDaemonSets(w.DaemonSets)
+		s.workloadsLoaded = true
 		s.jobs = copyJobs(w.Jobs)
 		s.cronJobs = copyCronJobs(w.CronJobs)
 	}
@@ -29,6 +32,9 @@ func (s *Snapshot) Deployments() []appsv1.Deployment { return copyDeployments(s.
 
 // StatefulSets returns a copy of the StatefulSets in the snapshot.
 func (s *Snapshot) StatefulSets() []appsv1.StatefulSet { return copyStatefulSets(s.statefulSets) }
+
+// DaemonSets returns a copy of the DaemonSets in the snapshot.
+func (s *Snapshot) DaemonSets() []appsv1.DaemonSet { return copyDaemonSets(s.daemonSets) }
 
 // Jobs returns a copy of the Jobs in the snapshot.
 func (s *Snapshot) Jobs() []batchv1.Job { return copyJobs(s.jobs) }
@@ -46,6 +52,14 @@ func copyDeployments(in []appsv1.Deployment) []appsv1.Deployment {
 
 func copyStatefulSets(in []appsv1.StatefulSet) []appsv1.StatefulSet {
 	out := make([]appsv1.StatefulSet, len(in))
+	for i := range in {
+		in[i].DeepCopyInto(&out[i])
+	}
+	return out
+}
+
+func copyDaemonSets(in []appsv1.DaemonSet) []appsv1.DaemonSet {
+	out := make([]appsv1.DaemonSet, len(in))
 	for i := range in {
 		in[i].DeepCopyInto(&out[i])
 	}

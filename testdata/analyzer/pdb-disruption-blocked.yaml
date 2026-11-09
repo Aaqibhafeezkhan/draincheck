@@ -334,3 +334,17 @@ status:
   desiredHealthy: 1
   disruptionsAllowed: 0
   expectedPods: 2
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  namespace: billing
+  name: api-logger
+
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  namespace: monitoring
+  name: agent
+

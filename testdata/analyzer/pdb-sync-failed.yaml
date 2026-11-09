@@ -314,3 +314,10 @@ status:
       status: "False"
       reason: SyncFailed
       message: "widgets.example.com does not implement the scale subresource"
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  namespace: monitoring
+  name: agent
+

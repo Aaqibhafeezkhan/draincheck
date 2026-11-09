@@ -249,3 +249,10 @@ spec:
       app: etl
 status:
   disruptionsAllowed: 1
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  namespace: shop
+  name: web-agent
+

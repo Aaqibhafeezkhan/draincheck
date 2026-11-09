@@ -320,3 +320,10 @@ spec:
       image: example/job:1
 status:
   phase: Succeeded
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  namespace: monitoring
+  name: agent
+

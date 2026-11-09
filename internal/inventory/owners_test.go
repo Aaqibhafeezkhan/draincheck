@@ -122,3 +122,37 @@ func TestOwnerUnmanaged(t *testing.T) {
 		t.Error("Owner with a kind should not be unmanaged")
 	}
 }
+
+func TestDaemonSetGone(t *testing.T) {
+	live := appsv1.DaemonSet{ObjectMeta: metav1.ObjectMeta{Name: "agent", Namespace: "shop"}}
+	dsPod := func(apiVersion, kind, name, namespace string) corev1.Pod {
+		p := podOwnedBy(controlledByAPI(apiVersion, kind, name))
+		p.Namespace = namespace
+		return p
+	}
+	loaded := NewSnapshot(nil, nil, nil, nil, time.Time{}, WithWorkloads(Workloads{DaemonSets: []appsv1.DaemonSet{live}}))
+	notLoaded := NewSnapshot(nil, nil, nil, nil, time.Time{})
+
+	tests := []struct {
+		name string
+		s    *Snapshot
+		pod  corev1.Pod
+		want bool
+	}{
+		{"the DaemonSet exists", loaded, dsPod("apps/v1", "DaemonSet", "agent", "shop"), false},
+		{"the DaemonSet is not in the snapshot", loaded, dsPod("apps/v1", "DaemonSet", "ghost", "shop"), true},
+		{"same name in another namespace is another DaemonSet", loaded, dsPod("apps/v1", "DaemonSet", "agent", "other"), true},
+		{"a DaemonSet of another API group is not looked up", loaded, dsPod("example.io/v1", "DaemonSet", "ghost", "shop"), false},
+		{"a pod of another kind", loaded, dsPod("apps/v1", "StatefulSet", "ghost", "shop"), false},
+		{"a pod with no controller", loaded, podOwnedBy(nil), false},
+		// Without WithWorkloads the snapshot never looked, so it cannot say a DaemonSet is gone.
+		{"DaemonSets were not collected", notLoaded, dsPod("apps/v1", "DaemonSet", "ghost", "shop"), false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := NewOwnerResolver(tt.s).DaemonSetGone(tt.pod); got != tt.want {
+				t.Errorf("DaemonSetGone = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

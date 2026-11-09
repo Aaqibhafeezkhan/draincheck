@@ -268,3 +268,17 @@ spec:
   containers:
     - name: scratch
       image: example/debug:1
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  namespace: logging
+  name: agent
+
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  namespace: monitoring
+  name: agent
+

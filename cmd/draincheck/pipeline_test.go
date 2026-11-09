@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -580,11 +581,12 @@ func TestExecuteDebugDoesNotChangeStdoutWithPodSelector(t *testing.T) {
 	}
 }
 
-// daemonSetCluster has one DaemonSet pod and one bare pod on worker-1.
+// daemonSetCluster has one DaemonSet pod (its DaemonSet exists) and one bare pod on worker-1.
 func daemonSetCluster() *fake.Clientset {
 	controller := true
 	return fake.NewClientset(
 		&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "worker-1"}},
+		&appsv1.DaemonSet{ObjectMeta: metav1.ObjectMeta{Namespace: "kube-system", Name: "agent"}},
 		&corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{Namespace: "kube-system", Name: "agent-x1", OwnerReferences: []metav1.OwnerReference{
 				{APIVersion: "apps/v1", Kind: "DaemonSet", Name: "agent", Controller: &controller}}},
