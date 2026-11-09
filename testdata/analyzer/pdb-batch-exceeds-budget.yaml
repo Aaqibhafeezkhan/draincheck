@@ -399,3 +399,10 @@ status:
   currentHealthy: 2
   desiredHealthy: 1
   disruptionsAllowed: 1
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  namespace: monitoring
+  name: mon
+

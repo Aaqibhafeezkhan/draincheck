@@ -1481,3 +1481,17 @@ status:
   desiredHealthy: 1
   disruptionsAllowed: 0
   expectedPods: 1
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  namespace: kube-system
+  name: kube-proxy
+
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  namespace: monitoring
+  name: node-exporter
+

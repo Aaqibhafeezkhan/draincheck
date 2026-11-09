@@ -151,3 +151,10 @@ spec:
   containers:
     - name: agent
       image: example/agent:1
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  namespace: monitoring
+  name: agent
+

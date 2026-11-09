@@ -178,7 +178,7 @@ func TestSingleReplicaWorkloadIgnoresOrder(t *testing.T) {
 	pods := s.Pods()
 	slices.Reverse(pods)
 	reversed := inventory.NewSnapshot(s.Nodes(), pods, s.ReplicaSets(), s.PodDisruptionBudgets(), s.Timestamp(),
-		inventory.WithWorkloads(inventory.Workloads{Deployments: s.Deployments(), StatefulSets: s.StatefulSets()}))
+		inventory.WithWorkloads(inventory.Workloads{Deployments: s.Deployments(), StatefulSets: s.StatefulSets(), DaemonSets: s.DaemonSets()}))
 	got := SingleReplicaWorkload{}.Evaluate(Input{Snapshot: reversed, Targets: targets})
 	findings.Sort(got)
 	if !reflect.DeepEqual(got, want) {

@@ -110,6 +110,7 @@ func TestClientsetCollectorLogsEveryList(t *testing.T) {
 		"resource=poddisruptionbudgets count=1",
 		"resource=deployments count=0",
 		"resource=statefulsets count=0",
+		"resource=daemonsets count=0",
 		"resource=jobs count=0",
 		"resource=cronjobs count=0",
 		"resource=persistentvolumeclaims count=0",

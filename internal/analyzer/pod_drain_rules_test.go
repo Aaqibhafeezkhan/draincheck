@@ -117,6 +117,12 @@ func stateCluster(spec drainPodSpec, spare bool, budgets int) *inventory.Snapsho
 		pod.OwnerReferences[0].APIVersion = map[string]string{"DaemonSet": "apps/v1", "Job": "batch/v1"}[pod.OwnerReferences[0].Kind]
 	}
 
+	// A DaemonSet pod's DaemonSet exists; one whose DaemonSet is gone is another case.
+	var daemonSets []appsv1.DaemonSet
+	if len(pod.OwnerReferences) > 0 && pod.OwnerReferences[0].Kind == "DaemonSet" {
+		daemonSets = []appsv1.DaemonSet{{ObjectMeta: metav1.ObjectMeta{Namespace: "shop", Name: pod.OwnerReferences[0].Name}}}
+	}
+
 	pdb := func(name string) policyv1.PodDisruptionBudget {
 		return policyv1.PodDisruptionBudget{
 			ObjectMeta: metav1.ObjectMeta{Namespace: "shop", Name: name, Generation: 1},
@@ -136,7 +142,7 @@ func stateCluster(spec drainPodSpec, spare bool, budgets int) *inventory.Snapsho
 	pdbs := []policyv1.PodDisruptionBudget{pdb("pdb-a"), pdb("pdb-b")}[:budgets]
 	return inventory.NewSnapshot(nodes, []corev1.Pod{pod}, replicaSets,
 		pdbs, time.Time{},
-		inventory.WithWorkloads(inventory.Workloads{Deployments: deployments}))
+		inventory.WithWorkloads(inventory.Workloads{Deployments: deployments, DaemonSets: daemonSets}))
 }
 
 func firedRules(s *inventory.Snapshot) []string {

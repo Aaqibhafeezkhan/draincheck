@@ -34,6 +34,8 @@ func TestSummarizeDrainFlags(t *testing.T) {
 		{"blocked unmanaged pod", []findings.Finding{ownershipFinding(findings.Blocked, findings.OwnershipUnmanaged)}, []string{"--force"}},
 		{"blocked emptyDir", []findings.Finding{localStorageFinding(findings.Blocked, false)}, []string{"--delete-emptydir-data"}},
 		{"static pod is a risk, no flag lifts it", []findings.Finding{ownershipFinding(findings.Risk, findings.OwnershipStaticPod)}, []string{}},
+		{"blocked orphaned DaemonSet pod needs --force, not --ignore-daemonsets", []findings.Finding{ownershipFinding(findings.Blocked, findings.OwnershipOrphanedDaemonSet)}, []string{"--force"}},
+		{"orphaned DaemonSet pod with --force is a risk", []findings.Finding{ownershipFinding(findings.Risk, findings.OwnershipOrphanedDaemonSet)}, []string{}},
 		{"unmanaged pod with --force is a risk", []findings.Finding{ownershipFinding(findings.Risk, findings.OwnershipUnmanaged)}, []string{}},
 		{"emptyDir with the flag is a risk", []findings.Finding{localStorageFinding(findings.Risk, true)}, []string{}},
 		{"blocked finding of another rule names no flag", []findings.Finding{{RuleID: "PDB_DISRUPTION_BLOCKED", Severity: findings.Blocked}}, []string{}},

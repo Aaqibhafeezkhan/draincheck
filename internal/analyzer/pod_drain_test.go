@@ -324,3 +324,47 @@ func TestRulesDoNotFilterPodsThemselves(t *testing.T) {
 		t.Fatalf("checked only %d files, the glob is wrong", checked)
 	}
 }
+
+// A pod whose DaemonSet is gone (the snapshot collected DaemonSets and this one
+// is not among them) is neither a DaemonSet pod nor a pod with no controller:
+// kubectl looks the DaemonSet up and refuses the pod, or with --force evicts it,
+// and nothing recreates it. Observed with kubectl v1.36.1 on a Kubernetes
+// v1.37.0 kind cluster.
+func TestClassifyPodOrphanedDaemonSet(t *testing.T) {
+	orphans := ownersWithDaemonSets()
+	live := ownersWithDaemonSets("x")
+	ds := func(phase corev1.PodPhase) drainPodSpec {
+		return drainPodSpec{controllerKind: "DaemonSet", phase: phase}
+	}
+	podOf := func(spec drainPodSpec) corev1.Pod {
+		p := spec.pod()
+		p.OwnerReferences[0].APIVersion = "apps/v1"
+		return p
+	}
+
+	tests := []struct {
+		name   string
+		owners *inventory.OwnerResolver
+		pod    corev1.Pod
+		class  podClass
+		fate   drainFate
+	}{
+		{"DaemonSet gone: evicted and not recreated", orphans, podOf(ds(corev1.PodRunning)), classOrphanedDaemonSet, fateEvictedUnmanaged},
+		{"DaemonSet present: left alone", live, podOf(ds(corev1.PodRunning)), classDaemonSet, fateLeftAlone},
+		{"DaemonSets not collected: left alone", drainOwners(), podOf(ds(corev1.PodRunning)), classDaemonSet, fateLeftAlone},
+		{"DaemonSet gone and the pod finished", orphans, podOf(ds(corev1.PodFailed)), classFinished, fateFinished},
+		{"DaemonSet gone and the pod terminating", orphans, podOf(drainPodSpec{controllerKind: "DaemonSet", phase: corev1.PodRunning, terminating: true}), classOrphanedDaemonSet, fateLeaving},
+		{"static pod wins over a gone DaemonSet", orphans, podOf(drainPodSpec{controllerKind: "DaemonSet", phase: corev1.PodRunning, mirror: true}), classStatic, fateLeftAlone},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := classifyPod(tt.pod, tt.owners, DrainOptions{})
+			if got.class != tt.class || got.fate() != tt.fate {
+				t.Errorf("class=%v fate=%v, want class=%v fate=%v", got.class, got.fate(), tt.class, tt.fate)
+			}
+		})
+	}
+	if d := classifyPod(podOf(ds(corev1.PodRunning)), orphans, DrainOptions{}); !d.consultsBudget() {
+		t.Error("an orphaned DaemonSet pod is evicted, so a budget is consulted")
+	}
+}

@@ -37,7 +37,7 @@ These flags tell draincheck what you will pass to `kubectl drain`, with the same
 | --- | --- |
 | `--pod-selector` | In effect. A pod the selector does not match is not touched by the drain, so no rule reports it (kubectl lists only the matching pods; checked with kubectl v1.36.1). The selector is a Kubernetes label selector such as `app=web` or `tier in (front,back)`; a selector that does not parse ends the run with exit `2`. The pods it leaves out are not looked at by any rule, so a finding about a workload may describe only part of it. With `--debug`, the `pod selector` line says how many pods on the target nodes were selected and how many left out. |
 | `--ignore-daemonsets` | In effect for `POD_OWNERSHIP`. Without it, a DaemonSet pod on a target node is `BLOCKED`, because kubectl refuses it. With it, kubectl skips the pod and `POD_OWNERSHIP` reports nothing for that DaemonSet. |
-| `--force` | In effect for `POD_OWNERSHIP`. Without it, a pod with no controller is `BLOCKED`, because kubectl refuses it. With it, kubectl deletes the pod and nothing recreates it, so the finding is a `RISK`. `--force` does not cover DaemonSet pods, as in kubectl. |
+| `--force` | In effect for `POD_OWNERSHIP`. Without it, a pod with no controller is `BLOCKED`, because kubectl refuses it. With it, kubectl deletes the pod and nothing recreates it, so the finding is a `RISK`. `--force` does not cover DaemonSet pods, as in kubectl, except a pod whose DaemonSet no longer exists: kubectl refuses it without `--force` (`--ignore-daemonsets` does not help) and evicts it with the flag, so that finding is `BLOCKED` and then `RISK` too. |
 | `--delete-emptydir-data` | In effect for `POD_LOCAL_STORAGE`. Without it, a pod with an `emptyDir` volume on a target node is `BLOCKED`, because kubectl refuses it. With it, kubectl deletes the pod and the data in the volume is lost, so the finding is a `RISK`. |
 | `--disable-eviction` | In effect for the `PDB_*` rules. `kubectl drain` then deletes the pods instead of evicting them, so no PodDisruptionBudget is consulted and those rules report nothing, however the budgets stand. Rules that do not read budgets (`SINGLE_REPLICA_WORKLOAD`, `POD_OWNERSHIP`, `POD_LOCAL_STORAGE`, and the node and taint rules) are unchanged. A deleted pod is gone without the graceful, budget-checked handover an eviction gives, so the silence is not safety; the finding that remains is the one you should read. With `--debug`, the `eviction disabled` line says how many budgets were not consulted. |
 
@@ -363,6 +363,7 @@ Raised for pods on a target node whose ownership gives them special `kubectl dra
 | `DaemonSet` | DaemonSet, covering all its pods on the target nodes | Refused unless `--ignore-daemonsets`; never evicted. `BLOCKED` without the flag; no finding with it. |
 | `StaticPod` | Node, covering the API mirrors of kubelet static pods on it (annotation `kubernetes.io/config.mirror`) | Skipped; cannot be rescheduled, stops with the node. Always `RISK`. |
 | `Unmanaged` | Pod with no controller | Refused unless `--force`; not recreated once deleted. `BLOCKED` without the flag, `RISK` with it. |
+| `OrphanedDaemonSet` | DaemonSet that no longer exists, covering its leftover pods on the target nodes | Refused unless `--force` (also with `--ignore-daemonsets`); then evicted, not recreated. `BLOCKED` without `--force`, `RISK` with it. |
 
 - **Resource:** `DaemonSet/<namespace>/<name>` for DaemonSet pods, `Node/<name>` for static pods and `Pod/<namespace>/<name>` for a pod with no controller.
 - **Evidence:** `category`, `nodes` (the nodes the covered pods run on, sorted) and `pods`, each with its `namespace`, `name` and `node`, sorted by namespace and name. A DaemonSet finding also has `owner_kind` and `owner_name`. Every covered pod is listed, so grouping hides nothing.
@@ -410,7 +411,7 @@ Read-only. Needs `list` on:
 - `pods` (all namespaces)
 - `replicasets` (`apps`, all namespaces)
 - `poddisruptionbudgets` (`policy`, all namespaces)
-- `deployments` and `statefulsets` (`apps`, all namespaces)
+- `deployments`, `statefulsets` and `daemonsets` (`apps`, all namespaces)
 - `jobs` and `cronjobs` (`batch`, all namespaces)
 - `persistentvolumeclaims` (all namespaces) and `persistentvolumes`
 
@@ -456,6 +457,7 @@ time=2026-10-18T17:29:41.516Z level=DEBUG msg=list resource=replicasets count=0 
 time=2026-10-18T17:29:41.516Z level=DEBUG msg=list resource=poddisruptionbudgets count=0 duration=399.377µs
 time=2026-10-18T17:29:41.516Z level=DEBUG msg=list resource=deployments count=0 duration=512.004µs
 time=2026-10-18T17:29:41.516Z level=DEBUG msg=list resource=statefulsets count=0 duration=401.118µs
+time=2026-10-18T17:29:41.516Z level=DEBUG msg=list resource=daemonsets count=0 duration=388.201µs
 time=2026-10-18T17:29:41.516Z level=DEBUG msg=list resource=jobs count=0 duration=389.652µs
 time=2026-10-18T17:29:41.516Z level=DEBUG msg=list resource=cronjobs count=0 duration=377.230µs
 time=2026-10-18T17:29:41.516Z level=DEBUG msg=list resource=persistentvolumeclaims count=0 duration=402.771µs

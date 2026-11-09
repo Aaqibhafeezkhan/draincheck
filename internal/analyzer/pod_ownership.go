@@ -82,10 +82,14 @@ func (PodOwnership) Evaluate(in Input) []findings.Finding {
 		case classUnmanaged:
 			category = findings.OwnershipUnmanaged
 			ref = findings.ResourceRef{Kind: "Pod", Namespace: pod.Namespace, Name: pod.Name}
-			severity = unmanagedSeverity(unreplicatedFilter(pod, in.Drain))
+			severity = unmanagedSeverity(unreplicatedFilter(pod, in.Drain, owners))
 		case classDaemonSet:
 			category = findings.OwnershipDaemonSet
-			severity = daemonSetSeverity(daemonSetFilter(pod, in.Drain))
+			severity = daemonSetSeverity(daemonSetFilter(pod, in.Drain, owners))
+			ref = findings.ResourceRef{Kind: owner.Kind, Namespace: owner.Namespace, Name: owner.Name}
+		case classOrphanedDaemonSet:
+			category = findings.OwnershipOrphanedDaemonSet
+			severity = unmanagedSeverity(daemonSetFilter(pod, in.Drain, owners))
 			ref = findings.ResourceRef{Kind: owner.Kind, Namespace: owner.Namespace, Name: owner.Name}
 		default:
 			continue
@@ -116,7 +120,7 @@ func (PodOwnership) Evaluate(in Input) []findings.Finding {
 		nodes = slices.Compact(nodes)
 
 		ev := findings.OwnershipEvidence{Category: g.category, Nodes: nodes, Pods: g.pods}
-		if g.category == findings.OwnershipDaemonSet {
+		if g.category == findings.OwnershipDaemonSet || g.category == findings.OwnershipOrphanedDaemonSet {
 			ev.OwnerKind, ev.OwnerName = g.resource.Kind, g.resource.Name
 		}
 		caseID, description := describeOwnership(g, len(nodes))
@@ -131,6 +135,9 @@ func (PodOwnership) Evaluate(in Input) []findings.Finding {
 	}
 	return out
 }
+
+// unmanagedSeverity (below) also maps the answer for an orphaned DaemonSet pod:
+// kubectl refuses it unless --force, then deletes it and nothing recreates it.
 
 // daemonSetSeverity maps the answer of kubectl's DaemonSet filter to a
 // severity: BLOCKED when it refuses the pod, none when it skips the pod or does
@@ -174,6 +181,14 @@ func describeOwnership(g *ownershipGroup, nodeCount int) (caseID, description st
 	case findings.OwnershipDaemonSet:
 		return podOwnershipDaemonSet, fmt.Sprintf(
 			"DaemonSet %s/%s has %s on %s.",
+			g.resource.Namespace, g.resource.Name, plural(len(g.pods), "pod"), plural(nodeCount, "target node"))
+	case findings.OwnershipOrphanedDaemonSet:
+		caseID = podOwnershipDaemonSetGone
+		if g.severity == findings.Risk {
+			caseID = podOwnershipDaemonSetGoneForced
+		}
+		return caseID, fmt.Sprintf(
+			"DaemonSet %s/%s no longer exists and %s on %s still name it as their controller.",
 			g.resource.Namespace, g.resource.Name, plural(len(g.pods), "pod"), plural(nodeCount, "target node"))
 	default:
 		pod := g.pods[0]

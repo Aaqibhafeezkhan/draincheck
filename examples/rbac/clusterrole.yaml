@@ -18,6 +18,7 @@ rules:
       - replicasets
       - deployments
       - statefulsets
+      - daemonsets
     verbs: ["list"]
   - apiGroups: ["batch"]
     resources:

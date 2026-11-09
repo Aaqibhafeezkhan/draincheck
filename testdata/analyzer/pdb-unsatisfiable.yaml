@@ -482,3 +482,10 @@ status:
   desiredHealthy: 1
   currentHealthy: 3
   disruptionsAllowed: 2
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  namespace: h
+  name: ds
+

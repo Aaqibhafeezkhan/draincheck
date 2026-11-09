@@ -301,3 +301,10 @@ metadata:
   ownerReferences:
     - {apiVersion: apps/v1, kind: ReplicaSet, name: bare-rs, controller: true}
 spec: {nodeName: worker-01}
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  namespace: ops
+  name: agent
+

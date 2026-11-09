@@ -62,7 +62,7 @@ func (PodLocalStorage) Evaluate(in Input) []findings.Finding {
 		if !slices.Contains(in.Targets, pod.Spec.NodeName) {
 			continue
 		}
-		severity := localStorageSeverity(pod, classifyPod(pod, owners, in.Drain), in.Drain)
+		severity := localStorageSeverity(pod, classifyPod(pod, owners, in.Drain), in.Drain, owners)
 		if severity == "" {
 			continue
 		}
@@ -118,12 +118,12 @@ func (PodLocalStorage) Evaluate(in Input) []findings.Finding {
 
 // localStorageSeverity is what kubectl drain's local-storage check means for
 // pod, or "" when it has nothing to say about it.
-func localStorageSeverity(pod corev1.Pod, d podDrain, o DrainOptions) findings.Severity {
+func localStorageSeverity(pod corev1.Pod, d podDrain, o DrainOptions, owners *inventory.OwnerResolver) findings.Severity {
 	if !d.selected || d.class == classFinished || !hasEmptyDir(pod) {
 		return ""
 	}
 	if !o.DeleteEmptyDirData {
-		if v := judgePod(pod, o); v.action == drainRefuse && v.reason == reasonLocalStorage {
+		if v := judgePod(pod, o, owners); v.action == drainRefuse && v.reason == reasonLocalStorage {
 			return findings.Blocked
 		}
 		return ""
@@ -135,7 +135,7 @@ func localStorageSeverity(pod corev1.Pod, d podDrain, o DrainOptions) findings.S
 	// lifting it with --force is the operator's next step, and the volume is
 	// deleted then.
 	o.Force = true
-	if judgePod(pod, o).action == drainDelete {
+	if judgePod(pod, o, owners).action == drainDelete {
 		return findings.Risk
 	}
 	return ""

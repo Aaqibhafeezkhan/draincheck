@@ -323,3 +323,10 @@ spec:
   volumes:
     - name: cache
       emptyDir: {}
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  namespace: monitoring
+  name: agent
+

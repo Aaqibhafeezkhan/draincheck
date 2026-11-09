@@ -9,7 +9,9 @@ import (
 
 	"github.com/Veinar/draincheck/internal/findings"
 	"github.com/Veinar/draincheck/internal/inventory"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func ownershipPod(ns, name, node string) findings.OwnershipPod {
@@ -621,4 +623,86 @@ func catalogWhy(t *testing.T, f findings.Finding) string {
 		t.Fatalf("%s: case %q is not in the default catalog", f.Resource, f.Case)
 	}
 	return c.Why
+}
+
+// ghostPod is a pod on worker-01 controlled by the DaemonSet "ghost".
+func ghostPod(name string) corev1.Pod {
+	yes := true
+	return corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "dc89", Name: name, OwnerReferences: []metav1.OwnerReference{
+			{APIVersion: "apps/v1", Kind: "DaemonSet", Name: "ghost", Controller: &yes}}},
+		Spec:   corev1.PodSpec{NodeName: "worker-01"},
+		Status: corev1.PodStatus{Phase: corev1.PodRunning},
+	}
+}
+
+func snapshotWithDaemonSets(pods []corev1.Pod, daemonSets ...appsv1.DaemonSet) *inventory.Snapshot {
+	return inventory.NewSnapshot(nil, pods, nil, nil, time.Time{}, inventory.WithWorkloads(inventory.Workloads{DaemonSets: daemonSets}))
+}
+
+// A pod whose DaemonSet no longer exists. Observed with kubectl v1.36.1 on a
+// Kubernetes v1.37.0 kind cluster: --ignore-daemonsets alone stops the drain
+// (`cannot delete daemonsets.apps "ghost" not found`), --force evicts the pod
+// and nothing recreates it. The finding is BLOCKED until --force, then RISK.
+func TestPodOwnershipOrphanedDaemonSet(t *testing.T) {
+	pods := []corev1.Pod{ghostPod("ghost-b"), ghostPod("ghost-a")}
+	s := snapshotWithDaemonSets(pods)
+	ref := findings.ResourceRef{Kind: "DaemonSet", Namespace: "dc89", Name: "ghost"}
+	ev := findings.OwnershipEvidence{
+		Category: findings.OwnershipOrphanedDaemonSet, OwnerKind: "DaemonSet", OwnerName: "ghost", Nodes: []string{"worker-01"},
+		Pods: []findings.OwnershipPod{ownershipPod("dc89", "ghost-a", "worker-01"), ownershipPod("dc89", "ghost-b", "worker-01")},
+	}
+
+	tests := []struct {
+		name  string
+		drain DrainOptions
+		want  []findings.Finding
+	}{
+		{"no flags", DrainOptions{}, []findings.Finding{ownershipFinding(findings.Blocked, "daemonset_gone", ref, ev)}},
+		{"--ignore-daemonsets does not help", DrainOptions{IgnoreDaemonSets: true}, []findings.Finding{ownershipFinding(findings.Blocked, "daemonset_gone", ref, ev)}},
+		{"--force: evicted, nothing recreates it", DrainOptions{Force: true}, []findings.Finding{ownershipFinding(findings.Risk, "daemonset_gone_forced", ref, ev)}},
+		{"both flags", DrainOptions{IgnoreDaemonSets: true, Force: true}, []findings.Finding{ownershipFinding(findings.Risk, "daemonset_gone_forced", ref, ev)}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := PodOwnership{}.Evaluate(Input{Snapshot: s, Targets: []string{"worker-01"}, Drain: tt.drain})
+			if len(got) != 1 {
+				t.Fatalf("got %d findings, want 1: %+v", len(got), got)
+			}
+			got[0].Description = "" // the wording has its own test
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("got %+v\nwant %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPodOwnershipOrphanedDaemonSetDescription(t *testing.T) {
+	s := snapshotWithDaemonSets([]corev1.Pod{ghostPod("ghost-a"), ghostPod("ghost-b")})
+	got := PodOwnership{}.Evaluate(Input{Snapshot: s, Targets: []string{"worker-01"}})
+	want := "DaemonSet dc89/ghost no longer exists and 2 pods on 1 target node still name it as their controller."
+	if len(got) != 1 || got[0].Description != want {
+		t.Errorf("description = %q, want %q", got[0].Description, want)
+	}
+}
+
+// A pod of a DaemonSet that exists is the ordinary DaemonSet case, and so is
+// every DaemonSet pod when the snapshot did not collect DaemonSets.
+func TestPodOwnershipOrphanedDaemonSetNeedsTheDaemonSetsToBeKnown(t *testing.T) {
+	live := appsv1.DaemonSet{ObjectMeta: metav1.ObjectMeta{Namespace: "dc89", Name: "ghost"}}
+	for name, s := range map[string]*inventory.Snapshot{
+		"the DaemonSet exists":     snapshotWithDaemonSets([]corev1.Pod{ghostPod("p")}, live),
+		"DaemonSets not collected": inventory.NewSnapshot(nil, []corev1.Pod{ghostPod("p")}, nil, nil, time.Time{}),
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := PodOwnership{}.Evaluate(Input{Snapshot: s, Targets: []string{"worker-01"}})
+			if len(got) != 1 || got[0].Case != "daemonset" || got[0].Severity != findings.Blocked {
+				t.Errorf("want the ordinary DaemonSet finding, got %+v", got)
+			}
+			ev := got[0].Evidence.(findings.OwnershipEvidence)
+			if ev.Category != findings.OwnershipDaemonSet {
+				t.Errorf("category = %q, want %q", ev.Category, findings.OwnershipDaemonSet)
+			}
+		})
+	}
 }

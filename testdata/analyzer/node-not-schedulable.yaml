@@ -194,3 +194,10 @@ spec:
   containers:
     - name: cache
       image: example/cache:1
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  namespace: monitoring
+  name: agent
+

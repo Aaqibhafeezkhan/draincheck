@@ -25,13 +25,24 @@ func (o Owner) Unmanaged() bool { return o.Kind == "" }
 // OwnerResolver maps pods to their top-level controller using a Snapshot.
 type OwnerResolver struct {
 	replicaSets map[replicaSetKey]metav1.OwnerReference
+	// daemonSets holds the DaemonSets of the snapshot; daemonSetsKnown is false
+	// when the snapshot never collected them, so none can be called gone.
+	daemonSets      map[replicaSetKey]bool
+	daemonSetsKnown bool
 }
 
 type replicaSetKey struct{ namespace, name string }
 
 // NewOwnerResolver indexes the ReplicaSets of s.
 func NewOwnerResolver(s *Snapshot) *OwnerResolver {
-	r := &OwnerResolver{replicaSets: make(map[replicaSetKey]metav1.OwnerReference)}
+	r := &OwnerResolver{
+		replicaSets:     make(map[replicaSetKey]metav1.OwnerReference),
+		daemonSets:      make(map[replicaSetKey]bool),
+		daemonSetsKnown: s.workloadsLoaded,
+	}
+	for i := range s.daemonSets {
+		r.daemonSets[replicaSetKey{s.daemonSets[i].Namespace, s.daemonSets[i].Name}] = true
+	}
 	for i := range s.rss {
 		rs := &s.rss[i]
 		if ref := controllerRef(rs.OwnerReferences); ref != nil {
@@ -59,6 +70,18 @@ func (r *OwnerResolver) Resolve(pod corev1.Pod) Owner {
 		}
 	}
 	return Owner{APIGroup: apiGroupOf(ref.APIVersion), Kind: ref.Kind, Namespace: pod.Namespace, Name: ref.Name}
+}
+
+// DaemonSetGone reports whether pod is controlled by an apps/v1 DaemonSet that is
+// not in the snapshot: the DaemonSet was deleted and the pod outlived it. It is
+// false when the snapshot never collected DaemonSets, so no pod is called an
+// orphan on a guess. A nil resolver knows nothing, so it is false too.
+func (r *OwnerResolver) DaemonSetGone(pod corev1.Pod) bool {
+	ref := controllerRef(pod.OwnerReferences)
+	if r == nil || !r.daemonSetsKnown || ref == nil || ref.Kind != "DaemonSet" || apiGroupOf(ref.APIVersion) != "apps" {
+		return false
+	}
+	return !r.daemonSets[replicaSetKey{pod.Namespace, ref.Name}]
 }
 
 // apiGroupOf returns the API group of an owner reference's apiVersion
