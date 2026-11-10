@@ -27,6 +27,7 @@ func DefaultCatalog() findings.Catalog {
 		podOwnershipCases,
 		podLocalStorageCases,
 		missingResourceRequestsCases,
+		podStuckTerminatingCases,
 	} {
 		maps.Copy(cat, part)
 	}

@@ -88,6 +88,7 @@ A finding covers one cause, not one pod. A cause that reaches many pods, such as
 | `POD_OWNERSHIP` | DaemonSet, node (for its static pods) or pod without a controller | the DaemonSet, node or pod |
 | `POD_LOCAL_STORAGE` | owning workload; a pod without a controller is its own | the workload or the pod |
 | `MISSING_RESOURCE_REQUESTS` | owning workload | the workload; a pod without a controller is its own workload |
+| `POD_STUCK_TERMINATING` | pod | the pod |
 
 An operator that keeps a PodDisruptionBudget for every node is grouped by the operator and the namespace. The operator is the API group and kind of the custom resource that controls the pods. The budgets of one operator in one namespace are one finding, however many nodes they cover, and each budget stays visible in `evidence.pdbs` with its numbers, nodes and pods. The same operator in another namespace, or another operator in the same namespace, is a finding of its own.
 
@@ -402,6 +403,17 @@ Raised for a workload with a pod on a target node that has at least one regular 
 - Init containers are not inspected.
 - A CPU or memory request set at pod level (`spec.resources.requests`) covers every container for that resource.
 - Requests are read from the stored pod spec, so values filled in by a LimitRange or an admission webhook count as set.
+
+### `POD_STUCK_TERMINATING`
+
+Severity: `RISK`.
+
+Raised for a pod on a target node that is being deleted and is still there more than one minute after its deadline. The deadline is the pod's `deletionTimestamp`, which already includes the grace period. `kubectl drain` waits for such a pod to disappear and gives up at `--timeout`; a server dry run does not notice (see `COMPARISON.md`).
+
+- **Resource:** the pod (`Pod/<namespace>/<name>`), one finding per pod.
+- **Evidence:** `node`, `deadline`, `grace_period_seconds` (the pod's `terminationGracePeriodSeconds`) and `finalizers` (`[]` when there are none). The `case` is `finalizer` when the pod has finalizers and `no_finalizer` when it has none (its kubelet has not confirmed it stopped).
+- A pod still inside its grace period or less than a minute past it is not reported. Running DaemonSet pods and static pods (`kubectl drain` skips them) and pods `--pod-selector` leaves out are not reported either. A finished pod (`Succeeded`, `Failed`) is reported, a finished DaemonSet pod too: drain deletes it and waits for it, and a finalizer keeps it.
+- The time is the snapshot's, not the clock of the machine that prints the report.
 
 ## Cluster access
 

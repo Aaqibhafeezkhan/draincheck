@@ -17,5 +17,6 @@ func DefaultRules() []Rule {
 		PodOwnership{},
 		PodLocalStorage{},
 		MissingResourceRequests{},
+		PodStuckTerminating{},
 	}
 }

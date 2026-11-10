@@ -54,6 +54,8 @@ var adviceCases = []adviceCase{
 	{"POD_LOCAL_STORAGE", "pod-local-storage.yaml", []string{"worker-01", "worker-02"}, DrainOptions{}},
 	{"POD_LOCAL_STORAGE", "pod-local-storage.yaml", []string{"worker-01", "worker-02"}, DrainOptions{DeleteEmptyDirData: true}},
 	{"MISSING_RESOURCE_REQUESTS", "missing-resource-requests.yaml", []string{"worker-01", "worker-02"}, DrainOptions{}},
+	// A finalizer and a missing finalizer each have their own advice.
+	{"POD_STUCK_TERMINATING", "pod-stuck-terminating.yaml", []string{"worker-01", "worker-02"}, DrainOptions{}},
 }
 
 // verifyPrefixes are the only commands a remediation may suggest: they read.

@@ -368,3 +368,59 @@ func TestClassifyPodOrphanedDaemonSet(t *testing.T) {
 		t.Error("an orphaned DaemonSet pod is evicted, so a budget is consulted")
 	}
 }
+
+// The deadline is the deletion timestamp; the grace period is the pod's own,
+// else 30 s, whatever deletionGracePeriodSeconds says (the kubelet sets it to 0).
+func TestTerminatingDeadlineAndGrace(t *testing.T) {
+	pod := drainPodSpec{controllerKind: "ReplicaSet", phase: corev1.PodRunning}.pod()
+	if _, ok := terminatingDeadline(pod); ok {
+		t.Error("a pod that is not terminating has a deadline")
+	}
+	if got := terminationGrace(pod); got != 30 {
+		t.Errorf("default grace = %d, want 30", got)
+	}
+	own := int64(5)
+	pod.Spec.TerminationGracePeriodSeconds = &own
+	if got := terminationGrace(pod); got != 5 {
+		t.Errorf("own grace = %d, want 5", got)
+	}
+	recorded := int64(0)
+	pod.DeletionGracePeriodSeconds = &recorded
+	if got := terminationGrace(pod); got != 5 {
+		t.Errorf("grace with a recorded 0 = %d, want the pod's own 5", got)
+	}
+	ts := metav1.Now()
+	pod.DeletionTimestamp = &ts
+	if d, ok := terminatingDeadline(pod); !ok || !d.Equal(ts.Time) {
+		t.Errorf("deadline = %v, %v", d, ok)
+	}
+}
+
+// A drain waits for every pod it deletes, a finished one too (a finished
+// DaemonSet pod included); it skips running DaemonSet pods and static pods, and does not list a pod
+// --pod-selector leaves out.
+func TestWaitsForDeletion(t *testing.T) {
+	sel := mustSelector(t, "app=other")
+	tests := []struct {
+		name  string
+		pod   drainPodSpec
+		drain DrainOptions
+		want  bool
+	}{
+		{"running, with a controller", drainPodSpec{controllerKind: "ReplicaSet", phase: corev1.PodRunning}, DrainOptions{}, true},
+		{"finished, with a controller", drainPodSpec{controllerKind: "ReplicaSet", phase: corev1.PodSucceeded}, DrainOptions{}, true},
+		{"finished, no controller", drainPodSpec{phase: corev1.PodFailed}, DrainOptions{}, true},
+		{"DaemonSet", drainPodSpec{controllerKind: "DaemonSet", phase: corev1.PodRunning}, DrainOptions{}, false},
+		// Observed: the drain waited for a finished DaemonSet pod held by a finalizer.
+		{"finished DaemonSet", drainPodSpec{controllerKind: "DaemonSet", phase: corev1.PodFailed}, DrainOptions{}, true},
+		{"finished static", drainPodSpec{mirror: true, phase: corev1.PodFailed}, DrainOptions{}, false},
+		{"not selected", drainPodSpec{controllerKind: "ReplicaSet", phase: corev1.PodRunning}, DrainOptions{PodSelector: sel}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := classifyPod(tt.pod.pod(), drainOwners(), tt.drain).waitsForDeletion(); got != tt.want {
+				t.Errorf("waitsForDeletion = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

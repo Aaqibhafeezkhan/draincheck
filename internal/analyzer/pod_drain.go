@@ -1,6 +1,8 @@
 package analyzer
 
 import (
+	"time"
+
 	"github.com/Veinar/draincheck/internal/inventory"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -83,6 +85,11 @@ type podDrain struct {
 	class       podClass
 	terminating bool
 	pending     bool
+	// skippedByKubectl is a static pod, or a DaemonSet pod that has not
+	// finished: kubectl drain skips it. A finished DaemonSet pod is not skipped:
+	// the drain waits for it (observed with kubectl v1.36.1). Whether it skips a
+	// finished static pod is not observed; none is reported.
+	skippedByKubectl bool
 	// evictionDisabled is --disable-eviction: kubectl deletes the pods instead
 	// of evicting them, so no budget is consulted for any pod.
 	evictionDisabled bool
@@ -101,6 +108,7 @@ func classifyPod(pod corev1.Pod, owners *inventory.OwnerResolver, drain DrainOpt
 		evictionDisabled: drain.DisableEviction,
 	}
 	owner := owners.Resolve(pod)
+	d.skippedByKubectl = isMirrorPod(pod) || (owner.Kind == "DaemonSet" && !owners.DaemonSetGone(pod) && !isFinished(pod))
 	switch {
 	case isFinished(pod):
 		d.class = classFinished
@@ -148,6 +156,17 @@ func (d podDrain) fate() drainFate {
 	}
 }
 
+// waitsForDeletion reports whether kubectl drain waits for the pod to be gone
+// after it is deleted. It does so for every pod it acts on, a finished pod
+// included: a finished pod is deleted, not evicted, and a finalizer keeps it in
+// the API (observed with kubectl v1.36.1: a Completed pod held by a finalizer,
+// DaemonSet pod included, made the drain give up at --timeout). A running
+// DaemonSet pod and a static pod are skipped, and a pod --pod-selector leaves
+// out is not listed.
+func (d podDrain) waitsForDeletion() bool {
+	return d.selected && !d.skippedByKubectl
+}
+
 // bypassesBudget reports whether the eviction API deletes the pod without
 // consulting any PodDisruptionBudget. kube-apiserver does so for a pod that has
 // finished (Succeeded, Failed), has not started (Pending) or is already being
@@ -163,4 +182,26 @@ func (d podDrain) bypassesBudget() bool {
 // drain deletes the pod and the eviction API is not called, so none is.
 func (d podDrain) consultsBudget() bool {
 	return !d.evictionDisabled && d.selected && !d.bypassesBudget() && d.class != classStatic && d.class != classDaemonSet
+}
+
+// terminatingDeadline returns the time by which a pod that is being deleted
+// should be gone: metadata.deletionTimestamp, which the API server sets to the
+// time deletion started plus the grace period. ok is false for a pod that is
+// not being deleted.
+func terminatingDeadline(pod corev1.Pod) (deadline time.Time, ok bool) {
+	if pod.DeletionTimestamp == nil {
+		return time.Time{}, false
+	}
+	return pod.DeletionTimestamp.Time, true
+}
+
+// terminationGrace returns the pod's own grace period, terminationGracePeriodSeconds,
+// else the 30 s default. The recorded deletionGracePeriodSeconds is not used: once
+// the container has exited the kubelet sets it to 0 (observed), which says nothing
+// about the grace the pod was given.
+func terminationGrace(pod corev1.Pod) int64 {
+	if pod.Spec.TerminationGracePeriodSeconds != nil {
+		return *pod.Spec.TerminationGracePeriodSeconds
+	}
+	return 30
 }
