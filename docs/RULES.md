@@ -86,6 +86,7 @@ Each row is the advice of one rule; `<...>` are the placeholders described above
 | `POD_OWNERSHIP` | DaemonSet pods, static pods or a pod with no controller are on a target node. `BLOCKED` for a DaemonSet pod without `--ignore-daemonsets`, for a pod with no controller without `--force` and for a pod whose DaemonSet no longer exists without `--force`; `RISK` for a pod with no controller or with a gone DaemonSet with `--force`, and for static pods. | DaemonSet: refused without `--ignore-daemonsets`, never evicted. Static: skipped. No controller: refused without `--force`, not recreated. DaemonSet gone: refused without `--force` (`--ignore-daemonsets` does not help), then evicted and not recreated. | DaemonSet: `kubectl get daemonset -n <namespace> <name>`. Static: `kubectl get pods -A --field-selector spec.nodeName=<node>`, `kubectl get pod -n <namespace> <pod> -o jsonpath='{.metadata.annotations}'`. No controller: `kubectl get pod -n <namespace> <name> -o jsonpath='{.metadata.ownerReferences}'`. DaemonSet gone: `kubectl get daemonset -n <namespace> <name>` (NotFound) | DaemonSet: drain with `--ignore-daemonsets`. Static: plan for the node outage. No controller: put it under a controller, or accept the loss and use `--force`. DaemonSet gone: delete the leftover pods or accept their loss and use `--force`. |
 | `POD_LOCAL_STORAGE` | The workload has N pods with `emptyDir` volumes (named in the evidence) on M target nodes. `BLOCKED` without `--delete-emptydir-data`, `RISK` with it. | Without the flag: refuses with `cannot delete Pods with local storage` and stops before it evicts anything. With it: deletes the pods, and the data in the volumes is lost. | `kubectl get pod -n <namespace> <pod> -o jsonpath='{.spec.volumes}'` | Move data that must survive to a PersistentVolumeClaim; or, for a cache or scratch data, drain with `--delete-emptydir-data` and accept the loss. |
 | `MISSING_RESOURCE_REQUESTS` | N of the workload's M pods on the targets have containers with no CPU or memory request. | Evicts the pods whatever they request. | `kubectl get pod -n <namespace> <pod> -o jsonpath='{.spec.containers[*].resources.requests}'` | Set requests on every container (or at pod level) in the pod template. |
+| `POD_STUCK_TERMINATING` | The pod is still terminating more than a minute after its deadline (`deletionTimestamp`), with or without finalizers. | Waits for the pod to disappear and gives up at `--timeout` with exit 1 (checked). A server dry run does not wait: it lists the pod as evicted and exits 0. | `kubectl get pod -n <namespace> <name> -o jsonpath='{.metadata.finalizers}'`, `kubectl get node <node>` | With finalizers: fix or wait for the controller that owns them; do not remove one by hand. Without: restore the kubelet or the container runtime on the node. |
 
 ## Pods a drain acts on
 
@@ -99,12 +100,12 @@ One function, `classifyPod` in `internal/analyzer/pod_drain.go`, says what a dra
 | DaemonSet-controlled | left alone by `kubectl drain` | no | no | `POD_OWNERSHIP` |
 | Controlled by an `apps/v1` DaemonSet that is not in the snapshot (the pod outlived its DaemonSet; only judged when DaemonSets were collected) | evicted, not recreated | no | yes, unless Pending | `POD_OWNERSHIP` |
 | Static (mirror annotation), even with a DaemonSet or Node owner reference | left alone by `kubectl drain` | no | no | `POD_OWNERSHIP` |
-| Succeeded or Failed (any owner, also DaemonSet and static) | finished | no | no | none |
-| Already terminating (deletion timestamp set, not finished) | already leaving | no | no | `POD_OWNERSHIP`; `POD_LOCAL_STORAGE` (`BLOCKED` only, with an `emptyDir`) |
+| Succeeded or Failed (any owner, also DaemonSet and static) | finished | no | no | `POD_STUCK_TERMINATING` (once terminating and past its deadline; not for a static pod) |
+| Already terminating (deletion timestamp set, not finished) | already leaving | no | no | `POD_OWNERSHIP`; `POD_LOCAL_STORAGE` (`BLOCKED` only, with an `emptyDir`); `POD_STUCK_TERMINATING` (not for DaemonSet and static pods) |
 | Not matched by `--pod-selector`, in any of the states above | not selected: `kubectl drain` does not list it | no | no | none (checked with kubectl v1.36.1: only the matching pods are named, and a selector that matches nothing drains cleanly) |
 | Any of the states above, with `--disable-eviction` | unchanged: the fate and the class are the same | unchanged | no, for every state (`kubectl drain` deletes the pods, so the eviction API and its budgets are not called) | unchanged |
 
-Order of precedence: not selected, then finished, then already terminating, then left alone, then evicted. For `POD_OWNERSHIP` the class decides, not the fate: a terminating DaemonSet, static or controller-less pod is still reported, because `kubectl drain` applies its DaemonSet, static and unreplicated checks to it as well. `POD_LOCAL_STORAGE` is the same for the refusal, because kubectl refuses a terminating pod with an `emptyDir` too, and skips the `RISK`, because the drain is not what removes the pod. For every other rule a terminating pod is skipped: its controller has already created the replacement, so the drain does not take anything down.
+Order of precedence: not selected, then finished, then already terminating, then left alone, then evicted. For `POD_OWNERSHIP` the class decides, not the fate: a terminating DaemonSet, static or controller-less pod is still reported, because `kubectl drain` applies its DaemonSet, static and unreplicated checks to it as well. `POD_LOCAL_STORAGE` is the same for the refusal, because kubectl refuses a terminating pod with an `emptyDir` too, and skips the `RISK`, because the drain is not what removes the pod. `POD_STUCK_TERMINATING` is the one rule that looks at a terminating pod for what it will cost: a pod that is still there after its deadline is something the drain waits for. For every other rule a terminating pod is skipped: its controller has already created the replacement, so the drain does not take anything down.
 
 ## Entries
 
@@ -304,6 +305,21 @@ Severity: `RISK`.
 | Evidence | `findings.MissingRequestsEvidence`: `owner_kind` and `owner_name` (omitted for a pod with no controller), `pods_on_targets` (the workload's pods on the target nodes that kubectl would evict, the denominator of the count) and `pods`. Each entry of `pods` has `name`, `node` and `containers` with `missing_cpu` and `missing_memory`. |
 | Fixture | `testdata/analyzer/missing-resource-requests.yaml`: replicas of a Deployment on several nodes, a partly affected Deployment, a Job with a finished pod, DaemonSet and mirror pods. |
 | Visibility | Every affected pod, its node and its containers are in `pods` in the JSON report. The text report shows the count; `--verbose` shows the full description. |
+
+### `POD_STUCK_TERMINATING`
+
+Severity: `RISK`.
+
+| Criterion | Answer |
+| --- | --- |
+| False-positive case | The pod may go away between the snapshot and the drain. The deadline is the pod's `deletionTimestamp`, which the API server sets to the time deletion started plus the grace period (checked); the kubelet moves it earlier when it confirms the stop, so a pod inside its grace period is never reported. A pod that is only slow to stop is reported only once it is more than one minute (`stuckTerminatingMargin`) past that deadline. |
+| Downgrade | It is only ever `RISK`: nothing refuses the pod, the drain waits. |
+| Mirror kubectl | Pods `kubectl drain` skips (running DaemonSet pods, static pods) and pods `--pod-selector` leaves out are not reported (`classifyPod`, `waitsForDeletion`). A finished pod (`Succeeded`, `Failed`) is reported, a finished DaemonSet pod too: drain deletes it and waits for it like any other, and a finalizer keeps it (a `Completed` pod held by a finalizer made `kubectl drain --ignore-daemonsets` give up at `--timeout`, checked). A finished static pod is not reported; what drain does with one is not observed. A pod with no controller is reported: `kubectl drain --force` waits on one held by a finalizer and gives up at `--timeout` (checked). A pod whose DaemonSet is gone is reported too, because the drain acts on it; that case is not observed. |
+| Grouping | One finding per pod. |
+| Estimates | No. The time is the snapshot's (`Snapshot.Timestamp()`), never the clock, so one snapshot gives one answer. |
+| Evidence | `findings.StuckTerminatingEvidence`: `node`, `deadline` (the pod's `deletionTimestamp`), `grace_period_seconds` (the pod's `terminationGracePeriodSeconds`, else 30; the recorded `deletionGracePeriodSeconds` is not used, because the kubelet sets it to 0 once the container has exited) and `finalizers` (`[]` when none). The case is `finalizer` or `no_finalizer`; the second points at the kubelet and the node. |
+| Fixture | `testdata/analyzer/pod-stuck-terminating.yaml`: a pod with a finalizer, one without, one inside its grace period, a finished pod held by a finalizer, a running pod and a DaemonSet pod. |
+| Visibility | One line per pod in the text report; the finalizers and the deadline are in the JSON `evidence`. |
 
 ## See also
 

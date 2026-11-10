@@ -48,6 +48,7 @@ Scope: only rules that are implemented (see [RULES.md](RULES.md)). Statements ab
 | Static pods | Skipped, not evicted (✓ checked) | `POD_OWNERSHIP` (`RISK`) | Reminds you they go down with the node |
 | Pods with local storage (`emptyDir`) | Refused without `--delete-emptydir-data`, also in dry-run: `cannot delete Pods with local storage (use --delete-emptydir-data to override): <namespace>/<pod>`, before any eviction, exit 1 (✓ checked). With the flag it evicts the pod, and the replacement on another node starts with an empty volume (✓ checked). `medium: Memory` is refused like any other `emptyDir` (✓ checked). Each pod is judged by the first filter that stops it: a DaemonSet pod with an `emptyDir` is named under the DaemonSet message only (✓ checked) | `POD_LOCAL_STORAGE` (`BLOCKED` without the flag, `RISK` with it) | Said up front for all nodes, one finding per workload with the pods and volume names; with the flag it tells you the data is lost |
 | Containers with no CPU or memory request | Evicts regardless (✓ checked) | `MISSING_RESOURCE_REQUESTS` (`RISK`) | Per workload; flags that rescheduled pods may not fit where they land |
+| Pod stuck in `Terminating` (finalizer, or a kubelet that never confirms) | A real drain waits for the pod and fails at `--timeout` with `error when waiting for pod ... to terminate: context deadline exceeded`, exit 1 (✓ checked, pod held by a finalizer). A server dry run lists it as `evicting pod ... (server dry run)` and exits 0, so it does not notice (✓ checked) | `POD_STUCK_TERMINATING` (`RISK`) | Names the pod, whether a finalizer holds it and where to look, before the drain starts |
 
 ## Where draincheck is not better
 
@@ -59,6 +60,7 @@ Listed on purpose. A comparison that only lists wins is marketing.
 | Capacity, affinity, node selectors, topology spread | Not evaluated. `NODE_NOT_SCHEDULABLE`, `NO_REMAINING_NODES` and `WORKLOAD_UNTOLERATED_TAINTS` count cordons, readiness and taints only, and say they are estimates |
 | Exactness | kubectl's refusals come from the live eviction API. draincheck models them from a snapshot, which can drift (every report says so) |
 | Operator internals | Not evaluated. An operator-managed PDB is `UNKNOWN`, not a verdict |
+| A pod that gets stuck during the drain | `POD_STUCK_TERMINATING` sees only a pod that is already past its deadline in the snapshot; a pod whose finalizer will hang later is not predicted |
 | Mutating | draincheck never cordons or evicts. It is a preflight, not a replacement for the drain |
 
 ## Which one when
