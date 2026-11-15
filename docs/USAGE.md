@@ -493,7 +493,7 @@ Debug lines name files, resources, rules and nodes, and give counts. They never 
 | ---- | ----------------------------------------------------------------------- |
 | `0`  | Analysis completed; no finding at or above the `--fail-on` level.       |
 | `1`  | Analysis completed; at least one finding at or above `--fail-on`.       |
-| `2`  | draincheck could not complete: bad flags, unreadable kubeconfig, cluster unreachable, unknown node, or the run was stopped with `SIGINT` or `SIGTERM`. |
+| `2`  | draincheck could not complete: bad flags, unreadable kubeconfig, cluster unreachable, unknown node, or the run was stopped with `SIGINT` or `SIGTERM`. [Troubleshooting](#troubleshooting) lists the messages. |
 
 `--fail-on` picks what counts:
 
@@ -508,6 +508,27 @@ A cluster with DaemonSets or pods with no controller on a target node exits `1` 
 The report is written before the exit code is decided, so a run that exits `1` still prints every finding.
 
 `--debug` does not change the exit code. The same run ends with the same code with and without it, and the `finished` debug line shows the code the process exits with.
+
+## Troubleshooting
+
+Exit code `2` means draincheck could not complete. It writes `error: <message>` to stderr and no report. Find the message below. Add `--debug` to see which step failed (see [Debug output](#debug-output)).
+
+| Message | What it means | What to do |
+| ------- | ------------- | ---------- |
+| `error: --nodes is required (comma-separated node names, or '*' for all nodes)` | No target node was given. | Pass `--nodes node-a,node-b`, or `--nodes '*'` for every node. |
+| `error: --nodes: '*' cannot be combined with node names` | `*` selects every node, so it cannot be mixed with names. | Use `--nodes '*'` alone, or list the names. Quote the `*` so the shell does not expand it. |
+| `error: --nodes: empty node name in list` | The list has an empty entry, such as `a,,b` or a trailing comma. | Remove the extra comma. |
+| `error: unexpected argument "<arg>": name the nodes with --nodes ...` | A positional argument was given. A node list with a space in it (`--nodes a, b`) causes this. | Name the nodes with `--nodes`, separated by commas and without spaces. |
+| `error: invalid --output "<value>": must be "text" or "json"`, `error: invalid --fail-on "<value>": must be "blocked", "risk" or "any"` | A flag has a value it does not accept. | Use one of the values the message lists. |
+| `error: invalid --pod-selector "<value>": ...` | The selector is not a valid label selector. | Fix it; the syntax is the one `kubectl get pods -l` takes. |
+| `error: load kubeconfig: stat <path>: no such file or directory` | The file given by `--kubeconfig` (or `KUBECONFIG`) does not exist. | Check the path. Without the flag, draincheck reads `KUBECONFIG`, then `~/.kube/config`. |
+| `error: load kubeconfig: context "<name>" does not exist` | `--context` names a context that is not in the kubeconfig. | List the contexts with `kubectl config get-contexts`. |
+| `error: collect cluster state: list <resource>: ... Get "https://<server>/...": dial tcp ...: connect: connection refused` (or `i/o timeout`, `no such host`) | The API server cannot be reached from where draincheck runs. | Check that the same kubeconfig works with `kubectl get nodes`, and the VPN or network path to the server. The `list failed` debug line names the resource and the error. There is no request timeout, so an unresponsive server keeps the run waiting until you stop it. |
+| `error: collect cluster state: list <resource>: <resource> is forbidden: User "<user>" cannot list resource "<resource>" in API group "<group>" at the cluster scope` | The account in the kubeconfig has no `list` permission on that resource (RBAC). | See [Cluster access](#cluster-access) for the resources and `examples/rbac/` for a read-only role. Run with `--debug`: the `list failed` line has `resource=<resource>`, and the `list` lines before it are the ones that succeeded. A run stops at the first failure, so after granting one resource it can fail on the next. |
+| `error: node(s) not found in cluster: <names>` | A name in `--nodes` is not a node of the cluster the kubeconfig points at. | Compare with `kubectl get nodes`. Check the context: the right names on the wrong cluster fail the same way. |
+| `error: cluster has no nodes` | `--nodes '*'` was used and the cluster lists no nodes. | Check the context and the account's `list` permission on `nodes`. |
+
+A run stopped with `SIGINT` or `SIGTERM` also exits `2`.
 
 ## See also
 
