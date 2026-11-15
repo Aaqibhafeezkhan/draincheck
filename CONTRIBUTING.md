@@ -87,7 +87,12 @@ go vet ./...
 go test ./...
 ```
 
-`make build`, `make test`, `make vet` and `make fmt` are shortcuts for the same commands.
+`make build`, `make test`, `make vet` and `make fmt` are shortcuts for the same commands. `make fmt` rewrites files. Two more targets change nothing:
+
+- `make check` verifies formatting (`gofmt -l .` must print nothing), then runs `go vet ./...` and `go test ./...`.
+- `make lint` runs `golangci-lint run ./...` with the config in `.golangci.yml`, as CI does. It needs [golangci-lint](https://golangci-lint.run/welcome/install/) installed and prints a hint if it is missing.
+
+`.editorconfig` and `.gitattributes` set LF line endings, tabs for Go and the Makefile and two spaces for YAML and JSON; most editors pick them up on their own.
 
 ## Workflow
 

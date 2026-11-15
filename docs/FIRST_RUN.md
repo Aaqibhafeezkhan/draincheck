@@ -54,3 +54,6 @@ With the flags, `BLOCKED` is gone and the exit code is `0`, yet two `RISK` findi
 
 > [!TIP]
 > In a pipeline, `--fail-on risk` makes `RISK` findings exit `1` too, and `--fail-on any` includes `UNKNOWN`. Pass the same drain flags there as in the real drain.
+
+> [!TIP]
+> A run that stops with `error: ...` and exit `2` could not complete, for example for a missing `list` permission or a wrong kubeconfig. [USAGE.md](USAGE.md#troubleshooting) maps each message to its fix.
