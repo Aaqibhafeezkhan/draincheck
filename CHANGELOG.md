@@ -11,8 +11,68 @@ entries under `[Unreleased]` in the same pull request as the change (see
 
 ## [Unreleased]
 
+### Upgrading from 0.1.0
+
+- **JSON report, breaking.** A finding has a new `case` field and **no longer
+  has `remediation`**; its `description` holds the facts only, and no
+  remediation, tip or `Why` is stored in the JSON any more. A script that read
+  `remediation` must read `case` (the commands are in the text report).
+  `schema_version` stays `"v1"`: there is no deprecation period before 1.0
+  (#186).
+- **JSON report, new field.** A top-level `drain_flags` object (`missing`,
+  `eviction_disabled`) names the `kubectl drain` flags the plan still needs
+  (#30).
+- **Rule ID change.** A PodDisruptionBudget that can never allow a disruption
+  (`minAvailable` at or above the replica count, or `maxUnavailable: 0`) is now
+  reported by `PDB_UNSATISFIABLE`, no longer by `PDB_DISRUPTION_BLOCKED`. A
+  filter or alert on the old ID misses it (#99).
+- **One more read permission.** draincheck now lists DaemonSets (`apps`, all
+  namespaces). A run with the 0.1.0 role stops with exit `2` until `list` on
+  `daemonsets` is granted; `examples/rbac/` has the updated role (#89).
+- **Exit codes on some clusters.** A pod whose DaemonSet no longer exists is now
+  `BLOCKED` without `--force`, so a run that exited `0` can exit `1` (#89). An
+  extra positional argument is now rejected with exit `2` instead of being
+  ignored (#164).
+- **Building from source** needs Go 1.26.10 or newer (#180).
+
+### Stability
+
+Meant to hold from here on: the exit codes (`0`, `1`, `2`), the flag names, the
+severity names `BLOCKED`, `RISK` and `UNKNOWN`, and the top-level fields of the
+JSON report (`schema_version`, `generated_at`, `disclaimer`, `findings`, and
+`drain_flags`).
+
+Can still change before 1.0, with a changelog entry when it does: rule IDs and
+which rule reports a given situation, the `evidence` fields and the `case`
+names of each rule, the wording of descriptions and remediation, and the layout
+of the text report. The JSON report changed once in this way, in the entry
+marked **Breaking** below.
+
+### Known limits
+
+- There is no request timeout. A server that never answers keeps the run
+  waiting until you stop it with `SIGINT` or `SIGTERM`, which end it with exit
+  `2`.
+- The snapshot is read with sequential list calls at one moment. The cluster
+  can change right after, which is why every report carries its timestamp and a
+  disclaimer.
+- A PodDisruptionBudget managed by an operator is `UNKNOWN`: draincheck does not
+  read operator state, so it cannot tell whether the operator removes the
+  budget when a node is cordoned.
+- Not checked yet: node affinity and selectors, pod anti-affinity, capacity,
+  `hostPort`, `hostPath` and volume placement, and admission webhooks on
+  eviction. A clean report does not cover them.
+- The kubectl behaviour modelled is that of 1.36.0 and 1.37.1, checked on kind
+  with 1.36.1. The rules were run on kind and on one real cluster, so the rate
+  of wrong findings on other clusters is not known. Please report one if it
+  occurs.
+
 ### Added
 
+- Each release archive also holds `kubectl-drain_check`, the same program under
+  the name kubectl gives the plugin `kubectl drain-check` (#179). The krew
+  manifest is in the repository, but the plugin is not listed in the krew index
+  yet (*planned*); see `docs/KREW.md`.
 - The report names the `kubectl drain` flags the plan still needs: a `KUBECTL DRAIN FLAGS` section in the text report (for example `kubectl drain will refuse without: --ignore-daemonsets --delete-emptydir-data`) and a new top-level `drain_flags` object in the JSON report (`missing`, `eviction_disabled`). Only flags whose absence makes a finding `BLOCKED` are named, never one you passed; with `--disable-eviction` the report says once that PodDisruptionBudgets are not consulted. `--debug` logs the result as `drain flags` (#30).
 - The compact text report shows in the header of each rule whose list is collapsed how many findings and namespaces it covers, for example `[RULE] 35 findings in 4 namespaces, first 5 shown`, so the reader can tell what the hidden findings cover. Findings without a namespace are not counted as one; the order of the examples, `--verbose` and the JSON report are unchanged (#182).
 
@@ -38,8 +98,8 @@ entries under `[Unreleased]` in the same pull request as the change (see
 
 ### Security
 
-- Builds now use Go 1.26.10 (`go.mod` required 1.26.0). `govulncheck` reported 28 standard-library vulnerabilities fixed in later 1.26 patch releases, including ones in `crypto/x509` and `net/url` that draincheck's cluster client reaches; it reports none with 1.26.10. Building from source now needs Go 1.26.10 or newer (#NNN).
-- Updated `golang.org/x/net` from v0.60.0 to v0.62.0, which fixes GO-2026-6866 and GO-2026-6860 (both in `golang.org/x/net/html`). draincheck does not import that package and `govulncheck` did not report either as reachable, so releases were not affected; the update clears the scan. `golang.org/x/sys`, `x/term` and `x/text` moved with it (#NNN).
+- Builds now use Go 1.26.10 (`go.mod` required 1.26.0). `govulncheck` reported 28 standard-library vulnerabilities fixed in later 1.26 patch releases, including ones in `crypto/x509` and `net/url` that draincheck's cluster client reaches; it reports none with 1.26.10. Building from source now needs Go 1.26.10 or newer (#180).
+- Updated `golang.org/x/net` from v0.60.0 to v0.62.0, which fixes GO-2026-6866 and GO-2026-6860 (both in `golang.org/x/net/html`). draincheck does not import that package and `govulncheck` did not report either as reachable, so releases were not affected; the update clears the scan. `golang.org/x/sys`, `x/term` and `x/text` moved with it (#180).
 
 ## [0.1.0] - 2026-10-28
 
