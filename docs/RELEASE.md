@@ -19,7 +19,7 @@ Releases are built by `.github/workflows/release.yml` when a `vX.Y.Z` tag is pus
 Linux and macOS:
 
 ```sh
-VERSION=v0.1.0
+VERSION=v0.2.0
 OS=linux     # or darwin
 ARCH=amd64   # or arm64
 curl -fsSLO "https://github.com/Veinar/draincheck/releases/download/${VERSION}/draincheck_${VERSION#v}_${OS}_${ARCH}.tar.gz"
