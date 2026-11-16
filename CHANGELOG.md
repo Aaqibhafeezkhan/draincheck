@@ -11,6 +11,8 @@ entries under `[Unreleased]` in the same pull request as the change (see
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-16
+
 ### Upgrading from 0.1.0
 
 - **JSON report, breaking.** A finding has a new `case` field and **no longer
@@ -453,6 +455,7 @@ JSON. Output and rules may still change before 0.1.0.
 - Bump Go to 1.26 and refresh indirect dependencies.
 - Bump `k8s.io/apimachinery` and `k8s.io/client-go` from 0.35.9 to 0.37.1.
 
-[Unreleased]: https://github.com/Veinar/draincheck/compare/v0.1.0...develop
+[Unreleased]: https://github.com/Veinar/draincheck/compare/v0.2.0...develop
+[0.2.0]: https://github.com/Veinar/draincheck/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Veinar/draincheck/compare/v0.0.1...v0.1.0
 [0.0.1]: https://github.com/Veinar/draincheck/releases/tag/v0.0.1
