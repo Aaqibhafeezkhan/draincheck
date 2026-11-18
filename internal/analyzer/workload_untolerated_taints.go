@@ -1,13 +1,11 @@
 package analyzer
 
 import (
-	"cmp"
 	"fmt"
 	"slices"
 	"strings"
 
 	"github.com/Veinar/draincheck/internal/findings"
-	"github.com/Veinar/draincheck/internal/inventory"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -22,19 +20,16 @@ const WorkloadUntoleratedTaintsID = "WORKLOAD_UNTOLERATED_TAINTS"
 // NoRemainingNodes states the case where no moving pod can land anywhere, for
 // the whole run, and the case where no node is left at all, so this rule stays
 // silent there. One finding per workload (resolved with inventory.OwnerResolver),
-// listing the nodes left and the taints the workload does not tolerate. Like
-// NoRemainingNodes it judges cordons, readiness and taints only, never
-// affinity, selectors or capacity.
+// listing the nodes left and the taints the workload does not tolerate.
+//
+// It states taints alone: it is silent when the workload's labels (nodeSelector,
+// required node affinity) rule out every node left too, because adding a
+// toleration would not help; WorkloadUnmatchedLabels and the combined case
+// own that. Capacity is never looked at.
 type WorkloadUntoleratedTaints struct{}
 
 // ID implements Rule.
 func (WorkloadUntoleratedTaints) ID() string { return WorkloadUntoleratedTaintsID }
-
-// untoleratedGroup collects the moving pods of one workload.
-type untoleratedGroup struct {
-	owner inventory.Owner
-	pods  []corev1.Pod
-}
 
 // Evaluate implements Rule.
 func (WorkloadUntoleratedTaints) Evaluate(in Input) []findings.Finding {
@@ -47,23 +42,10 @@ func (WorkloadUntoleratedTaints) Evaluate(in Input) []findings.Finding {
 		return nil
 	}
 
-	owners := inventory.NewOwnerResolver(in.Snapshot)
-	byOwner := map[inventory.Owner]*untoleratedGroup{}
-	var groups []*untoleratedGroup
-	for _, pod := range moving {
-		owner := owners.Resolve(pod)
-		g := byOwner[owner]
-		if g == nil {
-			g = &untoleratedGroup{owner: owner}
-			byOwner[owner] = g
-			groups = append(groups, g)
-		}
-		g.pods = append(g.pods, pod)
-	}
-
-	var stranded []*untoleratedGroup
+	groups := groupByWorkload(in.Snapshot, moving)
+	var stranded []*workloadGroup
 	for _, g := range groups {
-		if !hasRoom(g.pods, nodes) {
+		if !g.roomOf(nodes).taint {
 			stranded = append(stranded, g)
 		}
 	}
@@ -72,11 +54,14 @@ func (WorkloadUntoleratedTaints) Evaluate(in Input) []findings.Finding {
 		return nil
 	}
 
-	slices.SortFunc(stranded, func(a, b *untoleratedGroup) int {
-		return cmp.Or(cmp.Compare(a.owner.Namespace, b.owner.Namespace), cmp.Compare(a.owner.Kind, b.owner.Kind), cmp.Compare(a.owner.Name, b.owner.Name))
-	})
 	out := make([]findings.Finding, 0, len(stranded))
 	for _, g := range stranded {
+		// A workload whose labels rule out every node too is ruled out by both
+		// causes together, which neither this rule nor WorkloadUnmatchedLabels
+		// states; telling it to tolerate a taint would not help.
+		if !g.roomOf(nodes).label {
+			continue
+		}
 		ev := untoleratedEvidence(g, nodes)
 		out = append(out, findings.Finding{
 			RuleID:   WorkloadUntoleratedTaintsID,
@@ -92,26 +77,10 @@ func (WorkloadUntoleratedTaints) Evaluate(in Input) []findings.Finding {
 	return out
 }
 
-// hasRoom reports whether any of the pods can land on any of the nodes as far
-// as taints go.
-func hasRoom(pods []corev1.Pod, nodes []corev1.Node) bool {
-	for _, node := range nodes {
-		if placementOn(pods, node).Room {
-			return true
-		}
-	}
-	return false
-}
-
-// untoleratedEvidence builds the evidence for a workload that hasRoom reported false for.
-func untoleratedEvidence(g *untoleratedGroup, nodes []corev1.Node) findings.WorkloadUntoleratedTaintsEvidence {
+// untoleratedEvidence builds the evidence for a workload that taints rule out of every node left.
+func untoleratedEvidence(g *workloadGroup, nodes []corev1.Node) findings.WorkloadUntoleratedTaintsEvidence {
 	ev := findings.WorkloadUntoleratedTaintsEvidence{OwnerKind: g.owner.Kind, OwnerName: g.owner.Name, RemainingNodes: len(nodes)}
-	for _, pod := range g.pods {
-		ev.Pods = append(ev.Pods, findings.StrandedPod{Name: pod.Name, Node: pod.Spec.NodeName})
-	}
-	slices.SortFunc(ev.Pods, func(a, b findings.StrandedPod) int {
-		return cmp.Or(cmp.Compare(a.Name, b.Name), cmp.Compare(a.Node, b.Node))
-	})
+	ev.Pods = g.strandedPods()
 	for _, node := range nodes {
 		ev.TaintedNodes = append(ev.TaintedNodes, findings.TaintedNode{Name: node.Name, Taints: placementOn(g.pods, node).taints()})
 	}

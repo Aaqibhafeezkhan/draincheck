@@ -43,6 +43,7 @@ var adviceCases = []adviceCase{
 	{"NODE_NOT_SCHEDULABLE", "node-not-schedulable.yaml", []string{"worker-01"}, DrainOptions{}},
 	{"NO_REMAINING_NODES", "node-not-schedulable.yaml", allNodes, DrainOptions{}},
 	{"WORKLOAD_UNTOLERATED_TAINTS", "workload-untolerated-taints.yaml", []string{"worker", "soft"}, DrainOptions{}},
+	{"WORKLOAD_UNMATCHED_NODE_LABELS", "workload-unmatched-labels.yaml", []string{"worker", "fast"}, DrainOptions{}},
 	{"SINGLE_REPLICA_WORKLOAD", "single-replica-workload.yaml", []string{"worker-01", "worker-02"}, DrainOptions{}},
 	{"ALL_REPLICAS_ON_TARGETS", "all-replicas-on-targets.yaml", []string{"worker-01", "worker-02"}, DrainOptions{}},
 	// DaemonSet, static and controller-less pods each have their own advice, and a
@@ -165,6 +166,7 @@ var adviceVariants = []string{
 	"NODE_NOT_SCHEDULABLE/RISK/findings.NodeNotSchedulableEvidence",
 	"NO_REMAINING_NODES/RISK/findings.NoRemainingNodesEvidence",
 	"WORKLOAD_UNTOLERATED_TAINTS/RISK/findings.WorkloadUntoleratedTaintsEvidence",
+	"WORKLOAD_UNMATCHED_NODE_LABELS/RISK/findings.WorkloadUnmatchedLabelsEvidence",
 	"SINGLE_REPLICA_WORKLOAD/RISK/findings.SingleReplicaEvidence",
 	"ALL_REPLICAS_ON_TARGETS/RISK/findings.AllReplicasEvidence",
 	"POD_OWNERSHIP/BLOCKED/DaemonSet",

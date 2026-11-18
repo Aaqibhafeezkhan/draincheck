@@ -83,6 +83,7 @@ A finding covers one cause, not one pod. A cause that reaches many pods, such as
 | `NODE_NOT_SCHEDULABLE` | run (all affected nodes together) | the affected node names, joined by commas |
 | `NO_REMAINING_NODES` | run | the target node names, joined by commas |
 | `WORKLOAD_UNTOLERATED_TAINTS` | owning workload | the workload |
+| `WORKLOAD_UNMATCHED_NODE_LABELS` | owning workload | the workload |
 | `SINGLE_REPLICA_WORKLOAD` | Deployment or StatefulSet | the workload |
 | `ALL_REPLICAS_ON_TARGETS` | Deployment or StatefulSet | the workload |
 | `POD_OWNERSHIP` | DaemonSet, node (for its static pods) or pod without a controller | the DaemonSet, node or pod |
@@ -322,7 +323,20 @@ Raised for a workload none of whose evicted pods can land on a node left, becaus
 - **Description:** the workload, how many of its pods move, and each node left with the taints that rule the workload out.
 - **Evidence:** `owner_kind`, `owner_name`, `pods` (`name`, `node`), `remaining_nodes` and `tainted_nodes` (`name`, `taints` with `key` and `effect`).
 - Silent when no moving pod can land anywhere (`NO_REMAINING_NODES` states that for the run) and when no node is left at all.
-- Pods are counted as for `NO_REMAINING_NODES`. Taints are judged as the scheduler does. Affinity, selectors and capacity are not looked at, so the room that is left may still not fit the pods.
+- Pods are counted as for `NO_REMAINING_NODES`. Taints are judged as the scheduler does. Silent when the workload's labels rule out every node left too (a toleration would not help); labels alone are `WORKLOAD_UNMATCHED_NODE_LABELS`. Capacity is not looked at, so the room that is left may still not fit the pods.
+
+### `WORKLOAD_UNMATCHED_NODE_LABELS`
+
+Severity: `RISK`.
+
+Raised for a workload none of whose evicted pods can land on a node left, because the labels of every node left rule them out (a `nodeSelector` or a required node affinity), while taints leave a node open. The drain itself completes, but the workload's controller recreates the pods and they stay `Pending`. It is `RISK`, so it makes the run exit `1` only with `--fail-on risk` or `any`.
+
+- **Resource:** the owning workload (`Deployment`, `StatefulSet`, ...). One finding per workload.
+- **Description:** the workload, how many of its pods move, and each node left with the requirement the workload does not meet and what the node has (for example `nodeSelector disktype=ssd, node has disktype=hdd`).
+- **Evidence:** `owner_kind`, `owner_name`, `pods` (`name`, `node`), `remaining_nodes` and `mismatched_nodes` (`name`, `mismatches` with `source`, `key`, `operator`, `values`, `node_has_key` and `node_value`).
+- Only required constraints count; a preferred affinity never rules a node out. A constraint draincheck cannot evaluate counts as open, so nothing is reported on a guess.
+- Silent when taints rule out every node left too (labels and taints together are *planned*, #143), when no node is left at all and when no pod moves. A workload is judged as a whole: one pod that fits keeps it out.
+- Pods are counted as for `NO_REMAINING_NODES`. Capacity, volumes, topology spread and pod anti-affinity are not looked at, so the room that is left may still not fit the pods.
 
 ### `SINGLE_REPLICA_WORKLOAD`
 

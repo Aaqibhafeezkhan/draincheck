@@ -1,0 +1,194 @@
+# Cluster for WORKLOAD_UNMATCHED_NODE_LABELS.
+#
+# Nodes: "worker" holds the pods; "node-a" and "node-b" are Ready, untainted and
+# labelled disktype=hdd (zone a and b); "fast" is Ready, labelled disktype=ssd
+# and tainted NoSchedule. Draining "worker" and "fast" leaves node-a and node-b.
+#
+# cache (StatefulSet) needs disktype=ssd by nodeSelector: only "fast" has it.
+# search (StatefulSet) requires node affinity zone In [c]: no node has it.
+# free (StatefulSet) has no constraint: it can land anywhere untainted.
+# soft (StatefulSet) only prefers disktype=ssd: a preference rules out nothing.
+# odd (StatefulSet) requires a matchFields key draincheck does not evaluate: open.
+# agent (DaemonSet) selects disktype=ssd, but a DaemonSet pod is not moved.
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker
+  labels:
+    disktype: hdd
+    zone: a
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: node-a
+  labels:
+    disktype: hdd
+    zone: a
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: node-b
+  labels:
+    disktype: hdd
+    zone: b
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: fast
+  labels:
+    disktype: ssd
+spec:
+  taints:
+    - key: dedicated
+      value: fast
+      effect: NoSchedule
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cache-0
+  namespace: shop
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: StatefulSet
+      name: cache
+      uid: cache-uid
+      controller: true
+spec:
+  nodeName: worker
+  nodeSelector:
+    disktype: ssd
+  containers:
+    - name: c
+      image: example/cache:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: search-0
+  namespace: shop
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: StatefulSet
+      name: search
+      uid: search-uid
+      controller: true
+spec:
+  nodeName: worker
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: zone
+                operator: In
+                values: ["c"]
+  containers:
+    - name: c
+      image: example/search:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: free-0
+  namespace: shop
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: StatefulSet
+      name: free
+      uid: free-uid
+      controller: true
+spec:
+  nodeName: worker
+  containers:
+    - name: c
+      image: example/free:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: soft-0
+  namespace: shop
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: StatefulSet
+      name: soft
+      uid: soft-uid
+      controller: true
+spec:
+  nodeName: worker
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 10
+          preference:
+            matchExpressions:
+              - key: disktype
+                operator: In
+                values: ["ssd"]
+  containers:
+    - name: c
+      image: example/soft:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: odd-0
+  namespace: shop
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: StatefulSet
+      name: odd
+      uid: odd-uid
+      controller: true
+spec:
+  nodeName: worker
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchFields:
+              - key: spec.unknown
+                operator: In
+                values: ["x"]
+  containers:
+    - name: c
+      image: example/odd:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: agent-x1
+  namespace: shop
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: DaemonSet
+      name: agent
+      uid: agent-uid
+      controller: true
+spec:
+  nodeName: worker
+  nodeSelector:
+    disktype: ssd
+  containers:
+    - name: c
+      image: example/agent:1
