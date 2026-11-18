@@ -54,7 +54,7 @@ func (NoRemainingNodes) Evaluate(in Input) []findings.Finding {
 			continue
 		}
 		placement := placementOn(moving, node)
-		if placement.Room {
+		if placement.TaintRoom {
 			return nil
 		}
 		tainted = append(tainted, findings.TaintedNode{Name: node.Name, Taints: placement.taints()})

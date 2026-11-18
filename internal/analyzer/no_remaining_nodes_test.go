@@ -344,3 +344,12 @@ func TestNoRemainingNodesTaintsJSONHasNoNull(t *testing.T) {
 		t.Errorf("the JSON has a null: %s", b)
 	}
 }
+
+// NO_REMAINING_NODES does not read labels: a node whose labels rule every moving
+// pod out still counts as room, so the whole-run rule is silent.
+func TestNoRemainingNodesIgnoresLabels(t *testing.T) {
+	s := snapshotFromFixture(t, "workload-unmatched-labels.yaml")
+	if got := (NoRemainingNodes{}).Evaluate(Input{Snapshot: s, Targets: []string{"worker", "fast"}}); got != nil {
+		t.Errorf("want nil (node-a and node-b take pods by taints), got %+v", got)
+	}
+}

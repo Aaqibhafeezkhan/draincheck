@@ -264,3 +264,73 @@ func TestWorkloadUntoleratedTaintsUnknownOrNoTargets(t *testing.T) {
 		}
 	}
 }
+
+// clusterWithLabelledControlPlane is clusterWithProxy with a label on the tainted
+// node, so that a workload's nodeSelector can match it or not.
+func clusterWithLabelledControlPlane(db corev1.Pod) *inventory.Snapshot {
+	s := clusterWithProxy([]corev1.Pod{db}, nil)
+	nodes := s.Nodes()
+	for i := range nodes {
+		if nodes[i].Name == "cp" {
+			nodes[i].Labels = map[string]string{"disktype": "ssd"}
+		}
+	}
+	return inventory.NewSnapshot(nodes, s.Pods(), s.ReplicaSets(), s.PodDisruptionBudgets(), s.Timestamp())
+}
+
+// The taint rule reports a workload only when its labels leave a node open: a
+// toleration helps then. When its labels rule out every node left too, the
+// advice to tolerate a taint would be wrong, so the rule is silent.
+func TestWorkloadUntoleratedTaintsSilentWhenLabelsRuleOutEveryNode(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		selector map[string]string
+		want     int
+	}{
+		{"labels leave the node open: taints alone", map[string]string{"disktype": "ssd"}, 1},
+		{"no selector: taints alone", nil, 1},
+		{"labels rule the node out too: both causes", map[string]string{"disktype": "nvme"}, 0},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			db := ownedPod("db-0", "shop", "StatefulSet", "db", "worker")
+			db.Spec.NodeSelector = tt.selector
+			got := WorkloadUntoleratedTaints{}.Evaluate(Input{Snapshot: clusterWithLabelledControlPlane(db), Targets: []string{"worker"}})
+			if len(got) != tt.want {
+				t.Errorf("findings = %d, want %d: %+v", len(got), tt.want, got)
+			}
+			// The label rule is the mirror image: it needs taints to leave a node open.
+			if other := (WorkloadUnmatchedLabels{}).Evaluate(Input{Snapshot: clusterWithLabelledControlPlane(db), Targets: []string{"worker"}}); len(other) != 0 {
+				t.Errorf("the label rule must stay silent when taints rule out every node: %+v", other)
+			}
+		})
+	}
+}
+
+// No two placement rules report the same workload, whatever the fixture and targets.
+func TestPlacementRulesNeverReportTheSameWorkload(t *testing.T) {
+	for _, fixture := range []string{"workload-unmatched-labels.yaml", "workload-untolerated-taints.yaml"} {
+		s := snapshotFromFixture(t, fixture)
+		var names []string
+		for _, n := range s.Nodes() {
+			names = append(names, n.Name)
+		}
+		for mask := 1; mask < 1<<len(names); mask++ {
+			var targets []string
+			for i, n := range names {
+				if mask&(1<<i) != 0 {
+					targets = append(targets, n)
+				}
+			}
+			seen := map[string]string{}
+			for _, r := range []Rule{WorkloadUntoleratedTaints{}, WorkloadUnmatchedLabels{}} {
+				for _, f := range r.Evaluate(Input{Snapshot: s, Targets: targets}) {
+					key := f.Resource.String()
+					if prev, dup := seen[key]; dup {
+						t.Errorf("%s targets %v: %s is reported by %s and %s", fixture, targets, key, prev, r.ID())
+					}
+					seen[key] = r.ID()
+				}
+			}
+		}
+	}
+}
