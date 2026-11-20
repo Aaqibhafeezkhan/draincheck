@@ -1,0 +1,158 @@
+# Cluster for WORKLOAD_PLACEMENT_COMBINED.
+#
+# Nodes: "worker" holds the pods; "plain" is Ready, untainted and labelled
+# disktype=hdd; "gpu" is Ready, labelled disktype=ssd and tainted
+# dedicated=gpu:NoSchedule. Draining "worker" leaves plain and gpu.
+#
+# split (StatefulSet) selects disktype=ssd and tolerates nothing: plain fails by
+# label, gpu by taint, so neither cause explains it alone.
+# zoned (StatefulSet) requires zone In [c], which no node has: labels alone
+# while plain is left; with only gpu left, taints and labels each rule it out.
+# free (StatefulSet) has no constraint: it lands on plain; with only gpu left,
+# taints alone rule it out.
+# tolerant (StatefulSet) selects disktype=ssd and tolerates the gpu taint: it
+# lands on gpu.
+# agent (DaemonSet) selects disktype=ssd, but a DaemonSet pod is not moved.
+apiVersion: v1
+kind: Node
+metadata:
+  name: worker
+  labels:
+    disktype: hdd
+    zone: a
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: plain
+  labels:
+    disktype: hdd
+    zone: a
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+---
+apiVersion: v1
+kind: Node
+metadata:
+  name: gpu
+  labels:
+    disktype: ssd
+spec:
+  taints:
+    - key: dedicated
+      value: gpu
+      effect: NoSchedule
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: split-0
+  namespace: shop
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: StatefulSet
+      name: split
+      uid: split-uid
+      controller: true
+spec:
+  nodeName: worker
+  nodeSelector:
+    disktype: ssd
+  containers:
+    - name: c
+      image: example/split:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: zoned-0
+  namespace: shop
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: StatefulSet
+      name: zoned
+      uid: zoned-uid
+      controller: true
+spec:
+  nodeName: worker
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: zone
+                operator: In
+                values: ["c"]
+  containers:
+    - name: c
+      image: example/zoned:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: free-0
+  namespace: shop
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: StatefulSet
+      name: free
+      uid: free-uid
+      controller: true
+spec:
+  nodeName: worker
+  containers:
+    - name: c
+      image: example/free:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tolerant-0
+  namespace: shop
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: StatefulSet
+      name: tolerant
+      uid: tolerant-uid
+      controller: true
+spec:
+  nodeName: worker
+  nodeSelector:
+    disktype: ssd
+  tolerations:
+    - key: dedicated
+      operator: Equal
+      value: gpu
+      effect: NoSchedule
+  containers:
+    - name: c
+      image: example/tolerant:1
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: agent-x
+  namespace: shop
+  ownerReferences:
+    - apiVersion: apps/v1
+      kind: DaemonSet
+      name: agent
+      uid: agent-uid
+      controller: true
+spec:
+  nodeName: worker
+  nodeSelector:
+    disktype: ssd
+  containers:
+    - name: c
+      image: example/agent:1

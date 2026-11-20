@@ -13,6 +13,7 @@ func DefaultRules() []Rule {
 		NoRemainingNodes{},
 		WorkloadUntoleratedTaints{},
 		WorkloadUnmatchedLabels{},
+		WorkloadPlacementCombined{},
 		SingleReplicaWorkload{},
 		AllReplicasOnTargets{},
 		PodOwnership{},

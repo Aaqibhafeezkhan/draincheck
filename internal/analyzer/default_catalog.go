@@ -23,6 +23,7 @@ func DefaultCatalog() findings.Catalog {
 		noRemainingNodesCases,
 		workloadUntoleratedTaintsCases,
 		workloadUnmatchedLabelsCases,
+		workloadPlacementCombinedCases,
 		singleReplicaWorkloadCases,
 		allReplicasOnTargetsCases,
 		podOwnershipCases,
