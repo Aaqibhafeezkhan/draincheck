@@ -23,13 +23,21 @@ entries under `[Unreleased]` in the same pull request as the change (see
   the node has. Only required constraints count; one draincheck cannot evaluate
   (an unknown operator, a `matchFields` key other than `metadata.name`) counts
   as open, so nothing is reported on a guess (#8).
+- `WORKLOAD_PLACEMENT_COMBINED`: a workload whose evicted pods cannot land on
+  any node left, where neither taints alone nor labels alone explain it: taints
+  rule out some nodes and a `nodeSelector` or required node affinity the
+  others, or each rules out every node. The drain completes and the pods stay
+  `Pending`, so it is `RISK`. One finding per workload, naming for each node
+  left every taint and every label requirement that rules it out, and saying
+  that fixing one cause is not enough. The three placement rules never report
+  the same workload (#143).
 
 ### Changed
 
 - `WORKLOAD_UNTOLERATED_TAINTS` is now silent for a workload whose node selector
   or required node affinity also rule out every node left, because a toleration
   would not help there. A workload that labels and taints together rule out is
-  not reported by either rule yet (#8).
+  reported by `WORKLOAD_PLACEMENT_COMBINED` (#8, #143).
 
 ## [0.2.0] - 2026-11-16
 
