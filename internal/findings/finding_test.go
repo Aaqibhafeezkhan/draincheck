@@ -2,6 +2,7 @@ package findings
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -277,5 +278,28 @@ func TestFindingJSONNoRemainingNodesEvidence(t *testing.T) {
 	want := `{"rule_id":"NO_REMAINING_NODES","severity":"RISK","resource":"Node/worker-01,worker-02","evidence":{"pods_to_move":3,"target_nodes":2,"total_nodes":3,"remaining_schedulable":0},"case":"","description":""}`
 	if string(b) != want {
 		t.Errorf("json mismatch\n got: %s\nwant: %s", b, want)
+	}
+}
+
+// Verify is additive in schema v1: a finding without commands writes no key, so
+// a consumer that predates the field reads the same document as before.
+func TestFindingJSONVerify(t *testing.T) {
+	base := Finding{RuleID: "R", Severity: Risk, Resource: ResourceRef{Kind: "Pod", Namespace: "a", Name: "b"}, Evidence: StuckTerminatingEvidence{}}
+
+	b, err := json.Marshal(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), `"verify"`) {
+		t.Errorf("a finding with no commands writes a verify key: %s", b)
+	}
+
+	base.Verify = []string{"kubectl get pod -n a b"}
+	b, err = json.Marshal(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `"verify":["kubectl get pod -n a b"]`) {
+		t.Errorf("verify is not written as an array of commands: %s", b)
 	}
 }

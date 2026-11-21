@@ -111,6 +111,9 @@ Timestamp: 2026-10-14T09:30:00Z
 
 [PDB_DISRUPTION_BLOCKED] 1 finding
   PodDisruptionBudget/billing/payments-api-pdb: PodDisruptionBudget billing/payments-api-pdb allows 0 disruptions (3 healthy, 3 desired) and selects 2 pods on 2 target nodes.
+    Verify:
+      kubectl get pdb -n billing payments-api-pdb
+      kubectl get pdb -n billing payments-api-pdb -o yaml
 
   => Why: Eviction of the pods it selects is refused, and kubectl drain retries a refused eviction until --timeout, which is infinite by default, so it waits and does not complete.
   => Remediation: Confirm with `kubectl get pdb -n <namespace> <name>` (ALLOWED DISRUPTIONS is 0) and `kubectl describe pdb -n <namespace> <name>` (selector, current and desired). Then, safest first: bring the selected pods to Ready, by adding replicas or fixing the ones that are not, until the budget allows a disruption; or, if the budget is stricter than the workload needs, relax minAvailable/maxUnavailable. Do this before draining: the drain only waits.
@@ -119,6 +122,7 @@ This report describes the observed cluster state at 2026-10-14T09:30:00Z and doe
 ```
 
 - Every remediation names the read-only `kubectl` command that confirms the finding (`get`, `describe` or `auth can-i`, with `<namespace>`, `<name>` and similar placeholders taken from the resource of the finding), then the action, safest first. The standard is in [RULES.md](RULES.md#advice-standard).
+- A `Verify:` block under a finding lists the read-only commands that confirm it, one per line, with the names of that finding filled in (`kubectl get pdb -n billing payments-api-pdb`). The compact layout prints it for `BLOCKED` and `UNKNOWN` findings only, to keep a long `RISK` list short; `--verbose` prints it for every finding. The same commands are the `verify` array in the JSON report. draincheck never runs them (#130).
 - The advice of a case follows a blank line, and both its `Why` and its remediation start with `=>`, so they stand apart from the findings above it.
 - Every rule works in cases: a case is one situation of a rule, such as a DaemonSet pod or a static pod for `POD_OWNERSHIP`. Each case gives one `=> Why:` line, a single sentence with the consequence for the drain, right above its remediation. It is printed once per case, not per finding, and the finding line keeps only the facts: `  Why: kubectl drain refuses DaemonSet pods without --ignore-daemonsets and never evicts them.` followed by `  => Remediation: ...`. When a rule has several cases, each names its resources: `=> Why (DaemonSet/a/ds-1, DaemonSet/a/ds-2): ...` and the remediation below it. The text of a case is written once per rule, not once per finding (#186).
 - Findings of one case share its advice and print it once. A rule with several cases in the report (for example `POD_OWNERSHIP` for DaemonSet versus static pods) prints the advice of each once, with the resources it applies to: `=> Why (DaemonSet/a/ds-1, DaemonSet/a/ds-2): ...` and the remediation below it.
@@ -169,7 +173,11 @@ This report describes the observed cluster state at 2026-10-14T09:30:00Z and doe
         ]
       },
       "case": "budget_at_zero",
-      "description": "..."
+      "description": "...",
+      "verify": [
+        "kubectl get pdb -n billing payments-api-pdb",
+        "kubectl get pdb -n billing payments-api-pdb -o yaml"
+      ]
     }
   ]
 }
@@ -181,6 +189,7 @@ This report describes the observed cluster state at 2026-10-14T09:30:00Z and doe
 - `resource` is `Kind/namespace/name`, or `Kind/name` for cluster-scoped objects.
 - `evidence` is a typed object whose shape depends on `rule_id` (see *Rules*); it is `null` when a rule has none. `PDB_DISRUPTION_BLOCKED` has two shapes: one budget for `BLOCKED`, and the budgets of one operator for `UNKNOWN`.
 - `case` names the situation of the rule a finding belongs to, for example `daemonset` or `static_pod` for `POD_OWNERSHIP`. The list of cases of each rule is in [RULES.md](RULES.md). **Breaking, after 0.1.0:** a finding has no `remediation`, no tip and no explanation of why it matters any more; its `description` holds the facts only (numbers and names). That text is the same for every finding of a case, so it is written once and only the text report prints it. A script that read `remediation` or the reason in `description` must read `case` instead; the commands to confirm a finding are in the text report (#186).
+- `verify` is an array of read-only `kubectl` commands that confirm the finding, with its names filled in, each one plain command line (`kubectl get`, `kubectl describe` or `kubectl auth can-i`, no pipe or redirect) that a script can run as it is. Every finding of every rule has at least one. It is advice: draincheck never runs a command, and one can need a permission that draincheck's own role does not have, because it runs as you. It is left out of a finding that has none. **Additive, after 0.2.0:** `schema_version` stays `"v1"`, a new field, so a consumer that ignores unknown fields keeps working (#130).
 - `generated_at` is the time the cluster snapshot was taken (RFC 3339, UTC), not the time the document was written, so the same snapshot always gives the same bytes.
 - `disclaimer` is the mandatory statement that the report does not guarantee execution success. It names the same timestamp.
 
@@ -478,6 +487,7 @@ stdout is not touched. The text or JSON report is byte-for-byte the same with an
 | `pod selector` | after the target nodes are accepted, only with `--pod-selector` | `selector`, `selected` and `left_out` (pods on the target nodes) |
 | `eviction disabled` | after the target nodes are accepted, only with `--disable-eviction` | `budgets_not_consulted` (PodDisruptionBudgets in the cluster; the `PDB_*` rules report nothing) |
 | `rule start` and `rule done` | around each rule | `rule`; `findings` on `rule done` |
+| `verify commands` | when all rules are done, before `summary` | `findings` (findings that got commands), `commands` (how many in all) |
 | `summary` | when all rules are done | `blocked`, `risk`, `unknown`, `fail_on` |
 | `drain flags` | after `summary`, before the report is written | `missing` (the drain flags the `BLOCKED` findings still need), `eviction_disabled` |
 | `write report` | just before the report is written | `format`, `verbose`, `findings` |
@@ -507,6 +517,7 @@ time=2026-10-18T17:29:41.516Z level=DEBUG msg="rule done" rule=PDB_DISRUPTION_BL
 ...
 time=2026-10-18T17:29:41.516Z level=DEBUG msg="rule done" rule=POD_OWNERSHIP findings=1
 ...
+time=2026-10-18T17:29:41.516Z level=DEBUG msg="verify commands" findings=1 commands=1
 time=2026-10-18T17:29:41.516Z level=DEBUG msg=summary blocked=0 risk=1 unknown=0 fail_on=blocked
 time=2026-10-18T17:29:41.516Z level=DEBUG msg="write report" format=text verbose=false findings=1
 time=2026-10-18T17:29:41.516Z level=DEBUG msg=finished exit_code=0

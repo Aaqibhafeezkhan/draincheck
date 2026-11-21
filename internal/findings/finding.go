@@ -12,4 +12,9 @@ type Finding struct {
 	Case string `json:"case"`
 	// Description holds the facts of this finding: the numbers and the names.
 	Description string `json:"description"`
+	// Verify holds read-only kubectl commands, with this finding's names filled
+	// in, that confirm the facts in Description. They are advice for the
+	// operator: draincheck never runs them. Empty for a finding that has none,
+	// and then not written to JSON.
+	Verify []string `json:"verify,omitempty"`
 }

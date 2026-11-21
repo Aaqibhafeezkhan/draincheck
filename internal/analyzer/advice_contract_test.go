@@ -128,23 +128,52 @@ func adviceViolations(f findings.Finding, c findings.Case) []string {
 		v = append(v, "remediation names no verify command")
 	}
 	for _, c := range cmds {
-		if !slices.ContainsFunc(verifyPrefixes, func(p string) bool { return strings.HasPrefix(c, p) }) {
-			v = append(v, fmt.Sprintf("command %q does not start with kubectl get, describe or auth can-i", c))
-		}
-		for _, m := range shellMeta {
-			if strings.Contains(c, m) {
-				v = append(v, fmt.Sprintf("command %q contains %q: one plain kubectl invocation only", c, m))
-			}
-		}
+		v = append(v, commandViolations(c)...)
 		for _, ph := range regexp.MustCompile(`<[^<>]*>`).FindAllString(c, -1) {
 			if !slices.Contains(placeholders, strings.Trim(ph, "<>")) {
 				v = append(v, fmt.Sprintf("command %q has the unknown placeholder %s", c, ph))
 			}
 		}
-		for _, w := range writeWords {
-			if strings.Contains(strings.ToLower(c), w) {
-				v = append(v, fmt.Sprintf("command %q contains %q", c, w))
-			}
+	}
+	return v
+}
+
+// commandViolations lists how one suggested command breaks the read-only
+// contract: it must be one plain kubectl get, describe or auth can-i invocation
+// and contain no write word.
+func commandViolations(c string) []string {
+	var v []string
+	if !slices.ContainsFunc(verifyPrefixes, func(p string) bool { return strings.HasPrefix(c, p) }) {
+		v = append(v, fmt.Sprintf("command %q does not start with kubectl get, describe or auth can-i", c))
+	}
+	for _, m := range shellMeta {
+		if strings.Contains(c, m) {
+			v = append(v, fmt.Sprintf("command %q contains %q: one plain kubectl invocation only", c, m))
+		}
+	}
+	for _, w := range writeWords {
+		if strings.Contains(strings.ToLower(c), w) {
+			v = append(v, fmt.Sprintf("command %q contains %q", c, w))
+		}
+	}
+	return v
+}
+
+// verifyViolations lists how the Verify commands of f break the contract: at
+// least one, each read-only, and none with a placeholder left, because a
+// consumer runs them as they are.
+func verifyViolations(f findings.Finding) []string {
+	if len(f.Verify) == 0 {
+		return []string{"verify is empty"}
+	}
+	var v []string
+	for _, c := range f.Verify {
+		v = append(v, commandViolations(c)...)
+		if regexp.MustCompile(`<[^<>]*>`).MatchString(c) {
+			v = append(v, fmt.Sprintf("command %q has a placeholder left", c))
+		}
+		if strings.Contains(c, "  ") || strings.HasSuffix(c, " ") {
+			v = append(v, fmt.Sprintf("command %q has an empty argument", c))
 		}
 	}
 	return v
@@ -209,8 +238,11 @@ func TestAdviceContract(t *testing.T) {
 			if len(got) == 0 {
 				t.Fatal("the fixture gives no finding, so the contract is not tested")
 			}
-			for _, f := range got {
+			for _, f := range AddVerify(nil, got) {
 				produced[variantOf(f)] = true
+				for _, msg := range verifyViolations(f) {
+					t.Errorf("%s %s: %s", f.Severity, f.Resource, msg)
+				}
 				if f.RuleID != c.rule {
 					t.Errorf("%s: reported under rule %q", f.Resource, f.RuleID)
 				}
@@ -311,5 +343,27 @@ func TestRemediationCommands(t *testing.T) {
 	}
 	if cmds, ok := remediationCommands("kubectl drain skips them."); !ok || len(cmds) != 0 {
 		t.Errorf("prose outside backticks is not a command: got %v, %v", cmds, ok)
+	}
+}
+
+// The Verify half of the contract must fail when broken, or TestAdviceContract
+// proves nothing about it.
+func TestVerifyViolations(t *testing.T) {
+	ok := findings.Finding{Verify: []string{"kubectl get pdb -n shop web-pdb", "kubectl describe node worker-01"}}
+	if v := verifyViolations(ok); len(v) != 0 {
+		t.Fatalf("commands that meet the contract have violations: %v", v)
+	}
+	for name, verify := range map[string][]string{
+		"none":                 nil,
+		"a write":              {"kubectl delete pod -n shop web-0"},
+		"not kubectl get":      {"kubectl logs -n shop web-0"},
+		"a pipe":               {"kubectl get pods -A | grep web"},
+		"a placeholder":        {"kubectl get pod -n shop <pod>"},
+		"an empty argument":    {"kubectl get pod -n shop  -o yaml"},
+		"a trailing separator": {"kubectl get pod -n shop "},
+	} {
+		if v := verifyViolations(findings.Finding{Verify: verify}); len(v) == 0 {
+			t.Errorf("%s: no violation reported", name)
+		}
 	}
 }

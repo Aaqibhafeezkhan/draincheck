@@ -21,6 +21,7 @@ func writeVerboseSection(buf *bytes.Buffer, sev findings.Severity, fs []findings
 		}
 		fmt.Fprintf(buf, "\n[%s] %s\n", f.RuleID, f.Resource)
 		fmt.Fprintf(buf, "  %s\n", f.Description)
+		writeVerify(buf, f, "  ")
 		if why := whyOf(cat, f); why != "" {
 			fmt.Fprintf(buf, "  Why: %s\n", why)
 		}
