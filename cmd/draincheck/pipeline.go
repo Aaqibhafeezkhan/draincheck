@@ -48,7 +48,7 @@ func execute(ctx context.Context, opts options, logger *slog.Logger, c inventory
 		logger.Debug("eviction disabled", "budgets_not_consulted", len(snap.PodDisruptionBudgets()))
 	}
 
-	fs := analyzer.Run(logger, in, analyzer.DefaultRules()...)
+	fs := analyzer.AddVerify(logger, analyzer.Run(logger, in, analyzer.DefaultRules()...))
 	logSummary(logger, fs, opts.FailOn)
 	flags := report.SummarizeDrainFlags(fs, opts.DisableEviction)
 	logger.Debug("drain flags", "missing", flags.Missing, "eviction_disabled", flags.EvictionDisabled)

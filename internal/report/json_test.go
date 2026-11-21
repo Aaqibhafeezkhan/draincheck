@@ -49,6 +49,7 @@ func sampleFindings() []findings.Finding {
 			},
 			Description: "DaemonSet monitoring/agent has 2 pods on 2 target nodes.",
 			Case:        "daemonset",
+			Verify:      []string{"kubectl get daemonset -n monitoring agent"},
 		},
 		{
 			RuleID:   "PDB_DISRUPTION_BLOCKED",
@@ -67,6 +68,10 @@ func sampleFindings() []findings.Finding {
 			},
 			Description: "PodDisruptionBudget billing/payments-api-pdb allows 0 disruptions.",
 			Case:        "budget_at_zero",
+			Verify: []string{
+				"kubectl get pdb -n billing payments-api-pdb",
+				"kubectl get pdb -n billing payments-api-pdb -o yaml",
+			},
 		},
 		{
 			RuleID:   "PDB_DISRUPTION_BLOCKED",
@@ -96,6 +101,10 @@ func sampleFindings() []findings.Finding {
 			},
 			Description: "Operator storage.example.com (NodeAgent) manages 2 PodDisruptionBudgets in namespace storage-system with 0 allowed disruptions.",
 			Case:        "operator_managed",
+			Verify: []string{
+				"kubectl get pdb -n storage-system",
+				"kubectl get pdb -n storage-system agent-1-pdb -o yaml",
+			},
 		},
 		{
 			RuleID:      "UNKNOWN_CONSTRAINT",

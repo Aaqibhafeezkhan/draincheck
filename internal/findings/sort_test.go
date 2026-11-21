@@ -98,7 +98,7 @@ func FuzzSortIgnoresInputOrder(f *testing.F) {
 		Sort(a)
 		Sort(b)
 		for i := range a {
-			if a[i] != b[i] {
+			if !reflect.DeepEqual(a[i], b[i]) {
 				t.Fatalf("order differs at %d: %+v vs %+v", i, a, b)
 			}
 		}

@@ -32,6 +32,16 @@ entries under `[Unreleased]` in the same pull request as the change (see
   that fixing one cause is not enough. The three placement rules never report
   the same workload (#143).
 
+#### Report
+
+- Every finding now carries the read-only `kubectl` commands that confirm it,
+  with its own names filled in, as a `verify` array in the JSON report and as a
+  `Verify:` block in the text report. The compact text layout prints it for
+  `BLOCKED` and `UNKNOWN` findings; `--verbose` prints it for every finding.
+  draincheck never runs the commands. **Additive:** `schema_version` stays
+  `"v1"`, so a consumer that ignores unknown fields keeps working. With
+  `--debug`, a `verify commands` line says how many were added (#130).
+
 ### Changed
 
 - `WORKLOAD_UNTOLERATED_TAINTS` is now silent for a workload whose node selector

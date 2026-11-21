@@ -55,7 +55,11 @@
         ]
       },
       "case": "operator_managed",
-      "description": "Operator storage.example.com (NodeAgent) manages 2 PodDisruptionBudgets in namespace storage-system with 0 allowed disruptions."
+      "description": "Operator storage.example.com (NodeAgent) manages 2 PodDisruptionBudgets in namespace storage-system with 0 allowed disruptions.",
+      "verify": [
+        "kubectl get pdb -n storage-system",
+        "kubectl get pdb -n storage-system agent-1-pdb -o yaml"
+      ]
     },
     {
       "rule_id": "UNKNOWN_CONSTRAINT",
@@ -121,7 +125,11 @@
         ]
       },
       "case": "budget_at_zero",
-      "description": "PodDisruptionBudget billing/payments-api-pdb allows 0 disruptions."
+      "description": "PodDisruptionBudget billing/payments-api-pdb allows 0 disruptions.",
+      "verify": [
+        "kubectl get pdb -n billing payments-api-pdb",
+        "kubectl get pdb -n billing payments-api-pdb -o yaml"
+      ]
     },
     {
       "rule_id": "POD_OWNERSHIP",
@@ -149,7 +157,10 @@
         ]
       },
       "case": "daemonset",
-      "description": "DaemonSet monitoring/agent has 2 pods on 2 target nodes."
+      "description": "DaemonSet monitoring/agent has 2 pods on 2 target nodes.",
+      "verify": [
+        "kubectl get daemonset -n monitoring agent"
+      ]
     },
     {
       "rule_id": "MISSING_RESOURCE_REQUESTS",

@@ -64,6 +64,9 @@ func writeCompactRule(buf *bytes.Buffer, id string, fs []findings.Finding, cat f
 			break
 		}
 		fmt.Fprintf(buf, "  %s: %s\n", f.Resource, f.Description)
+		if showsVerifyCompact(f.Severity) {
+			writeVerify(buf, f, "    ")
+		}
 	}
 
 	if writeCompactAdvice(buf, fs, cat) {
